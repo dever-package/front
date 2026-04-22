@@ -1,0 +1,304 @@
+{
+  "page": {
+    "name": "上传规则",
+    "icon": "cloud-upload",
+    "parent": "system-settings",
+    "sort": 6
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "table-row": {
+            "type": "container",
+            "className": "overflow-hidden rounded-md border bg-background"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-rich",
+        "value": "page.titleHtml",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "资源中心",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/resource/list",
+          "withBack": true
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "存储方式",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/upload_storage/list",
+          "withBack": true
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "允许类型",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/upload_accept_type/list",
+          "withBack": true
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "新增规则",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "default",
+          "size": "sm"
+        },
+        "action": {
+          "click": {
+            "type": "modal",
+            "key": "dialog.create",
+            "value": true
+          }
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "table.list",
+        "meta": {
+          "pagePath": "data.table.page",
+          "pageSizePath": "data.table.pageSize",
+          "totalPath": "data.table.total",
+          "remote": true,
+          "externalPagination": true,
+          "rowKey": "id",
+          "columns": [
+            {
+              "name": "ID",
+              "value": "id",
+              "type": "show-base"
+            },
+            {
+              "value": "name",
+              "type": "show-base"
+            },
+            {
+              "value": "storage.name",
+              "type": "show-base"
+            },
+            {
+              "name": "存储类型",
+              "value": "storage.type",
+              "type": "show-tag",
+              "meta": {
+                "cases": [
+                  {
+                    "field": "storage.type",
+                    "value": "local",
+                    "text": "本地"
+                  },
+                  {
+                    "field": "storage.type",
+                    "value": "qiniu",
+                    "text": "七牛云"
+                  }
+                ]
+              }
+            },
+            {
+              "value": "accept_types",
+              "type": "show-tag"
+            },
+            {
+              "value": "transport",
+              "type": "show-tag",
+              "meta": {
+                "cases": [
+                  {
+                    "field": "transport",
+                    "value": "relay",
+                    "text": "后端中转"
+                  },
+                  {
+                    "field": "transport",
+                    "value": "direct",
+                    "text": "前端直传"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "分片大小(M)",
+              "value": "chunk_size",
+              "type": "show-base"
+            },
+            {
+              "name": "单文件上限(M)",
+              "value": "max_size",
+              "type": "show-base"
+            },
+            {
+              "tip": "点击状态可直接切换上传规则启用状态。",
+              "value": "status",
+              "type": "show-select",
+              "meta": {
+                "display": "badge"
+              }
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "square-pen",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "编辑当前上传规则",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.editRuleId",
+                          "value": "$row.id"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.open",
+                          "value": true
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "icon": "trash-2",
+                    "variant": "outline",
+                    "size": "xs",
+                    "description": "删除当前上传规则",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.deleteRule",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "confirm.delete",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-page"
+      }
+    ],
+    "page-main": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.open",
+          "pageRoute": "/front/upload_rule/update",
+          "title": "编辑上传规则",
+          "description": "上传规则只负责组合存储方式、允许类型、上传方式与大小限制。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "id": "data.actionTarget.editRuleId"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.create",
+          "pageRoute": "/front/upload_rule/update",
+          "title": "新增上传规则",
+          "description": "新规则创建后，可在 form-upload 的 ruleId 中直接引用。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-confirm",
+        "name": "删除上传规则",
+        "info": "确认删除当前上传规则吗？",
+        "meta": {
+          "stateKey": "confirm.delete"
+        },
+        "action": {
+          "confirm": {
+            "type": "delete",
+            "params": "actionTarget.deleteRule"
+          }
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "titleHtml": "<div class='flex min-w-0 flex-col gap-0.5'><h1 class='text-xl font-semibold tracking-tight text-foreground'>上传规则</h1><p class='text-sm leading-6 text-muted-foreground'>上传规则只负责组合存储方式、允许类型、上传方式，以及分片大小和单文件大小限制，供所有 form-upload 字段复用。</p></div>"
+    },
+    "table": {
+      "page": 1,
+      "pageSize": 10,
+      "total": 0
+    },
+    "actionTarget": {
+      "editRuleId": "",
+      "deleteRule": {}
+    }
+  },
+  "state": {
+    "dialog": {
+      "open": false,
+      "create": false
+    },
+    "confirm": {
+      "delete": false
+    }
+  },
+  "action": {}
+}

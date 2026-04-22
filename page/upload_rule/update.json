@@ -1,0 +1,206 @@
+{
+  "page": {
+    "name": "上传规则编辑",
+    "parent": "front/upload_rule/list",
+    "sort": 10,
+    "auth": [
+      {
+        "key": "front/upload_rule/create",
+        "name": "上传规则新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/upload_rule/update",
+        "name": "上传规则编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "例如：文章图片",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "规则名称不能为空。"
+          },
+          {
+            "type": "model",
+            "except": "$form.id",
+            "message": "该规则名称已存在，请更换。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "id": "upload-rule-storage",
+        "type": "form-select",
+        "placeholder": "请选择存储方式",
+        "value": "form.storage_id",
+        "mode": "form",
+        "option": "option.storage",
+        "validate": [
+          {
+            "type": "required",
+            "message": "存储方式不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[240px]"
+        }
+      },
+      {
+        "type": "form-select",
+        "placeholder": "请选择上传方式",
+        "value": "form.transport",
+        "mode": "form",
+        "option": "option.transport",
+        "validate": [
+          {
+            "type": "required",
+            "message": "上传方式不能为空。"
+          }
+        ],
+        "info": "本地存储仅支持后端中转；七牛云可选择后端中转或前端直传。",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[240px]",
+          "optionFilter": [
+            {
+              "field": "id",
+              "path": "form.storage_id",
+              "sourceNodeId": "upload-rule-storage",
+              "sourceField": "type",
+              "map": {
+                "local": ["relay"],
+                "qiniu": ["relay", "direct"]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "form-checkbox",
+        "value": "form.accept_type_ids",
+        "mode": "form",
+        "option": "option.accept_type",
+        "validate": [
+          {
+            "type": "required",
+            "message": "允许类型不能为空。"
+          }
+        ],
+        "info": "标准 Accept 规则统一在“允许类型”配置里维护，这里只做引用。",
+        "meta": {
+          "formLayout": "horizontal",
+          "orientation": "horizontal"
+        }
+      },
+      {
+        "type": "form-number",
+        "name": "分片大小(M)",
+        "placeholder": "例如：2",
+        "value": "form.chunk_size",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "分片大小不能为空。"
+          }
+        ],
+        "info": "单位是 MB。大文件会按这个大小分片上传。",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[240px]"
+        }
+      },
+      {
+        "type": "form-number",
+        "name": "单文件上限(M)",
+        "placeholder": "例如：10",
+        "value": "form.max_size",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "单文件上限不能为空。"
+          }
+        ],
+        "info": "单位是 MB。后端会在 init 阶段校验单文件大小。",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[240px]"
+        }
+      },
+      {
+        "type": "form-switch",
+        "value": "form.status",
+        "mode": "form",
+        "info": "停用后不会删除已有文件，但新的上传请求将无法使用该规则。",
+        "meta": {
+          "formLayout": "horizontal",
+          "trueValue": 1,
+          "falseValue": 0
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "id": "",
+      "name": "",
+      "storage_id": 1,
+      "accept_type_ids": [
+        1
+      ],
+      "transport": "relay",
+      "chunk_size": 2,
+      "max_size": 10,
+      "status": 1
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form",
+      "data": {
+        "id": "$form.id",
+        "name": "$form.name",
+        "storage_id": "$form.storage_id",
+        "accept_type_id": "$form.accept_type_ids.0",
+        "accept_type_ids": "$form.accept_type_ids",
+        "transport": "$form.transport",
+        "chunk_size": "$form.chunk_size",
+        "max_size": "$form.max_size",
+        "status": "$form.status"
+      }
+    }
+  }
+}

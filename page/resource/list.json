@@ -1,0 +1,111 @@
+{
+  "page": {
+    "name": "资源中心",
+    "icon": "folder-open",
+    "parent": "front/upload_rule/list",
+    "type": 2,
+    "sort": 0
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "content-shell": {
+            "type": "container",
+            "className": "front-two-pane-layout",
+            "children": {
+              "category-column": {
+                "type": "container",
+                "className": "min-w-0",
+                "path": "/front/upload_file_cate/list",
+                "meta": {
+                  "updateDocumentTitle": false
+                }
+              },
+              "resource-column": {
+                "type": "container",
+                "className": "min-w-0"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-rich",
+        "value": "page.titleHtml",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "返回上一页",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "back": true
+        }
+      }
+    ],
+    "resource-column": [
+      {
+        "type": "show-resource",
+        "meta": {
+          "emptyText": "当前暂无资源",
+          "cardDensity": "compact",
+          "categoryIdPath": "search.category_id",
+          "changeVersionPath": "resourceMeta.categoryVersion",
+          "hideCategoryFilter": true,
+          "allowCategoryAssign": true,
+          "allowBatchSelect": true,
+          "allowUpload": false,
+          "uploadRules": [
+            {
+              "ruleId": 1,
+              "kind": "image",
+              "bizKey": "resource.center",
+              "bizName": "资源中心"
+            },
+            {
+              "ruleId": 6,
+              "kind": "file",
+              "bizKey": "resource.center",
+              "bizName": "资源中心"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "titleHtml": "<div class='flex min-w-0 flex-col gap-0.5'><h1 class='text-xl font-semibold tracking-tight text-foreground'>资源中心</h1><p class='text-sm leading-6 text-muted-foreground'>左侧维护资源分类，右侧统一上传、筛选和浏览图片、附件等资源；支持按来源筛选，资源中心内上传的资源来源固定为资源中心。</p></div>"
+    },
+    "search": {
+      "category_id": ""
+    },
+    "resourceMeta": {
+      "categoryVersion": 0
+    }
+  },
+  "state": {},
+  "action": {}
+}

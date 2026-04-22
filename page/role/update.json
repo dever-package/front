@@ -1,0 +1,116 @@
+{
+  "page": {
+    "name": "角色编辑",
+    "parent": "front/role/list",
+    "sort": 10,
+    "auth": [
+      {
+        "key": "front/role/create",
+        "name": "角色新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/role/update",
+        "name": "角色编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "请输入角色名称",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "角色名称不能为空。"
+          },
+          {
+            "type": "model",
+            "except": "$form.id",
+            "message": "该角色名称已存在，请更换。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-text",
+        "name": "权限",
+        "value": "page.superRolePermissionInfo",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.id",
+              "operator": "equals",
+              "value": 1
+            }
+          ]
+        }
+      },
+      {
+        "type": "form-tree",
+        "value": "form.auth_ids",
+        "mode": "form",
+        "option": "/front/route/option?type=model&use=front.NewAuthModel&tree=1&extraFields=type,path,key",
+        "info": "勾选子权限时会自动补齐上级菜单；单独勾选菜单时不会自动勾选其子权限。",
+        "meta": {
+          "formLayout": "horizontal",
+          "labelField": "value",
+          "leafLayout": "detail",
+          "controlClassName": "w-full",
+          "treeClassName": "max-h-[60vh]",
+          "hiddenWhen": [
+            {
+              "path": "form.id",
+              "operator": "equals",
+              "value": 1
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "superRolePermissionInfo": "超级管理员默认拥有全部权限，无需单独勾选。"
+    },
+    "form": {
+      "id": "",
+      "name": "",
+      "auth_ids": []
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form"
+    }
+  }
+}

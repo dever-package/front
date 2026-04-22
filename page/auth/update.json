@@ -1,0 +1,163 @@
+{
+  "page": {
+    "name": "权限编辑",
+    "parent": "front/auth/list",
+    "sort": 10,
+    "auth": [
+      {
+        "key": "front/auth/create",
+        "name": "权限新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/auth/update",
+        "name": "权限编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "请输入权限名称",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "权限名称不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "placeholder": "例如：user/list 或 user_edit",
+        "value": "form.key",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "标识不能为空。"
+          },
+          {
+            "type": "model",
+            "except": "$form.id",
+            "message": "该标识已存在，请更换。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-icon",
+        "placeholder": "请选择图标，可留空",
+        "value": "form.icon",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "placeholder": "例如：user/list",
+        "value": "form.path",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.parent_id",
+              "operator": "notEmpty"
+            },
+            {
+              "path": "form.parent_id",
+              "operator": "notEquals",
+              "value": 0
+            }
+          ],
+          "showCondition": "all"
+        }
+      },
+      {
+        "type": "form-radio",
+        "placeholder": "请选择权限类型",
+        "info": "普通权限建议在列表页点击某个菜单右侧的 + 新增，这样会自动挂到对应菜单下。",
+        "value": "form.type",
+        "mode": "form",
+        "option": [
+          {
+            "id": 1,
+            "value": "菜单权限"
+          },
+          {
+            "id": 2,
+            "value": "普通权限"
+          }
+        ],
+        "validate": [
+          {
+            "type": "required",
+            "message": "类型不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal",
+          "optionDirection": "horizontal"
+        }
+      },
+      {
+        "type": "form-number",
+        "placeholder": "数值越小越靠前",
+        "value": "form.sort",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[160px]"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "id": "",
+      "key": "",
+      "name": "",
+      "icon": "",
+      "path": "",
+      "parent_id": 0,
+      "type": 1,
+      "sort": 0
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form"
+    }
+  }
+}

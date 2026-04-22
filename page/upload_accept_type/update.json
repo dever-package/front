@@ -1,0 +1,86 @@
+{
+  "page": {
+    "name": "允许类型编辑",
+    "parent": "front/upload_accept_type/list",
+    "sort": 10,
+    "auth": [
+      {
+        "key": "front/upload_accept_type/create",
+        "name": "允许类型新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/upload_accept_type/update",
+        "name": "允许类型编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "例如：图片 / PDF / Office 文档",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "名称不能为空。"
+          },
+          {
+            "type": "model",
+            "except": "$form.id",
+            "message": "该允许类型名称已存在，请更换。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "placeholder": "例如：image/*,.pdf,.doc,.docx",
+        "value": "form.accept",
+        "mode": "form",
+        "info": "留空表示不限；建议使用标准 accept 字符串。",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "id": "",
+      "name": "",
+      "accept": ""
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form"
+    }
+  }
+}

@@ -1,0 +1,201 @@
+{
+  "page": {
+    "name": "资源分类列表",
+    "parent": "front/resource/list",
+    "type": 2,
+    "sort": 1
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "category-shell": {
+        "type": "container",
+        "className": "min-w-0"
+      },
+      "feedback-shell": {
+        "type": "container"
+      }
+    }
+  },
+  "nodes": {
+    "category-shell": [
+      {
+        "type": "show-category-list",
+        "id": "resource-category",
+        "value": "parent.data.search.category_id",
+        "option": "/front/resource/category?stats=1",
+        "meta": {
+          "title": "资源分类",
+          "description": "左侧维护分类，右侧资源列表会按当前分类筛选。",
+          "optionReloadPaths": ["parent.data.resourceMeta.categoryVersion"],
+          "allowClear": true,
+          "clearLabel": "全部资源",
+          "uncategorized": true,
+          "uncategorizedLabel": "未分类",
+          "statusField": "status",
+          "countField": "count",
+          "statusDisplay": "select",
+          "statusChangeAction": {
+            "type": "save",
+            "path": "front/upload_file_cate/update",
+            "params": {
+              "_partial": true,
+              "id": "$row.raw_id",
+              "status": "$value"
+            },
+            "then": ["refresh-parent-resource"]
+          },
+          "statusCases": [
+            {
+              "value": 1,
+              "text": "启用",
+              "tone": "success"
+            },
+            {
+              "value": 0,
+              "text": "停用",
+              "tone": "muted"
+            }
+          ],
+          "createButton": {
+            "name": "新增分类",
+            "icon": "plus",
+            "variant": "outline",
+            "size": "sm",
+            "action": {
+              "click": {
+                "type": "modal",
+                "key": "dialog.categoryCreate",
+                "value": true
+              }
+            }
+          },
+          "buttons": [
+            {
+              "icon": "square-pen",
+              "variant": "ghost",
+              "size": "sm",
+              "description": "编辑当前分类",
+              "action": {
+                "click": [
+                  {
+                    "type": "data",
+                    "key": "actionTarget.editCategoryId",
+                    "value": "$row.raw_id"
+                  },
+                  {
+                    "type": "modal",
+                    "key": "dialog.categoryEdit",
+                    "value": true
+                  }
+                ]
+              }
+            },
+            {
+              "icon": "trash-2",
+              "variant": "ghost",
+              "size": "sm",
+              "description": "删除当前分类",
+              "action": {
+                "click": [
+                  {
+                    "type": "data",
+                    "key": "actionTarget.deleteCategory",
+                    "value": "$row"
+                  },
+                  {
+                    "type": "modal",
+                    "key": "confirm.categoryDelete",
+                    "value": true
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "feedback-shell": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.categoryCreate",
+          "pageRoute": "/front/upload_file_cate/update",
+          "title": "新增资源分类",
+          "description": "新增后可直接用于资源筛选、上传归类和资源改分类。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "size": "sm",
+          "bodyClassName": "py-2"
+        },
+        "action": {
+          "success": ["refresh-parent-resource"]
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.categoryEdit",
+          "pageRoute": "/front/upload_file_cate/update",
+          "title": "编辑资源分类",
+          "description": "修改名称和状态后，资源中心筛选和资源卡片会同步更新。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "id": "data.actionTarget.editCategoryId"
+          },
+          "size": "sm",
+          "bodyClassName": "py-2"
+        },
+        "action": {
+          "success": ["refresh-parent-resource"]
+        }
+      },
+      {
+        "type": "feedback-confirm",
+        "name": "删除资源分类",
+        "info": "确认删除当前分类吗？如果分类下仍有资源，会阻止删除。",
+        "meta": {
+          "stateKey": "confirm.categoryDelete"
+        },
+        "action": {
+          "confirm": {
+            "type": "delete",
+            "path": "front/upload_file_cate/update",
+            "params": "actionTarget.deleteCategory",
+            "before": {
+              "type": "service",
+              "use": "front.upload.UploadFileCateHook.BeforeDeleteUploadFileCate"
+            },
+            "then": ["refresh-parent-resource"]
+          }
+        }
+      }
+    ]
+  },
+  "data": {
+    "actionTarget": {
+      "editCategoryId": "",
+      "deleteCategory": {}
+    }
+  },
+  "state": {
+    "dialog": {
+      "categoryCreate": false,
+      "categoryEdit": false
+    },
+    "confirm": {
+      "categoryDelete": false
+    }
+  },
+  "action": {
+    "refresh-parent-resource": {
+      "type": "increment",
+      "key": "parent.data.resourceMeta.categoryVersion"
+    }
+  }
+}

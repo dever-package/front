@@ -1,0 +1,228 @@
+{
+  "page": {
+    "name": "存储方式编辑",
+    "parent": "front/upload_storage/list",
+    "sort": 10,
+    "auth": [
+      {
+        "key": "front/upload_storage/create",
+        "name": "存储方式新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/upload_storage/update",
+        "name": "存储方式编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "例如：本地存储 / 七牛云华东",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "名称不能为空。"
+          },
+          {
+            "type": "model",
+            "except": "$form.id",
+            "message": "该存储方式名称已存在，请更换。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "id": "upload-storage-type",
+        "type": "form-select",
+        "placeholder": "请选择存储类型",
+        "value": "form.type",
+        "mode": "form",
+        "option": "option.type",
+        "validate": [
+          {
+            "type": "required",
+            "message": "存储类型不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[240px]",
+          "control": [
+            {
+              "value": "local",
+              "hide": [
+                "upload-storage-access-key",
+                "upload-storage-secret-key",
+                "upload-storage-bucket",
+                "upload-storage-upload-host",
+                "upload-storage-token-ttl"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "id": "upload-storage-access-key",
+        "type": "form-input",
+        "placeholder": "输入七牛云 AccessKey",
+        "value": "form.access_key",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "AccessKey 不能为空。",
+            "when": [
+              {
+                "path": "form.type",
+                "operator": "equals",
+                "value": "qiniu"
+              }
+            ]
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "id": "upload-storage-secret-key",
+        "type": "form-password",
+        "placeholder": "输入七牛云 SecretKey",
+        "value": "form.secret_key",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "SecretKey 不能为空。",
+            "when": [
+              {
+                "path": "form.type",
+                "operator": "equals",
+                "value": "qiniu"
+              }
+            ]
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "id": "upload-storage-bucket",
+        "type": "form-input",
+        "placeholder": "输入七牛云 Bucket",
+        "value": "form.bucket",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "Bucket 不能为空。",
+            "when": [
+              {
+                "path": "form.type",
+                "operator": "equals",
+                "value": "qiniu"
+              }
+            ]
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "id": "upload-storage-domain",
+        "type": "form-input",
+        "placeholder": "例如：https://cdn.example.com 或 http://127.0.0.1:8085",
+        "value": "form.domain",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "访问域名不能为空。",
+            "when": [
+              {
+                "path": "form.type",
+                "operator": "equals",
+                "value": "qiniu"
+              }
+            ]
+          }
+        ],
+        "info": "七牛云必须填写访问域名；本地存储可留空，留空时会默认使用当前服务的 /upload/... 直链。",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "id": "upload-storage-upload-host",
+        "type": "form-input",
+        "placeholder": "例如：https://upload.qiniup.com",
+        "value": "form.upload_host",
+        "mode": "form",
+        "info": "留空时会使用七牛默认上传域名。",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "id": "upload-storage-token-ttl",
+        "type": "form-number",
+        "placeholder": "例如：3600",
+        "value": "form.token_ttl",
+        "mode": "form",
+        "info": "仅七牛前端直传使用，默认 3600 秒。",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[240px]"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "id": "",
+      "name": "",
+      "type": "local",
+      "access_key": "",
+      "secret_key": "",
+      "bucket": "",
+      "domain": "",
+      "upload_host": "",
+      "token_ttl": 3600
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form"
+    }
+  }
+}

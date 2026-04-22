@@ -1,0 +1,117 @@
+package page
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/shemic/dever/util"
+)
+
+type ActionConfig struct {
+	Type    string `json:"type"`
+	Path    string `json:"path"`
+	Use     string `json:"use"`
+	PK      string `json:"pk"`
+	Data    any    `json:"data"`
+	Params  any    `json:"params"`
+	Filters any    `json:"filters"`
+	Upsert  bool   `json:"upsert"`
+	Before  any    `json:"before"`
+	After   any    `json:"after"`
+	Api     string `json:"api"`
+	Method  string `json:"method"`
+	Target  string `json:"target"`
+	Key     string `json:"key"`
+	Value   any    `json:"value"`
+}
+
+type ActionRequest struct {
+	Action  *ActionConfig `json:"action"`
+	Payload any           `json:"payload"`
+}
+
+type actionEnvelope struct {
+	Action map[string]ActionConfig `json:"action"`
+}
+
+type actionEnvelopeCacheEntry struct {
+	signature ContentSignature
+	envelope  actionEnvelope
+}
+
+var actionEnvelopeCache util.ConcurrentMap[ContentSignature, actionEnvelopeCacheEntry]
+
+func NormalizeAction(config ActionConfig) ActionConfig {
+	config.Type = strings.ToLower(strings.TrimSpace(config.Type))
+	config.Path = NormalizePath(config.Path)
+	config.Use = strings.TrimSpace(config.Use)
+	config.PK = strings.TrimSpace(config.PK)
+	return config
+}
+
+func SubmitModelName(content []byte, pathValue string) string {
+	config, ok, err := parseNamedAction(content, "submit")
+	if err == nil && ok && config.Type == "save" {
+		return ActionModelName(pathValue, config)
+	}
+
+	if strings.HasSuffix(NormalizePath(pathValue), "/list") {
+		return ""
+	}
+
+	return DefaultModelName(pathValue)
+}
+
+func ActionModelName(pathValue string, config ActionConfig) string {
+	if modelName := strings.TrimSpace(config.Use); modelName != "" {
+		return modelName
+	}
+	return DefaultModelName(ActionPath(pathValue, config))
+}
+
+func ActionPrimaryKey(config ActionConfig) string {
+	return util.FirstNonEmpty(strings.TrimSpace(config.PK), "id")
+}
+
+func ActionPath(pathValue string, config ActionConfig) string {
+	if current := NormalizePath(config.Path); current != "" {
+		return current
+	}
+	return NormalizePath(pathValue)
+}
+
+func parseNamedAction(content []byte, name string) (ActionConfig, bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ActionConfig{}, false, nil
+	}
+
+	envelope, err := parseActionEnvelope(content)
+	if err != nil {
+		return ActionConfig{}, false, err
+	}
+
+	config, ok := envelope.Action[name]
+	if !ok {
+		return ActionConfig{}, false, nil
+	}
+	return NormalizeAction(config), true, nil
+}
+
+func parseActionEnvelope(content []byte) (actionEnvelope, error) {
+	signature := Signature(content)
+	if cached, ok := actionEnvelopeCache.Load(signature); ok {
+		return cached.envelope, nil
+	}
+
+	var envelope actionEnvelope
+	if err := util.UnmarshalNormalizedJSON(content, &envelope); err != nil {
+		return actionEnvelope{}, fmt.Errorf("页面 action 配置解析失败")
+	}
+
+	actionEnvelopeCache.Store(signature, actionEnvelopeCacheEntry{
+		signature: signature,
+		envelope:  envelope,
+	})
+	return envelope, nil
+}

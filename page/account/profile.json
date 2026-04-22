@@ -1,0 +1,81 @@
+{
+  "page": {
+    "name": "个人信息",
+    "parent": "front/account/list",
+    "sort": 12
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "name": "姓名",
+        "type": "form-input",
+        "placeholder": "请输入真实姓名",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "姓名不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "name": "密码",
+        "type": "form-password",
+        "placeholder": "留空则不修改密码",
+        "value": "form.password",
+        "mode": "form",
+        "info": "不填写表示保持原密码不变。",
+        "validate": [
+          {
+            "type": "min",
+            "min": 6,
+            "message": "密码至少 6 位。",
+            "when": [
+              {
+                "path": "form.password",
+                "operator": "notEmpty"
+              }
+            ]
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": "{{front.ProfileService.LoadCurrentAccountProfile}}"
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "use": "front.NewAccountModel",
+      "params": "form",
+      "before": {
+        "type": "service",
+        "use": "front.ProfileService.BeforeSaveAccountProfile"
+      }
+    }
+  }
+}

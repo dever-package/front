@@ -1,0 +1,325 @@
+{
+  "page": {
+    "name": "权限管理",
+    "icon": "key-round",
+    "parent": "system-settings",
+    "sort": 3
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "toolbar-row": {
+            "type": "row",
+            "className": "flex-wrap items-center gap-2.5"
+          },
+          "table-row": {
+            "type": "container",
+            "className": "overflow-hidden rounded-md border bg-background"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-rich",
+        "value": "page.titleHtml",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "同步权限",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "loadingText": "同步中...",
+          "successMessage": "权限同步成功",
+          "confirm": {
+            "title": "确认同步权限",
+            "description": "该操作会按当前页面配置重新同步权限关系，并刷新当前权限列表，确定继续吗？",
+            "confirmText": "确认同步",
+            "cancelText": "取消"
+          }
+        },
+        "action": {
+          "click": {
+            "type": "request",
+            "api": "/front/main/sync",
+            "method": "post",
+            "target": "data.table"
+          }
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "新增主权限",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "default",
+          "size": "sm"
+        },
+        "action": {
+          "click": [
+            {
+              "type": "data",
+              "key": "actionTarget.createAuth",
+              "value": {}
+            },
+            {
+              "type": "data",
+              "key": "actionTarget.createAuthMeta",
+              "value": {
+                "title": "新增主权限",
+                "description": "新增主权限，用于组织菜单分组，可不填写路径。"
+              }
+            },
+            {
+              "type": "modal",
+              "key": "dialog.create",
+              "value": true
+            }
+          ]
+        }
+      }
+    ],
+    "toolbar-row": [
+      {
+        "type": "form-input",
+        "placeholder": "筛选权限名称...",
+        "value": "search.keyword",
+        "mode": "search"
+      },
+      {
+        "type": "show-button",
+        "name": "重置",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/auth/list"
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "table.list",
+        "meta": {
+          "remote": true,
+          "tree": true,
+          "rowKey": "id",
+          "columns": [
+            {
+              "value": "name",
+              "type": "show-base",
+              "meta": {
+                "align": "left"
+              }
+            },
+            {
+              "value": "icon",
+              "type": "show-icon"
+            },
+            {
+              "value": "key",
+              "type": "show-base"
+            },
+            {
+              "value": "path",
+              "type": "show-base"
+            },
+            {
+              "value": "type",
+              "type": "show-select",
+              "meta": {
+                "editable": false
+              }
+            },
+            {
+              "tip": "双击修改，正序排序。",
+              "value": "sort",
+              "type": "show-base",
+              "editor": "form-number"
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "square-pen",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "编辑当前权限",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.editAuthId",
+                          "value": "$row.id"
+                        },
+                        {
+                          "type": "data",
+                          "key": "actionTarget.editAuthMeta",
+                          "value": {
+                            "title": "编辑权限",
+                            "description": "主权限可不填写路径，子权限通常需要填写路径。"
+                          }
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.open",
+                          "value": true
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "icon": "plus",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "在当前权限下新增子权限，可挂用户编辑、用户头衔等普通权限。",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.createAuth",
+                          "value": {
+                            "parent_id": "$row.id",
+                            "type": 2
+                          }
+                        },
+                        {
+                          "type": "data",
+                          "key": "actionTarget.createAuthMeta",
+                          "value": {
+                            "title": "新增子权限",
+                            "description": "新增子权限会自动挂到当前父权限下，适合挂“用户编辑”“用户头衔”这类普通权限。"
+                          }
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.create",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "page-main": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.open",
+          "pageRoute": "/front/auth/update",
+          "titlePath": "data.actionTarget.editAuthMeta.title",
+          "descriptionPath": "data.actionTarget.editAuthMeta.description",
+          "title": "编辑权限",
+          "description": "在这里调整权限名称、标识、路径和展示类型。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "id": "data.actionTarget.editAuthId"
+          },
+          "size": "md",
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.create",
+          "pageRoute": "/front/auth/update",
+          "titlePath": "data.actionTarget.createAuthMeta.title",
+          "descriptionPath": "data.actionTarget.createAuthMeta.description",
+          "title": "新增权限",
+          "description": "新增主权限或子权限，子权限会自动继承当前父级。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "parent_id": "data.actionTarget.createAuth.parent_id",
+            "type": "data.actionTarget.createAuth.type"
+          },
+          "size": "md",
+          "bodyClassName": "px-6 py-2"
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "titleHtml": "<div class='flex min-w-0 flex-col gap-0.5'><h1 class='text-xl font-semibold tracking-tight text-foreground'>权限管理</h1><p class='text-sm leading-6 text-muted-foreground'>权限按主权限和子权限两级维护，访问页面路由时会自动录入对应权限。</p></div>"
+    },
+    "search": {
+      "keyword": ""
+    },
+    "table": {
+      "page": 1,
+      "pageSize": 20,
+      "total": 0,
+      "searchFields": [
+        "name"
+      ],
+      "tree": true
+    },
+    "option": {
+      "type": [
+        {
+          "id": 1,
+          "value": "菜单权限"
+        },
+        {
+          "id": 2,
+          "value": "普通权限"
+        }
+      ]
+    },
+    "actionTarget": {
+      "editAuthId": "",
+      "editAuthMeta": {
+        "title": "编辑权限",
+        "description": "主权限可不填写路径，子权限通常需要填写路径。"
+      },
+      "createAuth": {},
+      "createAuthMeta": {
+        "title": "新增主权限",
+        "description": "新增主权限，用于组织菜单分组，可不填写路径。"
+      }
+    }
+  },
+  "state": {
+    "dialog": {
+      "open": false,
+      "create": false
+    }
+  },
+  "action": {}
+}
