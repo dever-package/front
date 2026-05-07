@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
-	uploadservice "github.com/dever-package/front/service/upload"
+	uploadservice "my/package/front/service/upload"
 )
 
 type Resource struct{}

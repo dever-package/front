@@ -33,5 +33,9 @@ type UploadSessionIndex struct {
 }
 
 func NewUploadSessionModel() *orm.Model[UploadSession] {
-	return orm.LoadModel[UploadSession]("upload_session", UploadSession{}, UploadSessionIndex{}, "id desc", "default")
+	return orm.LoadModel[UploadSession]("上传会话", "upload_session", orm.ModelConfig{
+		Index:    UploadSessionIndex{},
+		Order:    "id desc",
+		Database: "default",
+	})
 }

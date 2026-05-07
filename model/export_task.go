@@ -31,5 +31,9 @@ type ExportTaskIndex struct {
 }
 
 func NewExportTaskModel() *orm.Model[ExportTask] {
-	return orm.LoadModel[ExportTask]("export_task", ExportTask{}, ExportTaskIndex{}, "id desc", "default")
+	return orm.LoadModel[ExportTask]("导出任务", "export_task", orm.ModelConfig{
+		Index:    ExportTaskIndex{},
+		Order:    "id desc",
+		Database: "default",
+	})
 }

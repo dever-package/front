@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
-	permissionservice "github.com/dever-package/front/service/permission"
+	permissionservice "my/package/front/service/permission"
 )
 
 type Main struct{}

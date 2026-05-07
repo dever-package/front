@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
-	exportservice "github.com/dever-package/front/service/export"
+	exportservice "my/package/front/service/export"
 )
 
 type Export struct{}

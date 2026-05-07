@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/shemic/dever/orm"
-
-	frontmeta "github.com/dever-package/front/service/meta"
 )
 
 type Auth struct {
@@ -25,18 +23,17 @@ type AuthIndex struct {
 	Key struct{} `unique:"key"`
 }
 
-var authParentRelation = frontmeta.Relation{
+var authParentRelation = orm.Relation{
 	Field:      "parent_id",
 	Option:     "front.NewAuthModel",
 	OptionKeys: []string{},
 }
 
-func init() {
-	frontmeta.RegisterModelMeta("front.NewAuthModel", frontmeta.ModelMeta{
-		Relations: []frontmeta.Relation{authParentRelation},
-	})
-}
-
 func NewAuthModel() *orm.Model[Auth] {
-	return orm.LoadModel[Auth]("auth", Auth{}, AuthIndex{}, "sort asc, id asc", "default")
+	return orm.LoadModel[Auth]("权限", "auth", orm.ModelConfig{
+		Index:     AuthIndex{},
+		Order:     "sort asc, id asc",
+		Database:  "default",
+		Relations: []orm.Relation{authParentRelation},
+	})
 }

@@ -34,5 +34,9 @@ type ImportTaskIndex struct {
 }
 
 func NewImportTaskModel() *orm.Model[ImportTask] {
-	return orm.LoadModel[ImportTask]("import_task", ImportTask{}, ImportTaskIndex{}, "id desc", "default")
+	return orm.LoadModel[ImportTask]("导入任务", "import_task", orm.ModelConfig{
+		Index:    ImportTaskIndex{},
+		Order:    "id desc",
+		Database: "default",
+	})
 }

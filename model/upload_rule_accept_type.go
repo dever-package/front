@@ -28,5 +28,10 @@ var uploadRuleAcceptTypeSeed = []map[string]any{
 }
 
 func NewUploadRuleAcceptTypeModel() *orm.Model[UploadRuleAcceptType] {
-	return orm.LoadModel[UploadRuleAcceptType]("upload_rule_accept_type", UploadRuleAcceptType{}, UploadRuleAcceptTypeIndex{}, uploadRuleAcceptTypeSeed, "id asc", "default")
+	return orm.LoadModel[UploadRuleAcceptType]("上传规则允许类型", "upload_rule_accept_type", orm.ModelConfig{
+		Index:    UploadRuleAcceptTypeIndex{},
+		Seeds:    uploadRuleAcceptTypeSeed,
+		Order:    "id asc",
+		Database: "default",
+	})
 }

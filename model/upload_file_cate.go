@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/shemic/dever/orm"
-
-	frontmeta "github.com/dever-package/front/service/meta"
 )
 
 type UploadFileCate struct {
@@ -26,14 +24,13 @@ var uploadFileCateStatusOptions = []map[string]any{
 	{"id": 0, "value": "停用", "label": "停用", "color": "#737373"},
 }
 
-func init() {
-	frontmeta.RegisterModelMeta("front.NewUploadFileCateModel", frontmeta.ModelMeta{
+func NewUploadFileCateModel() *orm.Model[UploadFileCate] {
+	return orm.LoadModel[UploadFileCate]("资源分类", "upload_file_cate", orm.ModelConfig{
+		Index:    UploadFileCateIndex{},
+		Order:    "sort asc,id asc",
+		Database: "default",
 		Options: map[string]any{
 			"status": uploadFileCateStatusOptions,
 		},
 	})
-}
-
-func NewUploadFileCateModel() *orm.Model[UploadFileCate] {
-	return orm.LoadModel[UploadFileCate]("upload_file_cate", UploadFileCate{}, UploadFileCateIndex{}, "sort asc,id asc", "default")
 }

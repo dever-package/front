@@ -26,5 +26,10 @@ var uploadAcceptTypeSeed = []map[string]any{
 }
 
 func NewUploadAcceptTypeModel() *orm.Model[UploadAcceptType] {
-	return orm.LoadModel[UploadAcceptType]("upload_accept_type", UploadAcceptType{}, UploadAcceptTypeIndex{}, uploadAcceptTypeSeed, "id asc", "default")
+	return orm.LoadModel[UploadAcceptType]("允许类型", "upload_accept_type", orm.ModelConfig{
+		Index:    UploadAcceptTypeIndex{},
+		Seeds:    uploadAcceptTypeSeed,
+		Order:    "id asc",
+		Database: "default",
+	})
 }

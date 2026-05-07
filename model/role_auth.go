@@ -18,5 +18,9 @@ type RoleAuthIndex struct {
 }
 
 func NewRoleAuthModel() *orm.Model[RoleAuth] {
-	return orm.LoadModel[RoleAuth]("role_auth", RoleAuth{}, RoleAuthIndex{}, "id desc", "default")
+	return orm.LoadModel[RoleAuth]("角色权限关联", "role_auth", orm.ModelConfig{
+		Index:    RoleAuthIndex{},
+		Order:    "id desc",
+		Database: "default",
+	})
 }

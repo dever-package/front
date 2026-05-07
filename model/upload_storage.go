@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/shemic/dever/orm"
-
-	frontmeta "github.com/dever-package/front/service/meta"
 )
 
 type UploadStorage struct {
@@ -57,14 +55,14 @@ var (
 	}
 )
 
-func init() {
-	frontmeta.RegisterModelMeta("front.NewUploadStorageModel", frontmeta.ModelMeta{
+func NewUploadStorageModel() *orm.Model[UploadStorage] {
+	return orm.LoadModel[UploadStorage]("存储方式", "upload_storage", orm.ModelConfig{
+		Index:    UploadStorageIndex{},
+		Seeds:    uploadStorageSeed,
+		Order:    "id asc",
+		Database: "default",
 		Options: map[string]any{
 			"type": uploadStorageTypeOptions,
 		},
 	})
-}
-
-func NewUploadStorageModel() *orm.Model[UploadStorage] {
-	return orm.LoadModel[UploadStorage]("upload_storage", UploadStorage{}, UploadStorageIndex{}, uploadStorageSeed, "id asc", "default")
 }

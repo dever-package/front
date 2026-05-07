@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/shemic/dever/orm"
-
-	frontmeta "github.com/dever-package/front/service/meta"
 )
 
 type Role struct {
@@ -18,28 +16,21 @@ type RoleIndex struct {
 	Name struct{} `unique:"name"`
 }
 
-var roleAuthRelation = frontmeta.Relation{
+var roleAuthRelation = orm.Relation{
 	Field:      "auth_ids",
 	Through:    "front.NewRoleAuthModel",
 	Option:     "front.NewAuthModel",
 	OptionKeys: []string{},
 }
 
-func init() {
-	frontmeta.RegisterModelMeta("front.NewRoleModel", frontmeta.ModelMeta{
-		Relations: []frontmeta.Relation{roleAuthRelation},
-	})
-}
-
 func NewRoleModel() *orm.Model[Role] {
-	return orm.LoadModel[Role](
-		"role",
-		Role{},
-		RoleIndex{},
-		[]map[string]any{
+	return orm.LoadModel[Role]("角色", "role", orm.ModelConfig{
+		Index: RoleIndex{},
+		Seeds: []map[string]any{
 			{"id": 1, "name": "超级管理员"},
 		},
-		"id asc",
-		"default",
-	)
+		Order:     "id asc",
+		Database:  "default",
+		Relations: []orm.Relation{roleAuthRelation},
+	})
 }

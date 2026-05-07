@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
-	uploadservice "github.com/dever-package/front/service/upload"
+	uploadservice "my/package/front/service/upload"
 )
 
 type Upload struct{}
@@ -22,6 +22,18 @@ func (Upload) PostPart(c *server.Context) error {
 
 func (Upload) PostComplete(c *server.Context) error {
 	return uploadservice.CompleteUpload(c)
+}
+
+func (Upload) PostImportUrl(c *server.Context) error {
+	return uploadservice.ImportURLUpload(c)
+}
+
+func (Upload) PostImportUrlStream(c *server.Context) error {
+	return uploadservice.ImportURLUploadStream(c)
+}
+
+func (Upload) GetStream(c *server.Context) error {
+	return uploadservice.ReadUploadStream(c)
 }
 
 func (Upload) GetOpen(c *server.Context) error {

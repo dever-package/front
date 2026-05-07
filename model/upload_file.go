@@ -31,5 +31,9 @@ type UploadFileIndex struct {
 }
 
 func NewUploadFileModel() *orm.Model[UploadFile] {
-	return orm.LoadModel[UploadFile]("upload_file", UploadFile{}, UploadFileIndex{}, "id desc", "default")
+	return orm.LoadModel[UploadFile]("文件", "upload_file", orm.ModelConfig{
+		Index:    UploadFileIndex{},
+		Order:    "id desc",
+		Database: "default",
+	})
 }

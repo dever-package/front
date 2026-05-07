@@ -48,8 +48,8 @@
   "nodes": {
     "page-header": [
       {
-        "type": "show-rich",
-        "value": "page.titleHtml",
+        "type": "show-title",
+        "value": "page",
         "className": "min-w-0 flex-1"
       }
     ],
@@ -97,7 +97,8 @@
   },
   "data": {
     "page": {
-      "titleHtml": "<div class='flex min-w-0 flex-col gap-0.5'><h1 class='text-xl font-semibold tracking-tight text-foreground'>资源中心</h1><p class='text-sm leading-6 text-muted-foreground'>左侧维护资源分类，右侧统一上传、筛选和浏览图片、附件等资源；支持按来源筛选，资源中心内上传的资源来源固定为资源中心。</p></div>"
+      "title": "资源中心",
+      "description": "左侧维护资源分类，右侧统一上传、筛选和浏览图片、附件等资源；支持按来源筛选，资源中心内上传的资源来源固定为资源中心。"
     },
     "search": {
       "category_id": ""

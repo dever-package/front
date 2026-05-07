@@ -34,8 +34,8 @@
   "nodes": {
     "page-header": [
       {
-        "type": "show-rich",
-        "value": "page.titleHtml",
+        "type": "show-title",
+        "value": "page",
         "className": "min-w-0 flex-1"
       }
     ],
@@ -220,7 +220,8 @@
   },
   "data": {
     "page": {
-      "titleHtml": "<div class='flex min-w-0 flex-col gap-0.5'><h1 class='text-xl font-semibold tracking-tight text-foreground'>存储方式</h1><p class='text-sm leading-6 text-muted-foreground'>把本地、七牛云等存储配置单独维护起来，上传规则只关心引用哪一种存储方式。</p></div>"
+      "title": "存储方式",
+      "description": "把本地、七牛云等存储配置单独维护起来，上传规则只关心引用哪一种存储方式。"
     },
     "table": {
       "page": 1,

@@ -19,5 +19,9 @@ type UploadFileBizIndex struct {
 }
 
 func NewUploadFileBizModel() *orm.Model[UploadFileBiz] {
-	return orm.LoadModel[UploadFileBiz]("upload_file_biz", UploadFileBiz{}, UploadFileBizIndex{}, "id desc", "default")
+	return orm.LoadModel[UploadFileBiz]("业务来源", "upload_file_biz", orm.ModelConfig{
+		Index:    UploadFileBizIndex{},
+		Order:    "id desc",
+		Database: "default",
+	})
 }

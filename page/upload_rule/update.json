@@ -76,7 +76,7 @@
         }
       },
       {
-        "type": "form-select",
+        "type": "form-radio",
         "placeholder": "请选择上传方式",
         "value": "form.transport",
         "mode": "form",

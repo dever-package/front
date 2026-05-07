@@ -3,10 +3,10 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
-	actionservice "github.com/dever-package/front/service/action"
-	optionservice "github.com/dever-package/front/service/option"
-	pageservice "github.com/dever-package/front/service/page"
-	permissionservice "github.com/dever-package/front/service/permission"
+	actionservice "my/package/front/service/action"
+	optionservice "my/package/front/service/option"
+	pageservice "my/package/front/service/page"
+	permissionservice "my/package/front/service/permission"
 )
 
 type Route struct{}

@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/shemic/dever/orm"
-
-	frontmeta "github.com/dever-package/front/service/meta"
 )
 
 type UploadRule struct {
@@ -99,19 +97,19 @@ var (
 	}
 )
 
-var uploadRuleStorageRelation = frontmeta.Relation{
+var uploadRuleStorageRelation = orm.Relation{
 	Field:  "storage_id",
 	Option: "front.NewUploadStorageModel",
 }
 
-var uploadRuleAcceptTypeRelation = frontmeta.Relation{
+var uploadRuleAcceptTypeRelation = orm.Relation{
 	Field:      "accept_type_id",
 	Name:       "accept_type",
 	Option:     "front.NewUploadAcceptTypeModel",
 	OptionKeys: []string{},
 }
 
-var uploadRuleAcceptTypesRelation = frontmeta.Relation{
+var uploadRuleAcceptTypesRelation = orm.Relation{
 	Field:        "accept_type_ids",
 	Name:         "accept_types",
 	Through:      "front.NewUploadRuleAcceptTypeModel",
@@ -119,20 +117,20 @@ var uploadRuleAcceptTypesRelation = frontmeta.Relation{
 	ThroughOrder: "id asc",
 }
 
-func init() {
-	frontmeta.RegisterModelMeta("front.NewUploadRuleModel", frontmeta.ModelMeta{
+func NewUploadRuleModel() *orm.Model[UploadRule] {
+	return orm.LoadModel[UploadRule]("上传规则", "upload_rule", orm.ModelConfig{
+		Index:    UploadRuleIndex{},
+		Seeds:    uploadRuleSeed,
+		Order:    "id asc",
+		Database: "default",
 		Options: map[string]any{
 			"transport": uploadRuleTransportOptions,
 			"status":    uploadRuleStatusOptions,
 		},
-		Relations: []frontmeta.Relation{
+		Relations: []orm.Relation{
 			uploadRuleStorageRelation,
 			uploadRuleAcceptTypeRelation,
 			uploadRuleAcceptTypesRelation,
 		},
 	})
-}
-
-func NewUploadRuleModel() *orm.Model[UploadRule] {
-	return orm.LoadModel[UploadRule]("upload_rule", UploadRule{}, UploadRuleIndex{}, uploadRuleSeed, "id asc", "default")
 }

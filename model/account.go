@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/shemic/dever/orm"
-
-	frontmeta "github.com/dever-package/front/service/meta"
 )
 
 type Account struct {
@@ -21,7 +19,7 @@ type AccountIndex struct {
 	Account struct{} `unique:"account"`
 }
 
-var accountRoleRelation = frontmeta.Relation{
+var accountRoleRelation = orm.Relation{
 	Field:        "role_ids",
 	Through:      "front.NewAccountRoleModel",
 	Option:       "front.NewRoleModel",
@@ -29,14 +27,14 @@ var accountRoleRelation = frontmeta.Relation{
 	OptionKeys:   []string{"role"},
 }
 
-func init() {
-	frontmeta.RegisterModelMeta("front.NewAccountModel", frontmeta.ModelMeta{
-		Relations:      []frontmeta.Relation{accountRoleRelation},
-		HiddenFields:   []string{"password"},
-		PasswordFields: []string{"password"},
-	})
-}
-
 func NewAccountModel() *orm.Model[Account] {
-	return orm.LoadModel[Account]("account", Account{}, AccountIndex{}, "id desc", "default")
+	return orm.LoadModel[Account]("账户", "account", orm.ModelConfig{
+		Index:     AccountIndex{},
+		Order:     "id desc",
+		Database:  "default",
+		Relations: []orm.Relation{accountRoleRelation},
+		Fields: map[string]orm.FieldConfig{
+			"password": {Type: orm.FieldTypePassword},
+		},
+	})
 }

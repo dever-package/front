@@ -18,5 +18,9 @@ type AccountRoleIndex struct {
 }
 
 func NewAccountRoleModel() *orm.Model[AccountRole] {
-	return orm.LoadModel[AccountRole]("account_role", AccountRole{}, AccountRoleIndex{}, "id asc", "default")
+	return orm.LoadModel[AccountRole]("账户角色关联", "account_role", orm.ModelConfig{
+		Index:    AccountRoleIndex{},
+		Order:    "id asc",
+		Database: "default",
+	})
 }

@@ -34,8 +34,8 @@
   "nodes": {
     "page-header": [
       {
-        "type": "show-rich",
-        "value": "page.titleHtml",
+        "type": "show-title",
+        "value": "page",
         "className": "min-w-0 flex-1"
       }
     ],
@@ -207,7 +207,8 @@
   },
   "data": {
     "page": {
-      "titleHtml": "<div class='flex min-w-0 flex-col gap-0.5'><h1 class='text-xl font-semibold tracking-tight text-foreground'>允许类型</h1><p class='text-sm leading-6 text-muted-foreground'>把常用文件类型预先配置成标准 Accept 规则，上传规则只需要选中对应类型即可。</p></div>"
+      "title": "允许类型",
+      "description": "把常用文件类型预先配置成标准 Accept 规则，上传规则只需要选中对应类型即可。"
     },
     "table": {
       "page": 1,

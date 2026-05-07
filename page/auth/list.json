@@ -37,8 +37,8 @@
   "nodes": {
     "page-header": [
       {
-        "type": "show-rich",
-        "value": "page.titleHtml",
+        "type": "show-title",
+        "value": "page",
         "className": "min-w-0 flex-1"
       }
     ],
@@ -276,7 +276,8 @@
   },
   "data": {
     "page": {
-      "titleHtml": "<div class='flex min-w-0 flex-col gap-0.5'><h1 class='text-xl font-semibold tracking-tight text-foreground'>权限管理</h1><p class='text-sm leading-6 text-muted-foreground'>权限按主权限和子权限两级维护，访问页面路由时会自动录入对应权限。</p></div>"
+      "title": "权限管理",
+      "description": "权限按主权限和子权限两级维护，访问页面路由时会自动录入对应权限。"
     },
     "search": {
       "keyword": ""
