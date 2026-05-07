@@ -12,8 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
-	uploadrepo "github.com/dever-package/front/service/upload/repository"
+	"my/package/front/service/transfer"
+	uploadprovider "my/package/front/service/upload/provider"
+	uploadrepo "my/package/front/service/upload/repository"
 )
 
 type ImportFileInput struct {
@@ -26,9 +27,18 @@ type ImportFileInput struct {
 	BizKey     string
 	BizName    string
 	CategoryID uint64
+	Progress   func(text string, progress int)
 }
 
 func ImportFile(ctx context.Context, input ImportFileInput) (resolvedUploadFile, error) {
+	rule, err := uploadrepo.FindUploadRule(ctx, input.RuleID)
+	if err != nil {
+		return resolvedUploadFile{}, err
+	}
+	return importFileWithRule(ctx, input, rule)
+}
+
+func importFileWithRule(ctx context.Context, input ImportFileInput, rule resolvedUploadRule) (resolvedUploadFile, error) {
 	localPath, cleanup, err := resolveImportFileLocalPath(input)
 	if err != nil {
 		return resolvedUploadFile{}, err
@@ -44,11 +54,8 @@ func ImportFile(ctx context.Context, input ImportFileInput) (resolvedUploadFile,
 	if err != nil {
 		return resolvedUploadFile{}, err
 	}
+	notifyImportProgress(input.Progress, "正在校验资源", 48)
 	kind := resolveUploadKind(input.Kind, name, detectedMime)
-	rule, err := uploadrepo.FindUploadRule(ctx, input.RuleID)
-	if err != nil {
-		return resolvedUploadFile{}, err
-	}
 	if err = validateUploadInit(rule, uploadInitInput{
 		RuleID:     input.RuleID,
 		Name:       name,
@@ -75,11 +82,14 @@ func ImportFile(ctx context.Context, input ImportFileInput) (resolvedUploadFile,
 	ext := resolveUploadExt(name, detectedMime)
 	objectKey := buildUploadObjectKey(rule.ID, hash, ext, bizRecord.Key)
 	if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
+		notifyImportProgress(input.Progress, "资源已存在，正在复用记录", 95)
 		if err := updateUploadFileRelationMetaIfNeeded(ctx, *existing, bizRecord.ID, categoryID); err == nil {
 			if refreshed, refreshErr := uploadrepo.FindUploadFile(ctx, existing.ID); refreshErr == nil {
+				notifyImportProgress(input.Progress, "资源保存完成", 100)
 				return refreshed, nil
 			}
 		}
+		notifyImportProgress(input.Progress, "资源保存完成", 100)
 		return *existing, nil
 	}
 
@@ -87,6 +97,7 @@ func ImportFile(ctx context.Context, input ImportFileInput) (resolvedUploadFile,
 	if err != nil {
 		return resolvedUploadFile{}, err
 	}
+	notifyImportProgress(input.Progress, "正在保存到存储", 50)
 	if err = provider.Save(ctx, uploadprovider.SaveInput{
 		Rule: uploadprovider.Rule{
 			Storage:      rule.Storage,
@@ -103,9 +114,15 @@ func ImportFile(ctx context.Context, input ImportFileInput) (resolvedUploadFile,
 		Size:      size,
 		Hash:      hash,
 		Ext:       ext,
+		Progress: func(loaded int64, total int64) {
+			if progress := transfer.Percent(loaded, total, 50, 95); progress >= 0 {
+				notifyImportProgress(input.Progress, "正在保存到存储", progress)
+			}
+		},
 	}); err != nil {
 		return resolvedUploadFile{}, err
 	}
+	notifyImportProgress(input.Progress, "正在写入资源记录", 98)
 
 	return persistUploadFile(ctx, rule, resolvedUploadSession{
 		RuleID:     rule.ID,
@@ -123,6 +140,16 @@ func ImportFile(ctx context.Context, input ImportFileInput) (resolvedUploadFile,
 		ObjectKey:  objectKey,
 		Status:     uploadSessionComplete,
 	}, hash, objectKey)
+}
+
+func notifyImportProgress(progress func(text string, progress int), text string, percent int) {
+	if progress == nil {
+		return
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	progress(strings.TrimSpace(text), percent)
 }
 
 func resolveImportFileLocalPath(input ImportFileInput) (string, func(), error) {

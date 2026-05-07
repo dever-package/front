@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	actionpayload "github.com/dever-package/front/service/action/payload"
+	actionpayload "my/package/front/service/action/payload"
 )
 
 func shouldRunBackendRule(rule validateRule, form map[string]any) bool {

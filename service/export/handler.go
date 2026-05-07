@@ -11,8 +11,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	permissionservice "github.com/dever-package/front/service/permission"
-	"my/authstate"
+	authctx "my/package/front/service/authctx"
+	permissionservice "my/package/front/service/permission"
 )
 
 func CreateTask(c *server.Context) error {
@@ -41,7 +41,7 @@ func CreateTask(c *server.Context) error {
 		return c.Error(err)
 	}
 
-	accountID := uint64(authstate.OptionalUID(c.Context()))
+	accountID := uint64(authctx.OptionalUID(c.Context()))
 	task, err := createTask(c.Context(), accountID, pagePath, tableID, exportKey, query)
 	if err != nil {
 		return c.Error(err)
@@ -51,7 +51,7 @@ func CreateTask(c *server.Context) error {
 
 func GetTaskInfo(c *server.Context) error {
 	taskID := util.ToUint64(c.Input("id", "required", "导出任务"))
-	accountID := uint64(authstate.OptionalUID(c.Context()))
+	accountID := uint64(authctx.OptionalUID(c.Context()))
 	task, err := findTaskByOwner(c.Context(), taskID, accountID)
 	if err != nil {
 		return c.Error(err, http.StatusNotFound)
@@ -61,7 +61,7 @@ func GetTaskInfo(c *server.Context) error {
 
 func DownloadTask(c *server.Context) error {
 	taskID := util.ToUint64(c.Input("id", "required", "导出任务"))
-	accountID := uint64(authstate.OptionalUID(c.Context()))
+	accountID := uint64(authctx.OptionalUID(c.Context()))
 	task, err := findTaskByOwner(c.Context(), taskID, accountID)
 	if err != nil {
 		return c.Error(err, http.StatusNotFound)

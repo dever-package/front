@@ -9,7 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/shemic/dever/server"
 
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
+	uploadprovider "my/package/front/service/upload/provider"
 )
 
 func init() {

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	frontroot "github.com/dever-package/front"
 	"github.com/shemic/dever/util"
+	frontroot "my/package/front"
 )
 
 const cacheKey = "default"
@@ -81,30 +81,10 @@ func Parents() map[string]map[string]struct{} {
 }
 
 func walkParents(result map[string]map[string]struct{}) error {
-	if err := filepath.WalkDir("module", func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry == nil || entry.IsDir() || !isPageFileName(entry.Name()) {
-			return nil
-		}
-
-		cleanPath := filepath.ToSlash(filepath.Clean(path))
-		parts := strings.Split(cleanPath, "/")
-		if len(parts) < 4 || parts[0] != "module" || parts[1] == "front" || parts[2] != "page" {
-			return nil
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
+	for _, root := range []string{"module", "package"} {
+		if err := walkDiskParents(root, result); err != nil {
 			return err
 		}
-
-		routePath := trimPageFileExt(strings.Join(append([]string{parts[1]}, parts[3:]...), "/"))
-		collectParents(result, routePath, content)
-		return nil
-	}); err != nil {
-		return err
 	}
 
 	return fs.WalkDir(frontroot.PageFS, "page", func(path string, entry fs.DirEntry, walkErr error) error {
@@ -125,6 +105,36 @@ func walkParents(result map[string]map[string]struct{}) error {
 		collectParents(result, routePath, content)
 		return nil
 	})
+}
+
+func walkDiskParents(root string, result map[string]map[string]struct{}) error {
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry == nil || entry.IsDir() || !isPageFileName(entry.Name()) {
+			return nil
+		}
+
+		cleanPath := filepath.ToSlash(filepath.Clean(path))
+		parts := strings.Split(cleanPath, "/")
+		if len(parts) < 4 || parts[0] != root || parts[1] == "front" || parts[2] != "page" {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		routePath := trimPageFileExt(strings.Join(append([]string{parts[1]}, parts[3:]...), "/"))
+		collectParents(result, routePath, content)
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 func collectParents(result map[string]map[string]struct{}, parentPath string, content []byte) {

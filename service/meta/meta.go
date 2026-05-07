@@ -3,86 +3,98 @@ package meta
 import (
 	"context"
 	"strings"
-	"sync"
 
+	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	frontrecord "github.com/dever-package/front/service/record"
+	frontrecord "my/package/front/service/record"
 )
 
-type ModelMeta struct {
-	Options        map[string]any
-	Relations      []Relation
-	HiddenFields   []string
-	PasswordFields []string
-}
-
-var (
-	modelMetaMutex sync.RWMutex
-	modelMetaStore = map[string]ModelMeta{}
-)
-
-func RegisterModelMeta(modelName string, meta ModelMeta) {
+func ResolveModelConfig(modelName string) orm.ModelConfig {
 	modelName = strings.TrimSpace(modelName)
 	if modelName == "" {
-		return
+		return orm.ModelConfig{}
 	}
-
-	modelMetaMutex.Lock()
-	modelMetaStore[modelName] = meta
-	modelMetaMutex.Unlock()
+	return frontrecord.ResolveConfig(modelName, frontrecord.LoadSafe(modelName))
 }
 
-func getModelMeta(modelName string) (ModelMeta, bool) {
-	modelMetaMutex.RLock()
-	meta, ok := modelMetaStore[strings.TrimSpace(modelName)]
-	modelMetaMutex.RUnlock()
-	return meta, ok
+func ResolveModelName(modelName string) string {
+	return strings.TrimSpace(ResolveModelConfig(modelName).Name)
 }
 
-func ResolveModelOptions(ctx context.Context, modelName string) map[string]any {
-	meta, ok := getModelMeta(modelName)
-	if !ok {
+func ResolveModelOptionKeys(modelName string) map[string]struct{} {
+	config := ResolveModelConfig(modelName)
+	if len(config.Options) == 0 && len(config.Relations) == 0 {
 		return nil
 	}
 
-	result := cloneMetaOptions(meta.Options)
-	for _, relation := range meta.Relations {
+	result := map[string]struct{}{}
+	for key := range config.Options {
+		addOptionKey(result, key)
+	}
+	for _, relation := range config.Relations {
+		for _, key := range relationOptionKeys(normalizeRelation(modelName, relation)) {
+			addOptionKey(result, key)
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func HasModelOptionKey(modelName, key string) bool {
+	keys := ResolveModelOptionKeys(modelName)
+	if len(keys) == 0 {
+		return false
+	}
+	_, ok := keys[strings.TrimSpace(key)]
+	return ok
+}
+
+func addOptionKey(keys map[string]struct{}, key string) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return
+	}
+	keys[key] = struct{}{}
+}
+
+func ResolveModelOptions(ctx context.Context, modelName string) map[string]any {
+	config := ResolveModelConfig(modelName)
+	result := config.Options
+	for _, relation := range config.Relations {
 		result = MergeOptionMap(result, BuildRelationOptions(ctx, normalizeRelation(modelName, relation)))
 	}
 	return result
 }
 
 func ResolveModelRelations(modelName string) []Relation {
-	meta, ok := getModelMeta(modelName)
-	if !ok || len(meta.Relations) == 0 {
+	config := ResolveModelConfig(modelName)
+	if len(config.Relations) == 0 {
 		return nil
 	}
 
-	relations := make([]Relation, 0, len(meta.Relations))
-	for _, relation := range meta.Relations {
+	relations := make([]Relation, 0, len(config.Relations))
+	for _, relation := range config.Relations {
 		relations = append(relations, normalizeRelation(modelName, relation))
 	}
 	return relations
 }
 
-func ResolvePasswordFields(modelName string) []string {
-	meta, ok := getModelMeta(modelName)
-	if !ok || len(meta.PasswordFields) == 0 {
-		return nil
-	}
-	return append([]string(nil), meta.PasswordFields...)
+func ResolveModelFieldsByType(modelName, fieldType string) []string {
+	return modelFieldsByTypes(ResolveModelConfig(modelName), fieldType)
 }
 
 func AttachRelations(ctx context.Context, modelName string, rows []map[string]any) []map[string]any {
-	meta, ok := getModelMeta(modelName)
-	if !ok || len(meta.Relations) == 0 {
+	relations := ResolveModelRelations(modelName)
+	if len(relations) == 0 {
 		return rows
 	}
 
 	result := rows
-	for _, relation := range meta.Relations {
-		result = AttachRelation(ctx, result, normalizeRelation(modelName, relation))
+	for _, relation := range relations {
+		result = AttachRelation(ctx, result, relation)
 	}
 	return result
 }
@@ -92,27 +104,27 @@ func HideFields(modelName string, rows []map[string]any) []map[string]any {
 		return rows
 	}
 
-	meta, ok := getModelMeta(modelName)
-	if !ok || len(meta.HiddenFields) == 0 {
-		return rows
-	}
-
-	hiddenFields := make(map[string]struct{}, len(meta.HiddenFields))
-	for _, field := range meta.HiddenFields {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
-		hiddenFields[field] = struct{}{}
-		hiddenFields[util.ToSnake(field)] = struct{}{}
-	}
-
+	hiddenFields := hiddenModelFields(modelName)
 	if len(hiddenFields) == 0 {
 		return rows
 	}
 
+	hiddenFieldLookup := make(map[string]struct{}, len(hiddenFields))
+	for _, field := range hiddenFields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		hiddenFieldLookup[field] = struct{}{}
+		hiddenFieldLookup[util.ToSnake(field)] = struct{}{}
+	}
+
+	if len(hiddenFieldLookup) == 0 {
+		return rows
+	}
+
 	for _, row := range rows {
-		for field := range hiddenFields {
+		for field := range hiddenFieldLookup {
 			delete(row, field)
 		}
 	}
@@ -121,13 +133,13 @@ func HideFields(modelName string, rows []map[string]any) []map[string]any {
 }
 
 func SaveModelRelations(ctx context.Context, modelName string, ownerID any, record map[string]any) error {
-	meta, ok := getModelMeta(modelName)
-	if !ok || len(meta.Relations) == 0 {
+	relations := ResolveModelRelations(modelName)
+	if len(relations) == 0 {
 		return nil
 	}
 
-	for _, relation := range meta.Relations {
-		if err := SaveRelation(ctx, ownerID, record, normalizeRelation(modelName, relation)); err != nil {
+	for _, relation := range relations {
+		if err := SaveRelation(ctx, ownerID, record, relation); err != nil {
 			return err
 		}
 	}
@@ -135,46 +147,56 @@ func SaveModelRelations(ctx context.Context, modelName string, ownerID any, reco
 }
 
 func DeleteModelRelations(ctx context.Context, modelName string, payload any) error {
-	meta, ok := getModelMeta(modelName)
-	if !ok || len(meta.Relations) == 0 {
+	relations := ResolveModelRelations(modelName)
+	if len(relations) == 0 {
 		return nil
 	}
 
-	for _, relation := range meta.Relations {
-		if err := DeleteRelation(ctx, payload, normalizeRelation(modelName, relation)); err != nil {
+	for _, relation := range relations {
+		if err := DeleteRelation(ctx, payload, relation); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func cloneMetaOptions(options map[string]any) map[string]any {
-	if len(options) == 0 {
+func hiddenModelFields(modelName string) []string {
+	return modelFieldsByTypes(ResolveModelConfig(modelName), orm.FieldTypeHidden, orm.FieldTypePassword)
+}
+
+func modelFieldsByTypes(config orm.ModelConfig, fieldTypes ...string) []string {
+	if len(config.Fields) == 0 || len(fieldTypes) == 0 {
 		return nil
 	}
 
-	result := make(map[string]any, len(options))
-	for key, value := range options {
-		switch typed := value.(type) {
-		case []map[string]any:
-			result[key] = util.CloneMapSlice(typed)
-		case []any:
-			cloned := make([]any, 0, len(typed))
-			for _, item := range typed {
-				if mapped, ok := item.(map[string]any); ok {
-					cloned = append(cloned, util.CloneMap(mapped))
-					continue
-				}
-				cloned = append(cloned, item)
-			}
-			result[key] = cloned
-		case map[string]any:
-			result[key] = util.CloneMap(typed)
-		default:
-			result[key] = value
+	typeLookup := make(map[string]struct{}, len(fieldTypes))
+	for _, fieldType := range fieldTypes {
+		fieldType = strings.ToLower(strings.TrimSpace(fieldType))
+		if fieldType == "" {
+			continue
 		}
+		typeLookup[fieldType] = struct{}{}
+	}
+	if len(typeLookup) == 0 {
+		return nil
 	}
 
+	seen := map[string]struct{}{}
+	result := make([]string, 0)
+	for field, fieldConfig := range config.Fields {
+		if _, ok := typeLookup[strings.ToLower(strings.TrimSpace(fieldConfig.Type))]; !ok {
+			continue
+		}
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		if _, exists := seen[field]; exists {
+			continue
+		}
+		seen[field] = struct{}{}
+		result = append(result, field)
+	}
 	return result
 }
 

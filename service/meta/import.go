@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	frontrecord "github.com/dever-package/front/service/record"
+	frontrecord "my/package/front/service/record"
 )
 
 type ResolvedImportMeta struct {
@@ -45,7 +45,7 @@ func ResolveModelImportMeta(modelName string) (ResolvedImportMeta, bool) {
 		return ResolvedImportMeta{}, false
 	}
 
-	meta, _ := getModelMeta(modelName)
+	config := ResolveModelConfig(modelName)
 
 	relations := ResolveModelRelations(modelName)
 	relationByField := make(map[string]Relation, len(relations))
@@ -53,7 +53,7 @@ func ResolveModelImportMeta(modelName string) (ResolvedImportMeta, bool) {
 		relationByField[strings.TrimSpace(relation.Field)] = relation
 	}
 
-	optionMap := cloneMetaOptions(meta.Options)
+	optionMap := config.Options
 	fieldNames := collectImportFieldNames(modelName, relationByField, optionMap)
 	if len(fieldNames) == 0 {
 		return ResolvedImportMeta{}, false

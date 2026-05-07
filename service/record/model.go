@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/shemic/dever/load"
+	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 )
 
@@ -19,16 +20,47 @@ type Model interface {
 }
 
 type Adapter struct {
-	value any
+	value         any
+	config        reflect.Value
+	uniqueIndexes reflect.Value
+	selectMap     reflect.Value
+	findMap       reflect.Value
+	count         reflect.Value
+	insert        reflect.Value
+	update        reflect.Value
+	delete        reflect.Value
 }
 
-var adapterCache util.ConcurrentMap[string, *Adapter]
+type ConfigProvider interface {
+	Config() orm.ModelConfig
+}
+
+var (
+	loadCache    util.ConcurrentMap[string, any]
+	modelCache   util.ConcurrentMap[string, Model]
+	adapterCache util.ConcurrentMap[string, *Adapter]
+)
 
 func Resolve(modelName string) Model {
-	if modelValue, ok := LoadSafe(modelName).(Model); ok {
-		return modelValue
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return nil
 	}
-	return ResolveAdapter(modelName)
+	if cached, ok := modelCache.Load(modelName); ok {
+		return cached
+	}
+
+	modelValue := LoadSafe(modelName)
+	if model, ok := modelValue.(Model); ok {
+		modelCache.Store(modelName, model)
+		return model
+	}
+
+	adapter := resolveAdapterValue(modelName, modelValue)
+	if adapter != nil {
+		modelCache.Store(modelName, adapter)
+	}
+	return adapter
 }
 
 func ResolveAdapter(modelName string) *Adapter {
@@ -44,64 +76,79 @@ func ResolveAdapter(modelName string) *Adapter {
 	if modelValue == nil {
 		return nil
 	}
-	adapter := &Adapter{value: modelValue}
+	return resolveAdapterValue(modelName, modelValue)
+}
+
+func resolveAdapterValue(modelName string, modelValue any) *Adapter {
+	if modelValue == nil {
+		return nil
+	}
+	if cached, ok := adapterCache.Load(modelName); ok {
+		return cached
+	}
+	adapter := newAdapter(modelValue)
 	adapterCache.Store(modelName, adapter)
 	return adapter
 }
 
+func Wrap(value any) *Adapter {
+	if value == nil {
+		return nil
+	}
+	return newAdapter(value)
+}
+
 func LoadSafe(modelName string) (result any) {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return nil
+	}
+	if cached, ok := loadCache.Load(modelName); ok {
+		return cached
+	}
 	defer func() {
 		if recover() != nil {
 			result = nil
 		}
 	}()
-	return load.Model(modelName)
-}
-
-func (m *Adapter) Labels() map[string]string {
-	if m == nil || m.value == nil {
-		return nil
-	}
-	method := reflect.ValueOf(m.value).MethodByName("Labels")
-	if !method.IsValid() || method.Type().NumIn() != 0 {
-		return nil
-	}
-	out := method.Call(nil)
-	if len(out) == 0 || !out[0].IsValid() || out[0].IsNil() {
-		return nil
-	}
-	labels, _ := out[0].Interface().(map[string]string)
-	if len(labels) == 0 {
-		return nil
-	}
-	result := make(map[string]string, len(labels))
-	for key, value := range labels {
-		result[normalizeColumnKey(key)] = strings.TrimSpace(value)
+	result = load.Model(modelName)
+	if result != nil {
+		loadCache.Store(modelName, result)
 	}
 	return result
 }
 
-func (m *Adapter) Label(field string) string {
-	field = strings.TrimSpace(field)
-	if field == "" || m == nil || m.value == nil {
-		return ""
+func ResolveConfig(modelName string, modelValue any) orm.ModelConfig {
+	if provider, ok := modelValue.(ConfigProvider); ok {
+		return provider.Config()
 	}
-	method := reflect.ValueOf(m.value).MethodByName("Label")
-	if !method.IsValid() || method.Type().NumIn() != 1 {
-		return ""
+	if adapter := resolveAdapterValue(modelName, modelValue); adapter != nil {
+		return adapter.Config()
 	}
-	out := method.Call([]reflect.Value{reflectCallArg(method.Type().In(0), field)})
-	if len(out) == 0 {
-		return ""
+	return orm.ModelConfig{}
+}
+
+func (m *Adapter) Config() orm.ModelConfig {
+	if m == nil || m.value == nil {
+		return orm.ModelConfig{}
 	}
-	return strings.TrimSpace(util.ToString(out[0].Interface()))
+	method := m.config
+	if !method.IsValid() || method.Type().NumIn() != 0 {
+		return orm.ModelConfig{}
+	}
+	out := method.Call(nil)
+	if len(out) == 0 || !out[0].IsValid() {
+		return orm.ModelConfig{}
+	}
+	config, _ := out[0].Interface().(orm.ModelConfig)
+	return config
 }
 
 func (m *Adapter) UniqueIndexes() [][]string {
 	if m == nil || m.value == nil {
 		return nil
 	}
-	method := reflect.ValueOf(m.value).MethodByName("UniqueIndexes")
+	method := m.uniqueIndexes
 	if !method.IsValid() || method.Type().NumIn() != 0 {
 		return nil
 	}
@@ -138,13 +185,13 @@ func (m *Adapter) HasMethod(name string, argc int) bool {
 	if m == nil || m.value == nil {
 		return false
 	}
-	method := reflect.ValueOf(m.value).MethodByName(name)
+	method := m.method(name)
 	return method.IsValid() && method.Type().NumIn() == argc
 }
 
 func (m *Adapter) SelectMap(ctx context.Context, filters any, options ...map[string]any) []map[string]any {
-	method := reflect.ValueOf(m.value).MethodByName("SelectMap")
-	if !method.IsValid() {
+	method := m.selectMap
+	if !hasArgs(method, 2) {
 		return nil
 	}
 	args := []reflect.Value{
@@ -152,6 +199,9 @@ func (m *Adapter) SelectMap(ctx context.Context, filters any, options ...map[str
 		reflectCallArg(method.Type().In(1), filters),
 	}
 	if len(options) > 0 {
+		if method.Type().NumIn() < 3 {
+			return nil
+		}
 		args = append(args, reflectCallArg(method.Type().In(2), options[0]))
 	}
 	out := method.Call(args)
@@ -163,8 +213,8 @@ func (m *Adapter) SelectMap(ctx context.Context, filters any, options ...map[str
 }
 
 func (m *Adapter) FindMap(ctx context.Context, filters any, options ...map[string]any) map[string]any {
-	method := reflect.ValueOf(m.value).MethodByName("FindMap")
-	if !method.IsValid() {
+	method := m.findMap
+	if !hasArgs(method, 2) {
 		return nil
 	}
 	args := []reflect.Value{
@@ -172,6 +222,9 @@ func (m *Adapter) FindMap(ctx context.Context, filters any, options ...map[strin
 		reflectCallArg(method.Type().In(1), filters),
 	}
 	if len(options) > 0 {
+		if method.Type().NumIn() < 3 {
+			return nil
+		}
 		args = append(args, reflectCallArg(method.Type().In(2), options[0]))
 	}
 	out := method.Call(args)
@@ -183,8 +236,8 @@ func (m *Adapter) FindMap(ctx context.Context, filters any, options ...map[strin
 }
 
 func (m *Adapter) Count(ctx context.Context, filters any, options ...map[string]any) int64 {
-	method := reflect.ValueOf(m.value).MethodByName("Count")
-	if !method.IsValid() {
+	method := m.count
+	if !hasArgs(method, 2) {
 		return 0
 	}
 	args := []reflect.Value{
@@ -192,6 +245,9 @@ func (m *Adapter) Count(ctx context.Context, filters any, options ...map[string]
 		reflectCallArg(method.Type().In(1), filters),
 	}
 	if len(options) > 0 {
+		if method.Type().NumIn() < 3 {
+			return 0
+		}
 		args = append(args, reflectCallArg(method.Type().In(2), options[0]))
 	}
 	out := method.Call(args)
@@ -202,8 +258,8 @@ func (m *Adapter) Count(ctx context.Context, filters any, options ...map[string]
 }
 
 func (m *Adapter) Insert(ctx context.Context, record map[string]any) int64 {
-	method := reflect.ValueOf(m.value).MethodByName("Insert")
-	if !method.IsValid() {
+	method := m.insert
+	if !hasArgs(method, 2) {
 		return 0
 	}
 	out := method.Call([]reflect.Value{
@@ -217,8 +273,8 @@ func (m *Adapter) Insert(ctx context.Context, record map[string]any) int64 {
 }
 
 func (m *Adapter) Update(ctx context.Context, filters any, record map[string]any) int64 {
-	method := reflect.ValueOf(m.value).MethodByName("Update")
-	if !method.IsValid() {
+	method := m.update
+	if !hasArgs(method, 3) {
 		return 0
 	}
 	out := method.Call([]reflect.Value{
@@ -233,8 +289,8 @@ func (m *Adapter) Update(ctx context.Context, filters any, record map[string]any
 }
 
 func (m *Adapter) Delete(ctx context.Context, filters any) int64 {
-	method := reflect.ValueOf(m.value).MethodByName("Delete")
-	if !method.IsValid() {
+	method := m.delete
+	if !hasArgs(method, 2) {
 		return 0
 	}
 	out := method.Call([]reflect.Value{
@@ -245,6 +301,51 @@ func (m *Adapter) Delete(ctx context.Context, filters any) int64 {
 		return 0
 	}
 	return util.ToInt64(out[0].Interface())
+}
+
+func newAdapter(value any) *Adapter {
+	rv := reflect.ValueOf(value)
+	return &Adapter{
+		value:         value,
+		config:        rv.MethodByName("Config"),
+		uniqueIndexes: rv.MethodByName("UniqueIndexes"),
+		selectMap:     rv.MethodByName("SelectMap"),
+		findMap:       rv.MethodByName("FindMap"),
+		count:         rv.MethodByName("Count"),
+		insert:        rv.MethodByName("Insert"),
+		update:        rv.MethodByName("Update"),
+		delete:        rv.MethodByName("Delete"),
+	}
+}
+
+func (m *Adapter) method(name string) reflect.Value {
+	if m == nil {
+		return reflect.Value{}
+	}
+	switch strings.TrimSpace(name) {
+	case "Config":
+		return m.config
+	case "UniqueIndexes":
+		return m.uniqueIndexes
+	case "SelectMap":
+		return m.selectMap
+	case "FindMap":
+		return m.findMap
+	case "Count":
+		return m.count
+	case "Insert":
+		return m.insert
+	case "Update":
+		return m.update
+	case "Delete":
+		return m.delete
+	default:
+		return reflect.Value{}
+	}
+}
+
+func hasArgs(method reflect.Value, min int) bool {
+	return method.IsValid() && method.Type().NumIn() >= min
 }
 
 func reflectCallArg(target reflect.Type, value any) reflect.Value {

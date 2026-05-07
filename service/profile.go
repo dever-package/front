@@ -4,8 +4,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontrecord "github.com/dever-package/front/service/record"
-	"my/authstate"
+	authctx "my/package/front/service/authctx"
+	frontrecord "my/package/front/service/record"
 )
 
 type ProfileService struct{}
@@ -16,7 +16,7 @@ func (ProfileService) ProviderLoadCurrentAccountProfile(c *server.Context, _ []a
 		panic("账户模型未注册")
 	}
 
-	accountID := uint64(authstate.RequireUID(c.Context()))
+	accountID := uint64(authctx.RequireUID(c.Context()))
 	accountRow := accountModel.FindMap(c.Context(), map[string]any{"id": accountID})
 	if len(accountRow) == 0 {
 		panic("当前账户不存在")
@@ -36,7 +36,7 @@ func (ProfileService) ProviderBeforeSaveAccountProfile(c *server.Context, params
 	}
 
 	sanitized := map[string]any{
-		"id":   uint64(authstate.RequireUID(c.Context())),
+		"id":   uint64(authctx.RequireUID(c.Context())),
 		"name": name,
 	}
 

@@ -1,8 +1,8 @@
 package action
 
 import (
-	actionpayload "github.com/dever-package/front/service/action/payload"
-	frontpage "github.com/dever-package/front/service/page"
+	actionpayload "my/package/front/service/action/payload"
+	frontpage "my/package/front/service/page"
 )
 
 func resolveSavePayload(config frontpage.ActionConfig, form map[string]any) (any, error) {

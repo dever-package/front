@@ -11,8 +11,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
-	uploadrepo "github.com/dever-package/front/service/upload/repository"
+	uploadprovider "my/package/front/service/upload/provider"
+	uploadrepo "my/package/front/service/upload/repository"
 )
 
 func InitUpload(c *server.Context) error {

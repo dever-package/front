@@ -6,10 +6,11 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	frontmeta "github.com/dever-package/front/service/meta"
-	frontrecord "github.com/dever-package/front/service/record"
+	frontmeta "my/package/front/service/meta"
+	frontrecord "my/package/front/service/record"
 )
 
 func hashPlainPassword(password string) string {
@@ -24,12 +25,7 @@ func NormalizeModelPasswordFields(modelName string, data map[string]any, columnL
 }
 
 func resolveModelPasswordColumns(modelName string, columnLookup map[string]string) []string {
-	fields := []string{}
-	if metaFields := frontmeta.ResolvePasswordFields(modelName); len(metaFields) > 0 {
-		fields = metaFields
-	} else {
-		fields = []string{"password"}
-	}
+	fields := frontmeta.ResolveModelFieldsByType(modelName, orm.FieldTypePassword)
 
 	columns := make([]string, 0, len(fields))
 	seen := map[string]struct{}{}

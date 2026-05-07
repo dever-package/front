@@ -9,7 +9,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontoption "github.com/dever-package/front/service/option"
+	frontoption "my/package/front/service/option"
 )
 
 func applyNodeDefaults(
@@ -20,7 +20,7 @@ func applyNodeDefaults(
 	pathValue string,
 ) (json.RawMessage, error) {
 	if len(rawData) == 0 {
-		return rawData, nil
+		rawData = json.RawMessage(`{}`)
 	}
 
 	var nodes map[string][]map[string]any
@@ -41,6 +41,12 @@ func applyNodeDefaults(
 	}
 
 	changed := false
+	if applyFormFieldDefaults(root, nodes) {
+		changed = true
+	}
+	if applyPageDataDefaults(root, nodes, pathValue) {
+		changed = true
+	}
 	for _, items := range nodes {
 		for _, item := range items {
 			applied, err := applyDefaultCategoryValue(c, root, item)
@@ -74,6 +80,127 @@ func applyNodeDefaults(
 		return nil, fmt.Errorf("页面 data 编码失败")
 	}
 	return json.RawMessage(content), nil
+}
+
+func applyFormFieldDefaults(root map[string]any, nodes map[string][]map[string]any) bool {
+	form, _ := root["form"].(map[string]any)
+	if len(form) == 0 {
+		return false
+	}
+	if len(mapStringSlice(form["_fields"])) > 0 {
+		return false
+	}
+
+	fields := collectFormFieldKeys(nodes)
+	if len(fields) == 0 {
+		return false
+	}
+
+	form["_fields"] = stringSliceToAny(fields)
+	root["form"] = form
+	return true
+}
+
+func collectFormFieldKeys(nodes map[string][]map[string]any) []string {
+	seen := map[string]struct{}{}
+	fields := make([]string, 0)
+	for _, items := range nodes {
+		for _, item := range items {
+			fields = appendFormFieldKeys(fields, seen, item)
+		}
+	}
+	return fields
+}
+
+func appendFormFieldKeys(fields []string, seen map[string]struct{}, item map[string]any) []string {
+	if field := formFieldKeyFromPath(util.ToStringTrimmed(item["value"])); field != "" {
+		if _, exists := seen[field]; !exists {
+			seen[field] = struct{}{}
+			fields = append(fields, field)
+		}
+	}
+
+	for _, child := range normalizeNodeItems(item["items"]) {
+		fields = appendFormFieldKeys(fields, seen, child)
+	}
+	return fields
+}
+
+func formFieldKeyFromPath(path string) string {
+	path = strings.TrimSpace(path)
+	switch {
+	case strings.HasPrefix(path, "form."):
+		path = strings.TrimPrefix(path, "form.")
+	case strings.HasPrefix(path, "data.form."):
+		path = strings.TrimPrefix(path, "data.form.")
+	default:
+		return ""
+	}
+
+	field := strings.TrimSpace(strings.Split(path, ".")[0])
+	if field == "" || isFormMetaField(field) {
+		return ""
+	}
+	return field
+}
+
+func stringSliceToAny(values []string) []any {
+	result := make([]any, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+func applyPageDataDefaults(root map[string]any, nodes map[string][]map[string]any, pathValue string) bool {
+	if !usesPageTitleNode(nodes) {
+		return false
+	}
+
+	title := DefaultModelLabel(pathValue)
+	if title == "" {
+		return false
+	}
+
+	pageData, _ := root["page"].(map[string]any)
+	if pageData == nil {
+		pageData = map[string]any{}
+		root["page"] = pageData
+	}
+	if strings.TrimSpace(util.ToString(pageData["title"])) != "" {
+		return false
+	}
+
+	pageData["title"] = title
+	return true
+}
+
+func usesPageTitleNode(nodes map[string][]map[string]any) bool {
+	for _, items := range nodes {
+		for _, item := range items {
+			if usesPageTitleItem(item) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func usesPageTitleItem(item map[string]any) bool {
+	if len(item) == 0 {
+		return false
+	}
+	if util.ToStringTrimmed(item["type"]) == "show-title" && util.ToStringTrimmed(item["value"]) == "page" {
+		return true
+	}
+	for _, child := range normalizeNodeItems(item["items"]) {
+		if usesPageTitleItem(child) {
+			return true
+		}
+	}
+	return false
 }
 
 func applyLinkedPageCategoryDefaults(

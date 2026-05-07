@@ -4,8 +4,6 @@ import (
 	"strings"
 
 	"github.com/shemic/dever/util"
-
-	frontrecord "github.com/dever-package/front/service/record"
 )
 
 var modelLabelCache util.ConcurrentMap[string, modelLabelMap]
@@ -42,11 +40,7 @@ func resolveModelLabels(modelName string) modelLabelMap {
 		return cached
 	}
 
-	adapter := frontrecord.ResolveAdapter(modelName)
-	if adapter == nil {
-		return nil
-	}
-	labels := modelLabelMap(adapter.Labels())
+	labels := modelLabelMap(ResolveModelConfig(modelName).Labels)
 	modelLabelCache.Store(modelName, labels)
 	return labels
 }
@@ -189,6 +183,10 @@ func relatedModelFieldLabel(relation Relation, field string) string {
 func relatedEntityLabel(modelName string) string {
 	if strings.TrimSpace(modelName) == "" {
 		return ""
+	}
+
+	if name := ResolveModelName(modelName); name != "" {
+		return name
 	}
 
 	labels := resolveModelLabels(modelName)

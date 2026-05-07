@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	frontmeta "github.com/dever-package/front/service/meta"
+	frontmeta "my/package/front/service/meta"
 )
 
 const (

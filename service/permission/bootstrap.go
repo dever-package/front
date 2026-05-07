@@ -2,7 +2,6 @@ package permission
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -11,13 +10,12 @@ import (
 	"sort"
 	"strings"
 
-	frontroot "github.com/dever-package/front"
-	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
+	frontroot "my/package/front"
 
-	embedpageservice "github.com/dever-package/front/service/embedpage"
-	frontpage "github.com/dever-package/front/service/page"
-	frontrecord "github.com/dever-package/front/service/record"
+	embedpageservice "my/package/front/service/embedpage"
+	frontpage "my/package/front/service/page"
+	frontrecord "my/package/front/service/record"
 )
 
 func EnsureBootstrap(ctx context.Context) error {
@@ -206,49 +204,14 @@ func loadPageAuthRecords() ([]authRecord, error) {
 	recordMap := make(map[string]authRecord)
 	recordPriorityMap := make(map[string]int)
 	embeddedPaths := embedpageservice.Paths()
-	err := filepath.WalkDir("module", func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry == nil || entry.IsDir() || !frontpage.IsPageFileName(entry.Name()) {
-			return nil
-		}
 
-		cleanPath := filepath.ToSlash(filepath.Clean(path))
-		parts := strings.Split(cleanPath, "/")
-		if len(parts) < 4 || parts[0] != "module" || !frontpage.IsPageDir(parts[2]) {
-			return nil
+	for _, root := range []string{"module", "package"} {
+		if err := walkDiskPageAuthRecords(root, embeddedPaths, recordMap, recordPriorityMap); err != nil {
+			return nil, fmt.Errorf("扫描页面权限失败")
 		}
-		if parts[1] == "front" {
-			return nil
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		meta, err := parsePageMeta(content)
-		if err != nil {
-			return nil
-		}
-
-		routePath := frontpage.TrimPageFileExt(strings.Join(append([]string{parts[1]}, parts[3:]...), "/"))
-		routePath = frontpage.NormalizePath(routePath)
-		if routePath == "" {
-			return nil
-		}
-		if _, embedded := embeddedPaths[routePath]; embedded {
-			return nil
-		}
-
-		savePageAuthRecords(recordMap, recordPriorityMap, content, meta, routePath, entry.Name())
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("扫描页面权限失败")
 	}
 
-	err = fs.WalkDir(frontroot.PageFS, "page", func(path string, entry fs.DirEntry, walkErr error) error {
+	err := fs.WalkDir(frontroot.PageFS, "page", func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -289,6 +252,56 @@ func loadPageAuthRecords() ([]authRecord, error) {
 	return records, nil
 }
 
+func walkDiskPageAuthRecords(
+	root string,
+	embeddedPaths map[string]struct{},
+	recordMap map[string]authRecord,
+	recordPriorityMap map[string]int,
+) error {
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry == nil || entry.IsDir() || !frontpage.IsPageFileName(entry.Name()) {
+			return nil
+		}
+
+		cleanPath := filepath.ToSlash(filepath.Clean(path))
+		parts := strings.Split(cleanPath, "/")
+		if len(parts) < 4 || parts[0] != root || !frontpage.IsPageDir(parts[2]) {
+			return nil
+		}
+		if parts[1] == "front" {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		meta, err := parsePageMeta(content)
+		if err != nil {
+			return nil
+		}
+
+		routePath := frontpage.TrimPageFileExt(strings.Join(append([]string{parts[1]}, parts[3:]...), "/"))
+		routePath = frontpage.NormalizePath(routePath)
+		if routePath == "" {
+			return nil
+		}
+		if _, embedded := embeddedPaths[routePath]; embedded {
+			return nil
+		}
+
+		savePageAuthRecords(recordMap, recordPriorityMap, content, meta, routePath, entry.Name())
+		return nil
+	})
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
 func FilterAssignableAuthRows(rows []map[string]any) []map[string]any {
 	return embedpageservice.FilterRows(rows)
 }
@@ -324,7 +337,7 @@ func buildPageAuthRecords(meta pageMeta, routePath string) []authRecord {
 	return []authRecord{
 		{
 			Key:       routePath,
-			Name:      util.FirstNonEmpty(strings.TrimSpace(meta.Name), strings.TrimSpace(meta.Title), routePath),
+			Name:      util.FirstNonEmpty(strings.TrimSpace(meta.Name), strings.TrimSpace(meta.Title), frontpage.DefaultPageTitle(routePath), routePath),
 			Icon:      strings.TrimSpace(meta.Icon),
 			Path:      routePath,
 			ParentKey: strings.TrimSpace(meta.Parent),
@@ -836,131 +849,7 @@ func ensureAccountRoleLink(ctx context.Context, accountID, roleID uint64) {
 }
 
 func SyncModelPrimarySequence(ctx context.Context, modelName string) error {
-	tableName, primaryColumn, err := loadModelPrimarySequenceInfo(modelName)
-	if err != nil {
-		return err
-	}
-	if tableName == "" || primaryColumn == "" {
-		return nil
-	}
-
-	db, err := orm.Get()
-	if err != nil {
-		return err
-	}
-	if normalizeDatabaseDriver(db.DriverName()) != "postgres" {
-		return nil
-	}
-
-	var sequenceName sql.NullString
-	if err := db.QueryRowContext(
-		ctx,
-		"SELECT pg_get_serial_sequence($1, $2)",
-		tableName,
-		primaryColumn,
-	).Scan(&sequenceName); err != nil {
-		return err
-	}
-	if !sequenceName.Valid || strings.TrimSpace(sequenceName.String) == "" {
-		return nil
-	}
-
-	statement := fmt.Sprintf(
-		"SELECT setval($1::regclass, COALESCE((SELECT MAX(%s) FROM %s), 0) + 1, false)",
-		quotePostgresIdentifier(primaryColumn),
-		quotePostgresTableName(tableName),
-	)
-	_, err = db.ExecContext(ctx, statement, sequenceName.String)
-	return err
-}
-
-func loadModelPrimarySequenceInfo(modelName string) (string, string, error) {
-	resourceName := frontrecord.ResourceName(modelName)
-	if resourceName == "" {
-		return "", "", nil
-	}
-
-	entries, err := os.ReadDir(filepath.Join("data", "table"))
-	if err != nil {
-		return "", "", err
-	}
-
-	type schemaColumn struct {
-		Name          string `json:"name"`
-		Primary       bool   `json:"primary"`
-		AutoIncrement bool   `json:"autoIncrement"`
-	}
-	type tableSchemaFile struct {
-		Table   string         `json:"table"`
-		Columns []schemaColumn `json:"columns"`
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		name := entry.Name()
-		if name != resourceName+".json" && !strings.HasSuffix(name, "_"+resourceName+".json") {
-			continue
-		}
-
-		content, readErr := os.ReadFile(filepath.Join("data", "table", name))
-		if readErr != nil {
-			continue
-		}
-
-		var schema tableSchemaFile
-		if jsonErr := json.Unmarshal(content, &schema); jsonErr != nil {
-			continue
-		}
-
-		primaryColumn := ""
-		for _, column := range schema.Columns {
-			if column.Primary && column.AutoIncrement {
-				primaryColumn = strings.TrimSpace(column.Name)
-				break
-			}
-		}
-		if primaryColumn == "" {
-			for _, column := range schema.Columns {
-				if column.Primary {
-					primaryColumn = strings.TrimSpace(column.Name)
-					break
-				}
-			}
-		}
-
-		return strings.TrimSpace(schema.Table), primaryColumn, nil
-	}
-
-	return "", "", nil
-}
-
-func normalizeDatabaseDriver(name string) string {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "postgres", "postgresql", "pgx":
-		return "postgres"
-	default:
-		return strings.ToLower(strings.TrimSpace(name))
-	}
-}
-
-func quotePostgresIdentifier(name string) string {
-	parts := strings.Split(strings.TrimSpace(name), ".")
-	quoted := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		quoted = append(quoted, `"`+strings.ReplaceAll(part, `"`, `""`)+`"`)
-	}
-	return strings.Join(quoted, ".")
-}
-
-func quotePostgresTableName(name string) string {
-	return quotePostgresIdentifier(name)
+	return frontrecord.SyncModelPrimarySequence(ctx, modelName)
 }
 
 func loadConfigMeta() (configMeta, error) {

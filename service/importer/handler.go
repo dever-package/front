@@ -8,9 +8,9 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontmeta "github.com/dever-package/front/service/meta"
-	permissionservice "github.com/dever-package/front/service/permission"
-	"my/authstate"
+	authctx "my/package/front/service/authctx"
+	frontmeta "my/package/front/service/meta"
+	permissionservice "my/package/front/service/permission"
 )
 
 func Analyze(c *server.Context) error {
@@ -112,7 +112,7 @@ func CreateTask(c *server.Context) error {
 		return c.Error("请至少映射一个导入字段")
 	}
 
-	accountID := uint64(authstate.OptionalUID(c.Context()))
+	accountID := uint64(authctx.OptionalUID(c.Context()))
 	task, err := createTask(c.Context(), accountID, pagePath, importKey, fileID, sheetName, settings)
 	if err != nil {
 		return c.Error(err)
@@ -122,7 +122,7 @@ func CreateTask(c *server.Context) error {
 
 func GetTaskInfo(c *server.Context) error {
 	taskID := util.ToUint64(c.Input("id", "required", "导入任务"))
-	accountID := uint64(authstate.OptionalUID(c.Context()))
+	accountID := uint64(authctx.OptionalUID(c.Context()))
 	task, err := findTaskByOwner(c.Context(), taskID, accountID)
 	if err != nil {
 		return c.Error(err, http.StatusNotFound)

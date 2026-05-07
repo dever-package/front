@@ -6,7 +6,7 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	uploadrepo "github.com/dever-package/front/service/upload/repository"
+	uploadrepo "my/package/front/service/upload/repository"
 )
 
 const (

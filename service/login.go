@@ -11,8 +11,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	permissionservice "github.com/dever-package/front/service/permission"
-	frontrecord "github.com/dever-package/front/service/record"
+	permissionservice "my/package/front/service/permission"
+	frontrecord "my/package/front/service/record"
 )
 
 func Login(c *server.Context) error {

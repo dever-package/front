@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	frontmodel "github.com/dever-package/front/model"
+	frontmodel "my/package/front/model"
 )
 
 type Rule struct {
@@ -33,12 +33,13 @@ type SaveInput struct {
 	Size      int64
 	Hash      string
 	Ext       string
+	Progress  func(loaded int64, total int64)
 }
 
 type DirectInitResult struct {
-	UploadURL string
-	Fields    map[string]string
-	Method    string
+	UploadURL string            `json:"uploadURL"`
+	Fields    map[string]string `json:"fields"`
+	Method    string            `json:"method"`
 }
 
 type OpenTarget struct {

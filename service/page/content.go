@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	frontroot "github.com/dever-package/front"
 	"github.com/shemic/dever/util"
+	frontroot "my/package/front"
 )
 
 const pageDirName = "page"
@@ -38,12 +38,12 @@ func ReadContent(pathValue string) ([]byte, error) {
 		return nil, err
 	}
 
-	for _, ext := range pageFileExtCandidates {
-		diskPath := filepath.Join("module", moduleName, pageDirName, fileName+ext)
-		if content, _, readErr := util.ReadJSONCFile(diskPath); readErr == nil {
-			if !json.Valid(content) {
-				return nil, fmt.Errorf("页面配置格式错误")
-			}
+	for _, root := range []string{"module", "package"} {
+		content, ok, err := readDiskPageContent(root, moduleName, fileName)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			return content, nil
 		}
 	}
@@ -61,6 +61,21 @@ func ReadContent(pathValue string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("页面配置不存在")
+}
+
+func readDiskPageContent(root, moduleName, fileName string) ([]byte, bool, error) {
+	for _, ext := range pageFileExtCandidates {
+		diskPath := filepath.Join(root, moduleName, pageDirName, fileName+ext)
+		content, _, readErr := util.ReadJSONCFile(diskPath)
+		if readErr != nil {
+			continue
+		}
+		if !json.Valid(content) {
+			return nil, false, fmt.Errorf("页面配置格式错误")
+		}
+		return content, true, nil
+	}
+	return nil, false, nil
 }
 
 func IsPageDir(name string) bool {

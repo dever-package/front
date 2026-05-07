@@ -10,11 +10,11 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontservice "github.com/dever-package/front/service"
-	actionpayload "github.com/dever-package/front/service/action/payload"
-	frontmeta "github.com/dever-package/front/service/meta"
-	permissionservice "github.com/dever-package/front/service/permission"
-	frontrecord "github.com/dever-package/front/service/record"
+	frontservice "my/package/front/service"
+	actionpayload "my/package/front/service/action/payload"
+	frontmeta "my/package/front/service/meta"
+	permissionservice "my/package/front/service/permission"
+	frontrecord "my/package/front/service/record"
 )
 
 func saveModelRecord(c *server.Context, modelName string, record map[string]any, primaryKey string, upsert bool) (result map[string]any, err error) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	frontrecord "github.com/dever-package/front/service/record"
+	frontrecord "my/package/front/service/record"
 )
 
 func NormalizePath(path string) string {
@@ -82,10 +82,31 @@ func defaultModelCandidates(moduleName string, resourceSegments []string) []stri
 	}
 
 	resourceName := toPascal(strings.Join(resourceSegments, "/"))
-	return uniqueStrings([]string{
+	candidates := []string{
 		fmt.Sprintf("%s.New%sModel", moduleName, resourceName),
 		fmt.Sprintf("%s.New%s%sModel", moduleName, modulePascal, resourceName),
-	})
+	}
+	// package 模块允许用 bot/energon/provider 映射到 bot.energon.NewProviderModel。
+	// 普通 module/user/source 仍优先走 user.NewSourceModel，不受这个候选影响。
+	candidates = append(candidates, nestedModelCandidates(moduleName, resourceSegments)...)
+	return uniqueStrings(candidates)
+}
+
+func nestedModelCandidates(moduleName string, resourceSegments []string) []string {
+	if len(resourceSegments) < 2 {
+		return nil
+	}
+
+	result := make([]string, 0, len(resourceSegments)-1)
+	for split := 1; split < len(resourceSegments); split++ {
+		namespace := strings.Join(append([]string{moduleName}, resourceSegments[:split]...), ".")
+		resourceName := toPascal(strings.Join(resourceSegments[split:], "/"))
+		if namespace == "" || resourceName == "" {
+			continue
+		}
+		result = append(result, fmt.Sprintf("%s.New%sModel", namespace, resourceName))
+	}
+	return result
 }
 
 func uniqueStrings(items []string) []string {

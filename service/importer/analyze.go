@@ -8,9 +8,9 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	frontmeta "github.com/dever-package/front/service/meta"
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
-	uploadrepo "github.com/dever-package/front/service/upload/repository"
+	frontmeta "my/package/front/service/meta"
+	uploadprovider "my/package/front/service/upload/provider"
+	uploadrepo "my/package/front/service/upload/repository"
 )
 
 type workbookAnalysis struct {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -12,7 +11,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontmeta "github.com/dever-package/front/service/meta"
+	frontmeta "my/package/front/service/meta"
+	frontrecord "my/package/front/service/record"
 )
 
 type filterFieldConfig struct {
@@ -24,6 +24,11 @@ type filterFieldConfig struct {
 }
 
 type queryValueLookup func(string) string
+
+type listModel interface {
+	SelectMap(ctx context.Context, filters any, options ...map[string]any) []map[string]any
+	Count(ctx context.Context, filters any, options ...map[string]any) int64
+}
 
 func queryRecordID(c *server.Context, key string) (uint64, bool) {
 	value := normalizeQueryInputText(c.Input(key))
@@ -71,14 +76,9 @@ func queryModelListWithLookup(
 	}
 	order := util.ToStringTrimmed(current["order"])
 
-	listMethod := reflect.ValueOf(modelValue).MethodByName("SelectMap")
-	if !listMethod.IsValid() {
-		return nil, 0, page, pageSize, fmt.Errorf("model 不支持 SelectMap")
-	}
-
-	countMethod := reflect.ValueOf(modelValue).MethodByName("Count")
-	if !countMethod.IsValid() {
-		return nil, 0, page, pageSize, fmt.Errorf("model 不支持 Count")
+	model, ok := resolveListModel(modelValue)
+	if !ok {
+		return nil, 0, page, pageSize, fmt.Errorf("model 不支持 SelectMap/Count")
 	}
 
 	options := map[string]any{
@@ -94,21 +94,8 @@ func queryModelListWithLookup(
 		page = 1
 	}
 
-	listOut := listMethod.Call([]reflect.Value{
-		reflect.ValueOf(ctx),
-		reflect.ValueOf(filters),
-		reflect.ValueOf(options),
-	})
-	rows, _ := listOut[0].Interface().([]map[string]any)
-
-	countOut := countMethod.Call([]reflect.Value{
-		reflect.ValueOf(ctx),
-		reflect.ValueOf(filters),
-	})
-	total := int64(0)
-	if len(countOut) > 0 {
-		total = reflect.ValueOf(countOut[0].Interface()).Convert(reflect.TypeOf(int64(0))).Interface().(int64)
-	}
+	rows := model.SelectMap(ctx, filters, options)
+	total := model.Count(ctx, filters)
 	if treeMode {
 		pageSize = int(total)
 		if pageSize <= 0 {
@@ -117,6 +104,20 @@ func queryModelListWithLookup(
 	}
 
 	return rows, total, page, pageSize, nil
+}
+
+func resolveListModel(modelValue any) (listModel, bool) {
+	if model, ok := modelValue.(listModel); ok {
+		return model, true
+	}
+	adapter := frontrecord.Wrap(modelValue)
+	if adapter == nil || !adapter.HasMethod("SelectMap", 3) {
+		return nil, false
+	}
+	if !adapter.HasMethod("Count", 3) && !adapter.HasMethod("Count", 2) {
+		return nil, false
+	}
+	return adapter, true
 }
 
 func buildModelFilters(c *server.Context, current map[string]any) any {

@@ -11,9 +11,9 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "github.com/dever-package/front/service/call"
-	embedpageservice "github.com/dever-package/front/service/embedpage"
-	frontrecord "github.com/dever-package/front/service/record"
+	frontcall "my/package/front/service/call"
+	embedpageservice "my/package/front/service/embedpage"
+	frontrecord "my/package/front/service/record"
 )
 
 func Get(c *server.Context) error {

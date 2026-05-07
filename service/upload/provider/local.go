@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"my/package/front/service/transfer"
 )
 
 type localDriver struct{}
@@ -34,8 +36,12 @@ func (localDriver) Save(_ context.Context, input SaveInput) error {
 	}
 	defer dst.Close()
 
-	if _, err = io.Copy(dst, src); err != nil {
+	reader := transfer.WrapReader(src, input.Size, input.Progress)
+	if _, err = io.Copy(dst, reader); err != nil {
 		return fmt.Errorf("保存上传文件失败: %w", err)
+	}
+	if input.Progress != nil {
+		input.Progress(input.Size, input.Size)
 	}
 	return nil
 }

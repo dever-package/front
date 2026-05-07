@@ -8,10 +8,10 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	embedpageservice "github.com/dever-package/front/service/embedpage"
-	frontpage "github.com/dever-package/front/service/page"
-	frontrecord "github.com/dever-package/front/service/record"
-	"my/authstate"
+	authctx "my/package/front/service/authctx"
+	embedpageservice "my/package/front/service/embedpage"
+	frontpage "my/package/front/service/page"
+	frontrecord "my/package/front/service/record"
 )
 
 type InputLookup func(key string) string
@@ -390,7 +390,7 @@ func resolveAllowedAuthSet(
 }
 
 func resolveCurrentRoleIDs(ctx context.Context) []uint64 {
-	uid := authstate.OptionalUID(ctx)
+	uid := authctx.OptionalUID(ctx)
 	if uid <= 0 {
 		return []uint64{defaultRoleID}
 	}

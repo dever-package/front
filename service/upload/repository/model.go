@@ -3,7 +3,7 @@ package repository
 import (
 	"fmt"
 
-	frontrecord "github.com/dever-package/front/service/record"
+	frontrecord "my/package/front/service/record"
 )
 
 func resolveModel(modelName, label string) (frontrecord.Model, error) {

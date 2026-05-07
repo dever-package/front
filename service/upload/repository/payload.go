@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
+	uploadprovider "my/package/front/service/upload/provider"
 )
 
 func BuildUploadFilePayload(file UploadFile) map[string]any {

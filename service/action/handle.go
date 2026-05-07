@@ -5,10 +5,10 @@ import (
 
 	"github.com/shemic/dever/server"
 
-	actionvalidate "github.com/dever-package/front/service/action/validate"
-	frontpage "github.com/dever-package/front/service/page"
-	permissionservice "github.com/dever-package/front/service/permission"
-	frontrecord "github.com/dever-package/front/service/record"
+	actionvalidate "my/package/front/service/action/validate"
+	frontpage "my/package/front/service/page"
+	permissionservice "my/package/front/service/permission"
+	frontrecord "my/package/front/service/record"
 )
 
 func PostAction(c *server.Context) error {
@@ -66,12 +66,18 @@ func PostAction(c *server.Context) error {
 
 		result, err := runSave(c, pathValue, config, payload)
 		if err != nil {
+			if failures, ok := FieldFailures(err); ok {
+				return actionvalidate.RespondError(c, failures)
+			}
 			return c.Error(err)
 		}
 		return c.JSON(result)
 	case "delete":
 		result, err := runDelete(c, pathValue, config, request.Payload)
 		if err != nil {
+			if failures, ok := FieldFailures(err); ok {
+				return actionvalidate.RespondError(c, failures)
+			}
 			return c.Error(err)
 		}
 		return c.JSON(result)

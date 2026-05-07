@@ -1,7 +1,7 @@
 package upload
 
 import (
-	uploadrepo "github.com/dever-package/front/service/upload/repository"
+	uploadrepo "my/package/front/service/upload/repository"
 )
 
 const (
@@ -25,6 +25,17 @@ type uploadInitInput struct {
 
 type uploadCompleteInput struct {
 	SessionID uint64 `json:"session_id"`
+}
+
+type uploadImportURLInput struct {
+	RuleID     uint64 `json:"rule_id"`
+	URL        string `json:"url"`
+	Name       string `json:"name"`
+	Mime       string `json:"mime"`
+	Kind       string `json:"kind"`
+	BizKey     string `json:"biz_key"`
+	BizName    string `json:"biz_name"`
+	CategoryID uint64 `json:"category_id"`
 }
 
 type resolvedUploadStorage = uploadrepo.UploadStorage

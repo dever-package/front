@@ -10,6 +10,7 @@ import (
 
 type menuNode struct {
 	ID       uint64
+	Key      string
 	Name     string
 	Icon     string
 	Path     string
@@ -76,6 +77,7 @@ func buildMenu(snapshot *accessSnapshot) []map[string]any {
 func menuNodeFromRow(row map[string]any) menuNode {
 	return menuNode{
 		ID:       authRowID(row),
+		Key:      authRowKey(row),
 		Name:     util.ToStringTrimmed(row["name"]),
 		Icon:     util.ToStringTrimmed(row["icon"]),
 		Path:     authRowPath(row),
@@ -126,6 +128,7 @@ func buildMenuItem(children map[uint64][]menuNode, node menuNode) (map[string]an
 	}
 
 	item := map[string]any{
+		"key":          node.Key,
 		"name":         node.Name,
 		"path":         node.Path,
 		"icon":         node.Icon,

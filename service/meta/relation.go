@@ -3,14 +3,16 @@ package meta
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/shemic/dever/load"
+	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	frontoption "github.com/dever-package/front/service/option"
-	frontrecord "github.com/dever-package/front/service/record"
+	frontoption "my/package/front/service/option"
+	frontrecord "my/package/front/service/record"
 )
 
 type OptionModel interface {
@@ -23,24 +25,7 @@ type RelationModel interface {
 	Insert(ctx context.Context, record map[string]any) int64
 }
 
-type Relation struct {
-	Kind             string
-	Name             string
-	Field            string
-	Through          string
-	Option           string
-	Mode             string
-	OptionKeys       []string
-	RowKey           string
-	OwnerField       string
-	TargetField      string
-	OptionValueField string
-	OptionLabelField string
-	EmptyValue       any
-	Order            string
-	ThroughOrder     string
-	OptionOrder      string
-}
+type Relation = orm.Relation
 
 func BuildRelationOptions(ctx context.Context, config Relation) map[string]any {
 	if strings.ToLower(strings.TrimSpace(config.Kind)) != "option" {
@@ -62,20 +47,47 @@ func BuildRelationOptions(ctx context.Context, config Relation) map[string]any {
 		items = append(items, item)
 	}
 
-	if len(config.OptionKeys) == 0 {
+	optionKeys := relationOptionKeys(config)
+	if len(optionKeys) == 0 {
 		return nil
 	}
 
-	result := make(map[string]any, len(config.OptionKeys))
-	for _, key := range config.OptionKeys {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
+	result := make(map[string]any, len(optionKeys))
+	for _, key := range optionKeys {
 		result[key] = util.CloneMapSlice(items)
 	}
 
 	return result
+}
+
+func relationOptionKeys(config Relation) []string {
+	if strings.ToLower(strings.TrimSpace(config.Kind)) != "option" {
+		return nil
+	}
+	if strings.TrimSpace(config.Option) == "" || len(config.OptionKeys) == 0 {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	keys := make([]string, 0, len(config.OptionKeys)+2)
+	appendKey := func(key string) {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return
+		}
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+
+	appendKey(config.Field)
+	appendKey(config.Name)
+	for _, key := range config.OptionKeys {
+		appendKey(key)
+	}
+	return keys
 }
 
 func AttachRelation(ctx context.Context, rows []map[string]any, config Relation) []map[string]any {
@@ -272,7 +284,9 @@ func SaveRelation(ctx context.Context, ownerID any, record map[string]any, confi
 		if len(columnLookup) == 0 {
 			record["created_at"] = time.Now()
 		}
-		relationValue.Insert(ctx, record)
+		if err := insertRelationRecord(ctx, modelName, relationValue, record); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -426,20 +440,82 @@ func saveChildrenRelation(ctx context.Context, ownerID any, record map[string]an
 		return nil
 	}
 
-	relationValue.Delete(ctx, map[string]any{config.OwnerField: owner})
-
-	items, ok := childrenValue.([]any)
-	if !ok || len(items) == 0 {
+	items, ok := normalizeChildrenRelationItems(childrenValue)
+	if !ok {
 		return nil
 	}
 
-	modelValue := load.Model(strings.TrimSpace(config.Through))
-	columnLookup := frontrecord.ResolveColumnLookup(strings.TrimSpace(config.Through), modelValue)
+	modelName := strings.TrimSpace(config.Through)
+	modelValue := load.Model(modelName)
+	columnLookup := frontrecord.ResolveColumnLookup(modelName, modelValue)
 	if len(columnLookup) == 0 {
 		return nil
 	}
 
 	primaryColumn := frontrecord.ResolveColumnName(columnLookup, "id")
+	if primaryColumn == "" {
+		relationValue.Delete(ctx, map[string]any{config.OwnerField: owner})
+		return insertChildrenRelationRows(ctx, modelName, relationValue, owner, items, config, columnLookup)
+	}
+
+	existingRows := relationValue.SelectMap(ctx, map[string]any{config.OwnerField: owner})
+	existingByID := make(map[uint64]map[string]any, len(existingRows))
+	for _, row := range existingRows {
+		if id := util.ToUint64(row[primaryColumn]); id > 0 {
+			existingByID[id] = row
+		}
+	}
+
+	keptIDs := map[uint64]struct{}{}
+	if len(items) > 0 {
+		if err := upsertChildrenRelationRows(ctx, modelName, relationValue, owner, items, config, columnLookup, existingByID, keptIDs); err != nil {
+			return err
+		}
+	}
+
+	for id := range existingByID {
+		if _, kept := keptIDs[id]; kept {
+			continue
+		}
+		relationValue.Delete(ctx, map[string]any{
+			config.OwnerField: owner,
+			primaryColumn:     id,
+		})
+	}
+
+	return nil
+}
+
+func normalizeChildrenRelationItems(value any) ([]any, bool) {
+	switch items := value.(type) {
+	case []any:
+		return items, true
+	case []map[string]any:
+		result := make([]any, 0, len(items))
+		for _, item := range items {
+			if item != nil {
+				result = append(result, item)
+			}
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
+func insertChildrenRelationRows(
+	ctx context.Context,
+	modelName string,
+	relationValue RelationModel,
+	owner uint64,
+	items []any,
+	config Relation,
+	columnLookup map[string]string,
+) error {
+	if len(items) == 0 {
+		return nil
+	}
+
 	ownerColumn := frontrecord.ResolveColumnName(columnLookup, config.OwnerField)
 	createdAtColumn := frontrecord.ResolveColumnName(columnLookup, "created_at")
 	for _, item := range items {
@@ -449,26 +525,135 @@ func saveChildrenRelation(ctx context.Context, ownerID any, record map[string]an
 		}
 
 		data := frontrecord.SanitizeRecord(child, columnLookup)
-
-		if primaryColumn != "" {
-			delete(data, primaryColumn)
-		}
-		if ownerColumn != "" {
-			delete(data, ownerColumn)
-		}
-		if createdAtColumn != "" {
-			delete(data, createdAtColumn)
-		}
+		delete(data, ownerColumn)
+		delete(data, createdAtColumn)
 		if isEmptyChildRecord(data) {
 			continue
 		}
 
 		data[config.OwnerField] = owner
 		frontrecord.ApplyCreatedAt(data, columnLookup)
-		relationValue.Insert(ctx, data)
+		if err := insertRelationRecord(ctx, modelName, relationValue, data); err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func upsertChildrenRelationRows(
+	ctx context.Context,
+	modelName string,
+	relationValue RelationModel,
+	owner uint64,
+	items []any,
+	config Relation,
+	columnLookup map[string]string,
+	existingByID map[uint64]map[string]any,
+	keptIDs map[uint64]struct{},
+) error {
+	primaryColumn := frontrecord.ResolveColumnName(columnLookup, "id")
+	ownerColumn := frontrecord.ResolveColumnName(columnLookup, config.OwnerField)
+	createdAtColumn := frontrecord.ResolveColumnName(columnLookup, "created_at")
+	updatedAtColumn := frontrecord.ResolveColumnName(columnLookup, "updated_at")
+	for _, item := range items {
+		child, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		data := frontrecord.SanitizeRecord(child, columnLookup)
+		childID := util.ToUint64(data[primaryColumn])
+
+		delete(data, primaryColumn)
+		delete(data, ownerColumn)
+		delete(data, createdAtColumn)
+		delete(data, updatedAtColumn)
+		if isEmptyChildRecord(data) {
+			continue
+		}
+
+		if childID > 0 {
+			if _, exists := existingByID[childID]; exists {
+				updateRelationRecord(ctx, relationValue, map[string]any{
+					config.OwnerField: owner,
+					primaryColumn:     childID,
+				}, data)
+				keptIDs[childID] = struct{}{}
+				continue
+			}
+		}
+
+		data[config.OwnerField] = owner
+		frontrecord.ApplyCreatedAt(data, columnLookup)
+		if err := insertRelationRecord(ctx, modelName, relationValue, data); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func updateRelationRecord(ctx context.Context, relationValue RelationModel, filters any, record map[string]any) int64 {
+	method := reflect.ValueOf(relationValue).MethodByName("Update")
+	if !method.IsValid() {
+		return 0
+	}
+
+	out := method.Call([]reflect.Value{
+		reflect.ValueOf(ctx),
+		reflect.ValueOf(filters),
+		reflect.ValueOf(record),
+	})
+	if len(out) == 0 {
+		return 0
+	}
+	return util.ToInt64(out[0].Interface())
+}
+
+func insertRelationRecord(
+	ctx context.Context,
+	modelName string,
+	relationValue RelationModel,
+	record map[string]any,
+) error {
+	err := tryInsertRelationRecord(ctx, relationValue, record)
+	if err == nil {
+		return nil
+	}
+	if !isPrimaryKeyDuplicateError(err) {
+		return err
+	}
+	if syncErr := frontrecord.SyncModelPrimarySequence(ctx, modelName); syncErr != nil {
+		return err
+	}
+	return tryInsertRelationRecord(ctx, relationValue, record)
+}
+
+func tryInsertRelationRecord(
+	ctx context.Context,
+	relationValue RelationModel,
+	record map[string]any,
+) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("%v", recovered)
+		}
+	}()
+	relationValue.Insert(ctx, record)
+	return nil
+}
+
+func isPrimaryKeyDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	if !strings.Contains(message, "duplicate key value violates unique constraint") {
+		return false
+	}
+	return strings.Contains(message, "_pkey") || strings.Contains(message, "primary key")
 }
 
 func CollectIDs(payload any, key string) []any {
@@ -742,7 +927,10 @@ func resolveRelationModel(config Relation) RelationModel {
 		return modelValue
 	}
 	adapter := frontrecord.ResolveAdapter(modelName)
-	if adapter == nil || !adapter.HasMethod("SelectMap", 3) || !adapter.HasMethod("Delete", 2) || !adapter.HasMethod("Insert", 2) {
+	if adapter == nil ||
+		!adapter.HasMethod("SelectMap", 3) ||
+		!adapter.HasMethod("Delete", 2) ||
+		!adapter.HasMethod("Insert", 2) {
 		return nil
 	}
 	return adapter

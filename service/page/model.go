@@ -10,9 +10,9 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "github.com/dever-package/front/service/call"
-	frontmeta "github.com/dever-package/front/service/meta"
-	frontrecord "github.com/dever-package/front/service/record"
+	frontcall "my/package/front/service/call"
+	frontmeta "my/package/front/service/meta"
+	frontrecord "my/package/front/service/record"
 )
 
 func resolveDataValue(
@@ -81,9 +81,22 @@ func resolveDataPlaceholder(c *server.Context, key, value string) any {
 }
 
 func syncQueryValues(c *server.Context, current map[string]any) map[string]any {
+	return syncQueryValuesExcept(c, current, nil)
+}
+
+func syncFormQueryValues(c *server.Context, current map[string]any) map[string]any {
+	return syncQueryValuesExcept(c, current, map[string]struct{}{
+		"path": {},
+	})
+}
+
+func syncQueryValuesExcept(c *server.Context, current map[string]any, skipped map[string]struct{}) map[string]any {
 	result := make(map[string]any, len(current))
 	for key, value := range current {
 		result[key] = value
+		if _, skip := skipped[key]; skip {
+			continue
+		}
 		input := normalizeQueryInputText(c.Input(key))
 		if input == "" {
 			continue
@@ -213,7 +226,7 @@ func resolveModelFormContainer(
 		return nil, nil, true, fmt.Errorf("model 未注册")
 	}
 	options := resolveModelFrontOption(c.Context(), modelName, modelValue)
-	form := syncQueryValues(c, util.CloneMap(current))
+	form := syncFormQueryValues(c, util.CloneMap(current))
 
 	recordID, hasRecordID := queryRecordID(c, "id")
 	recordIDFromTemplate := false
@@ -222,7 +235,7 @@ func resolveModelFormContainer(
 		recordIDFromTemplate = hasRecordID
 	}
 	if !hasRecordID {
-		return cleanFormMetaFields(form), options, true, nil
+		return mergeCreateFormDefaults(current, form), options, true, nil
 	}
 
 	record, found, err := queryModelRecord(c.Context(), modelName, recordID)
@@ -320,21 +333,52 @@ func mergeFormRecord(
 	defaults map[string]any,
 	record map[string]any,
 ) map[string]any {
-	if len(template) == 0 {
+	keys := explicitFormFieldKeys(template)
+	if len(keys) == 0 {
 		return util.CloneMap(record)
 	}
 
-	result := util.CloneMap(defaults)
-	for key := range template {
-		if isFormMetaField(key) {
-			continue
-		}
+	result := map[string]any{}
+	if value, ok := frontrecord.ReadValue(record, "id"); ok {
+		result["id"] = value
+	}
+	for _, key := range keys {
 		if value, ok := frontrecord.ReadValue(record, key); ok {
+			result[key] = value
+		} else if value, ok := frontrecord.ReadValue(defaults, key); ok {
 			result[key] = value
 		}
 		copyRelationCompanionValue(result, record, key)
 	}
 	return cleanFormMetaFields(result)
+}
+
+func mergeCreateFormDefaults(template map[string]any, form map[string]any) map[string]any {
+	result := cleanFormMetaFields(form)
+	for key, value := range formDefaultValues(template) {
+		if hasMeaningfulFrontValue(result[key]) {
+			continue
+		}
+		result[key] = value
+	}
+	return result
+}
+
+func explicitFormFieldKeys(template map[string]any) []string {
+	return mapStringSlice(template["_fields"])
+}
+
+func formDefaultValues(template map[string]any) map[string]any {
+	for _, key := range []string{"_default", "_defaults"} {
+		value, ok := template[key]
+		if !ok {
+			continue
+		}
+		if defaults, ok := value.(map[string]any); ok {
+			return util.CloneMap(defaults)
+		}
+	}
+	return nil
 }
 
 func formRecordID(current map[string]any, key string) (uint64, bool) {
@@ -362,7 +406,7 @@ func cleanFormMetaFields(values map[string]any) map[string]any {
 
 func isFormMetaField(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "_model", "_use":
+	case "_model", "_use", "_default", "_defaults", "_fields":
 		return true
 	default:
 		return false

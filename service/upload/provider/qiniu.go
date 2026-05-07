@@ -35,10 +35,16 @@ func (qiniuDriver) Save(ctx context.Context, input SaveInput) error {
 
 	ret := storage.PutRet{}
 	uploader := storage.NewFormUploader(qiniuConfig)
+	if input.Progress != nil {
+		input.Progress(0, input.Size)
+	}
 	if err := uploader.PutFile(ctx, &ret, upToken, input.ObjectKey, input.LocalPath, &storage.PutExtra{
 		MimeType: input.Mime,
 	}); err != nil {
 		return fmt.Errorf("上传到七牛云失败: %w", err)
+	}
+	if input.Progress != nil {
+		input.Progress(input.Size, input.Size)
 	}
 	return nil
 }

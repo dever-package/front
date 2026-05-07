@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
-	uploadrepo "github.com/dever-package/front/service/upload/repository"
+	uploadprovider "my/package/front/service/upload/provider"
+	uploadrepo "my/package/front/service/upload/repository"
 )
 
 func completeUploadSession(ctx context.Context, rule resolvedUploadRule, session resolvedUploadSession) (resolvedUploadFile, error) {

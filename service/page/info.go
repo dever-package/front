@@ -3,11 +3,12 @@ package page
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontmeta "github.com/dever-package/front/service/meta"
+	frontmeta "my/package/front/service/meta"
 )
 
 type schema struct {
@@ -64,7 +65,12 @@ func parseSchema(pathValue string, content []byte) (schema, error) {
 	if err := json.Unmarshal(content, &current); err != nil {
 		return schema{}, fmt.Errorf("页面配置解析失败")
 	}
-	if normalizedNodes, err := applyNodeLabels(current.Nodes, pathValue); err != nil {
+	if normalizedPage, err := applyPageMetaDefaults(current.Page, pathValue); err != nil {
+		return schema{}, fmt.Errorf("页面 page 默认值解析失败")
+	} else {
+		current.Page = normalizedPage
+	}
+	if normalizedNodes, err := applyNodeLabels(current.Nodes, pathValue, content); err != nil {
 		return schema{}, fmt.Errorf("页面 nodes 标签解析失败")
 	} else {
 		current.Nodes = normalizedNodes
@@ -75,6 +81,42 @@ func parseSchema(pathValue string, content []byte) (schema, error) {
 		schema:    current,
 	})
 	return current, nil
+}
+
+func applyPageMetaDefaults(rawPage json.RawMessage, pathValue string) (json.RawMessage, error) {
+	page := map[string]any{}
+	if len(rawPage) > 0 {
+		if err := json.Unmarshal(rawPage, &page); err != nil {
+			return nil, err
+		}
+	}
+
+	defaultTitle := DefaultPageTitle(pathValue)
+	if defaultTitle == "" {
+		if len(rawPage) == 0 {
+			return json.RawMessage(`{}`), nil
+		}
+		return rawPage, nil
+	}
+
+	changed := false
+	if strings.TrimSpace(util.ToString(page["name"])) == "" {
+		page["name"] = defaultTitle
+		changed = true
+	}
+	if strings.TrimSpace(util.ToString(page["title"])) == "" {
+		page["title"] = util.FirstNonEmpty(util.ToString(page["name"]), defaultTitle)
+		changed = true
+	}
+	if !changed {
+		return rawPage, nil
+	}
+
+	content, err := json.Marshal(page)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(content), nil
 }
 
 func resolvePageData(

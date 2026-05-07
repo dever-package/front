@@ -9,10 +9,10 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "github.com/dever-package/front/service/call"
-	frontmeta "github.com/dever-package/front/service/meta"
-	frontpage "github.com/dever-package/front/service/page"
-	frontrecord "github.com/dever-package/front/service/record"
+	frontcall "my/package/front/service/call"
+	frontmeta "my/package/front/service/meta"
+	frontpage "my/package/front/service/page"
+	frontrecord "my/package/front/service/record"
 )
 
 type rawPageSchema struct {
