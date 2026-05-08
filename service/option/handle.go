@@ -87,6 +87,12 @@ func GetModelOptionsByInput(ctx context.Context, getInput func(string) string) (
 	if !treeMode && parentField != "" {
 		filters[parentField] = normalizeOptionFilterValue(parentValue)
 	}
+	applyModelOptionFieldFilter(
+		filters,
+		columnLookup,
+		getInput("filterField"),
+		getInput("filterValue"),
+	)
 	queryFilters := buildModelOptionQueryFilters(
 		filters,
 		columnLookup,
@@ -215,6 +221,29 @@ func normalizeSelectedOptionItems(items []any) []any {
 		values = append(values, normalizeOptionFilterValue(text))
 	}
 	return values
+}
+
+func applyModelOptionFieldFilter(
+	filters map[string]any,
+	columnLookup map[string]string,
+	rawField string,
+	rawValue string,
+) {
+	field := frontrecord.ResolveColumnName(columnLookup, rawField)
+	if field == "" || strings.TrimSpace(rawValue) == "" {
+		return
+	}
+
+	values := normalizeSelectedOptionValues(rawValue)
+	if len(values) == 0 {
+		return
+	}
+	if len(values) == 1 {
+		filters[field] = values[0]
+		return
+	}
+
+	filters[field] = values
 }
 
 func buildModelOptionQueryFilters(
