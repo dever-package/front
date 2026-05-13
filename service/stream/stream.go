@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -18,10 +20,12 @@ const (
 )
 
 type Service struct {
-	namespace string
-	client    *redis.Client
-	maxLen    int64
-	ttl       time.Duration
+	namespace     string
+	client        *redis.Client
+	maxLen        int64
+	ttl           time.Duration
+	memory        *memoryStreamStore
+	redisDisabled *atomic.Bool
 }
 
 type Entry struct {
@@ -36,10 +40,12 @@ func New(namespace string) Service {
 	}
 	envPrefix := strings.ToUpper(strings.ReplaceAll(namespace, "-", "_"))
 	return Service{
-		namespace: namespace,
-		client:    newRedisClientFromEnv(envPrefix),
-		maxLen:    envInt64(envPrefix+"_STREAM_MAXLEN", envInt64("STREAM_MAXLEN", defaultMaxLen)),
-		ttl:       envDuration(envPrefix+"_STREAM_TTL", envDuration("STREAM_TTL", defaultTTL)),
+		namespace:     namespace,
+		client:        newRedisClientFromEnv(envPrefix),
+		maxLen:        envInt64(envPrefix+"_STREAM_MAXLEN", envInt64("STREAM_MAXLEN", defaultMaxLen)),
+		ttl:           envDuration(envPrefix+"_STREAM_TTL", envDuration("STREAM_TTL", defaultTTL)),
+		memory:        newMemoryStreamStore(envInt64(envPrefix+"_STREAM_MAXLEN", envInt64("STREAM_MAXLEN", defaultMaxLen)), envDuration(envPrefix+"_STREAM_TTL", envDuration("STREAM_TTL", defaultTTL))),
+		redisDisabled: &atomic.Bool{},
 	}
 }
 
@@ -47,9 +53,6 @@ func (s Service) WritePayload(ctx context.Context, requestID string, payload map
 	requestID = strings.TrimSpace(requestID)
 	if requestID == "" {
 		return "", fmt.Errorf("request_id 不能为空")
-	}
-	if s.client == nil {
-		return "", fmt.Errorf("Redis 未初始化")
 	}
 	if payload == nil {
 		payload = map[string]any{}
@@ -63,33 +66,33 @@ func (s Service) WritePayload(ctx context.Context, requestID string, payload map
 		return "", err
 	}
 	streamKey := s.Key(requestID)
-	id, err := s.client.XAdd(ctx, &redis.XAddArgs{
-		Stream: streamKey,
-		MaxLen: s.maxLen,
-		Approx: true,
-		Values: map[string]any{
-			"request_id": requestID,
-			"type":       strings.TrimSpace(InputText(payload["type"])),
-			"status":     payload["status"],
-			"payload":    string(rawPayload),
-		},
-	}).Result()
-	if err != nil {
-		return "", err
+	if s.canUseRedis() {
+		id, err := s.client.XAdd(ctx, &redis.XAddArgs{
+			Stream: streamKey,
+			MaxLen: s.maxLen,
+			Approx: true,
+			Values: map[string]any{
+				"request_id": requestID,
+				"type":       strings.TrimSpace(InputText(payload["type"])),
+				"status":     payload["status"],
+				"payload":    string(rawPayload),
+			},
+		}).Result()
+		if err == nil {
+			if s.ttl > 0 {
+				_ = s.client.Expire(ctx, streamKey, s.ttl).Err()
+			}
+			return id, nil
+		}
+		s.disableRedis()
 	}
-	if s.ttl > 0 {
-		_ = s.client.Expire(ctx, streamKey, s.ttl).Err()
-	}
-	return id, nil
+	return s.memory.Write(ctx, streamKey, payload)
 }
 
 func (s Service) Read(ctx context.Context, requestID string, lastID string, count int64, block time.Duration) ([]Entry, error) {
 	requestID = strings.TrimSpace(requestID)
 	if requestID == "" {
 		return nil, fmt.Errorf("request_id 不能为空")
-	}
-	if s.client == nil {
-		return nil, fmt.Errorf("Redis 未初始化")
 	}
 	lastID = strings.TrimSpace(lastID)
 	if lastID == "" {
@@ -99,28 +102,31 @@ func (s Service) Read(ctx context.Context, requestID string, lastID string, coun
 		count = 100
 	}
 
-	streams, err := s.client.XRead(ctx, &redis.XReadArgs{
-		Streams: []string{s.Key(requestID), lastID},
-		Count:   count,
-		Block:   block,
-	}).Result()
-	if err == redis.Nil {
-		return []Entry{}, nil
-	}
-	if err != nil {
-		return nil, err
+	if s.canUseRedis() {
+		streams, err := s.client.XRead(ctx, &redis.XReadArgs{
+			Streams: []string{s.Key(requestID), lastID},
+			Count:   count,
+			Block:   block,
+		}).Result()
+		if err == redis.Nil {
+			return []Entry{}, nil
+		}
+		if err == nil {
+			entries := make([]Entry, 0)
+			for _, currentStream := range streams {
+				for _, message := range currentStream.Messages {
+					entries = append(entries, Entry{
+						ID:      message.ID,
+						Payload: DecodePayload(message.Values["payload"]),
+					})
+				}
+			}
+			return entries, nil
+		}
+		s.disableRedis()
 	}
 
-	entries := make([]Entry, 0)
-	for _, currentStream := range streams {
-		for _, message := range currentStream.Messages {
-			entries = append(entries, Entry{
-				ID:      message.ID,
-				Payload: DecodePayload(message.Values["payload"]),
-			})
-		}
-	}
-	return entries, nil
+	return s.memory.Read(ctx, s.Key(requestID), lastID, count, block)
 }
 
 func (s Service) Key(requestID string) string {
@@ -232,6 +238,206 @@ func InputInt64(value any, fallback int64) int64 {
 		return fallback
 	}
 	return result
+}
+
+func (s Service) canUseRedis() bool {
+	if s.client == nil {
+		return false
+	}
+	if s.redisDisabled == nil {
+		return true
+	}
+	return !s.redisDisabled.Load()
+}
+
+func (s Service) disableRedis() {
+	if s.redisDisabled != nil {
+		s.redisDisabled.Store(true)
+	}
+}
+
+type memoryStreamStore struct {
+	mu     sync.Mutex
+	notify chan struct{}
+	items  map[string][]memoryEntry
+	seq    int64
+	maxLen int64
+	ttl    time.Duration
+}
+
+type memoryEntry struct {
+	id        string
+	payload   map[string]any
+	createdAt time.Time
+}
+
+func newMemoryStreamStore(maxLen int64, ttl time.Duration) *memoryStreamStore {
+	if maxLen <= 0 {
+		maxLen = defaultMaxLen
+	}
+	return &memoryStreamStore{
+		notify: make(chan struct{}),
+		items:  map[string][]memoryEntry{},
+		maxLen: maxLen,
+		ttl:    ttl,
+	}
+}
+
+func (s *memoryStreamStore) Write(ctx context.Context, key string, payload map[string]any) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	s.cleanupLocked(now)
+	s.seq++
+	id := fmt.Sprintf("%d-%d", now.UnixMilli(), s.seq)
+	s.items[key] = append(s.items[key], memoryEntry{
+		id:        id,
+		payload:   clonePayload(payload),
+		createdAt: now,
+	})
+	if int64(len(s.items[key])) > s.maxLen {
+		s.items[key] = s.items[key][int64(len(s.items[key]))-s.maxLen:]
+	}
+	s.notifyWaitersLocked()
+	return id, nil
+}
+
+func (s *memoryStreamStore) Read(ctx context.Context, key string, lastID string, count int64, block time.Duration) ([]Entry, error) {
+	if count <= 0 {
+		count = 100
+	}
+	deadline := time.Time{}
+	if block > 0 {
+		deadline = time.Now().Add(block)
+	}
+
+	for {
+		s.mu.Lock()
+		s.cleanupLocked(time.Now())
+		entries := s.entriesAfterLocked(key, lastID, count)
+		notify := s.notify
+		s.mu.Unlock()
+
+		if len(entries) > 0 || block <= 0 {
+			return entries, nil
+		}
+
+		wait := time.Until(deadline)
+		if wait <= 0 {
+			return []Entry{}, nil
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-notify:
+			timer.Stop()
+		case <-timer.C:
+			return []Entry{}, nil
+		}
+	}
+}
+
+func (s *memoryStreamStore) entriesAfterLocked(key string, lastID string, count int64) []Entry {
+	rows := s.items[key]
+	if len(rows) == 0 {
+		return []Entry{}
+	}
+	result := make([]Entry, 0, minInt64(count, int64(len(rows))))
+	for _, row := range rows {
+		if compareStreamID(row.id, lastID) <= 0 {
+			continue
+		}
+		result = append(result, Entry{
+			ID:      row.id,
+			Payload: clonePayload(row.payload),
+		})
+		if int64(len(result)) >= count {
+			break
+		}
+	}
+	return result
+}
+
+func (s *memoryStreamStore) cleanupLocked(now time.Time) {
+	if s.ttl <= 0 {
+		return
+	}
+	cutoff := now.Add(-s.ttl)
+	for key, rows := range s.items {
+		index := 0
+		for index < len(rows) && rows[index].createdAt.Before(cutoff) {
+			index++
+		}
+		if index >= len(rows) {
+			delete(s.items, key)
+			continue
+		}
+		if index > 0 {
+			s.items[key] = rows[index:]
+		}
+	}
+}
+
+func (s *memoryStreamStore) notifyWaitersLocked() {
+	close(s.notify)
+	s.notify = make(chan struct{})
+}
+
+func clonePayload(payload map[string]any) map[string]any {
+	next := make(map[string]any, len(payload))
+	for key, value := range payload {
+		next[key] = value
+	}
+	return next
+}
+
+func compareStreamID(left string, right string) int {
+	leftTime, leftSeq := parseStreamID(left)
+	rightTime, rightSeq := parseStreamID(right)
+	if leftTime < rightTime {
+		return -1
+	}
+	if leftTime > rightTime {
+		return 1
+	}
+	if leftSeq < rightSeq {
+		return -1
+	}
+	if leftSeq > rightSeq {
+		return 1
+	}
+	return 0
+}
+
+func parseStreamID(value string) (int64, int64) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, 0
+	}
+	left, right, ok := strings.Cut(value, "-")
+	if !ok {
+		left = value
+		right = "0"
+	}
+	timePart, _ := strconv.ParseInt(left, 10, 64)
+	seqPart, _ := strconv.ParseInt(right, 10, 64)
+	return timePart, seqPart
+}
+
+func minInt64(left int64, right int64) int64 {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 func newRedisClientFromEnv(prefix string) *redis.Client {
