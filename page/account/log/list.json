@@ -1,0 +1,403 @@
+{
+  "page": {
+    "name": "操作日志",
+    "icon": "history",
+    "parent": "front/account/list",
+    "type": 2,
+    "sort": 20
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "toolbar-row": {
+            "type": "row",
+            "className": "flex-wrap items-center gap-2.5"
+          },
+          "table-row": {
+            "type": "container",
+            "className": "overflow-hidden rounded-md border bg-background"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "value": "page",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "返回账户",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "icon": "arrow-left",
+          "to": "/front/account/list"
+        }
+      }
+    ],
+    "toolbar-row": [
+      {
+        "type": "form-input",
+        "placeholder": "筛选说明、路径或IP...",
+        "value": "search.keyword",
+        "mode": "search"
+      },
+      {
+        "type": "form-select",
+        "placeholder": "管理员",
+        "value": "search.account_id",
+        "mode": "search",
+        "option": "/front/route/option?type=model&use=front.NewAccountModel&labelField=name&searchFields=name,account&pageSize=20",
+        "meta": {
+          "remoteOptionSearch": true
+        }
+      },
+      {
+        "type": "form-select",
+        "placeholder": "操作类型",
+        "value": "search.action",
+        "mode": "search",
+        "option": "option.action"
+      },
+      {
+        "type": "form-date",
+        "placeholder": "操作时间",
+        "value": "search.created_at_start",
+        "mode": "search",
+        "className": "w-[320px]",
+        "meta": {
+          "range": true,
+          "endValue": "search.created_at_end",
+          "inputType": "datetime-local"
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "搜索",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "searchSubmit": true,
+          "searchLayoutId": "toolbar-row",
+          "loadingText": "搜索中..."
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "重置",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "searchLayoutId": "toolbar-row",
+          "to": "/front/account/log/list"
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "table.list",
+        "meta": {
+          "pagePath": "data.table.page",
+          "pageSizePath": "data.table.pageSize",
+          "totalPath": "data.table.total",
+          "remote": true,
+          "externalPagination": true,
+          "rowKey": "id",
+          "columns": [
+            {
+              "name": "ID",
+              "value": "id",
+              "type": "show-base"
+            },
+            {
+              "name": "管理员",
+              "value": "account_name",
+              "type": "show-base"
+            },
+            {
+              "name": "账户",
+              "value": "account",
+              "type": "show-base"
+            },
+            {
+              "name": "操作",
+              "value": "action",
+              "type": "show-select",
+              "meta": {
+                "editable": false,
+                "display": "badge"
+              }
+            },
+            {
+              "name": "说明",
+              "value": "message",
+              "type": "show-base"
+            },
+            {
+              "name": "页面路径",
+              "value": "page_path",
+              "type": "show-base"
+            },
+            {
+              "name": "IP地址",
+              "value": "ip",
+              "type": "show-base"
+            },
+            {
+              "name": "操作时间",
+              "value": "created_at",
+              "type": "show-base",
+              "meta": {
+                "format": "datetime-second"
+              }
+            },
+            {
+              "name": "详情",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "eye",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "查看操作详情",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.viewLog",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.view",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-page"
+      }
+    ],
+    "page-main": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.view",
+          "formSection": "detail-section",
+          "title": "操作详情",
+          "description": "查看本次后台操作的完整记录。",
+          "size": "xl",
+          "bodyClassName": "max-h-[70vh] overflow-y-auto px-6 py-2"
+        }
+      }
+    ],
+    "detail-section": [
+      {
+        "type": "show-base",
+        "name": "日志ID",
+        "value": "actionTarget.viewLog.id",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "管理员",
+        "value": "actionTarget.viewLog.account_name",
+        "mode": "form",
+        "meta": {
+          "template": "{actionTarget.viewLog.account_name}（{actionTarget.viewLog.account}）",
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-select",
+        "name": "操作类型",
+        "value": "actionTarget.viewLog.action",
+        "mode": "form",
+        "option": "option.action",
+        "meta": {
+          "editable": false,
+          "display": "badge",
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "操作说明",
+        "value": "actionTarget.viewLog.message",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "页面路径",
+        "value": "actionTarget.viewLog.page_path",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "请求路径",
+        "value": "actionTarget.viewLog.path",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "请求方法",
+        "value": "actionTarget.viewLog.method",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "目标模型",
+        "value": "actionTarget.viewLog.target_model",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "目标ID",
+        "value": "actionTarget.viewLog.target_id",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "IP地址",
+        "value": "actionTarget.viewLog.ip",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "操作时间",
+        "value": "actionTarget.viewLog.created_at",
+        "mode": "form",
+        "meta": {
+          "format": "datetime-second",
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-text",
+        "name": "浏览器",
+        "value": "actionTarget.viewLog.user_agent",
+        "mode": "form",
+        "className": "break-all text-foreground",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-text",
+        "name": "操作参数",
+        "value": "actionTarget.viewLog.payload",
+        "mode": "form",
+        "className": "max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 font-mono text-xs text-foreground",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "title": "操作日志",
+      "description": "查看后台管理员的登录、增删改、导入导出等操作记录。"
+    },
+    "search": {
+      "keyword": "",
+      "account_id": "",
+      "action": "",
+      "created_at_start": "",
+      "created_at_end": ""
+    },
+    "actionTarget": {
+      "viewLog": {}
+    },
+    "table": {
+      "modelName": "front.NewAccountLogModel",
+      "page": 1,
+      "pageSize": 10,
+      "total": 0,
+      "order": "main.created_at desc, main.id desc",
+      "filterFields": [
+        "account_id",
+        "action",
+        {
+          "field": "created_at",
+          "type": "date-range",
+          "startKey": "created_at_start",
+          "endKey": "created_at_end",
+          "valueType": "datetime"
+        }
+      ],
+      "searchFields": [
+        "account_name",
+        "account",
+        "action",
+        "message",
+        "path",
+        "page_path",
+        "target_model",
+        "target_id",
+        "ip"
+      ]
+    }
+  },
+  "state": {
+    "dialog": {
+      "view": false
+    }
+  },
+  "action": {}
+}

@@ -11,7 +11,7 @@ import (
 	frontmeta "my/package/front/service/meta"
 )
 
-type schema struct {
+type Schema struct {
 	Page   json.RawMessage `json:"page"`
 	Layout json.RawMessage `json:"layout"`
 	Nodes  json.RawMessage `json:"nodes"`
@@ -22,37 +22,46 @@ type schema struct {
 
 type schemaCacheEntry struct {
 	signature ContentSignature
-	schema    schema
+	schema    Schema
 }
 
 var schemaCache util.ConcurrentMap[string, schemaCacheEntry]
 
 func GetInfo(c *server.Context, pathValue string) error {
-	content, err := ReadContent(pathValue)
+	currentSchema, err := BuildInfo(c, pathValue)
 	if err != nil {
 		return c.Error(err)
 	}
-
-	currentSchema, err := parseSchema(pathValue, content)
-	if err != nil {
-		return c.Error(err)
-	}
-
-	defaultedData, err := applyNodeDefaults(c, currentSchema.Layout, currentSchema.Nodes, currentSchema.Data, pathValue)
-	if err != nil {
-		return c.Error(err)
-	}
-
-	resolvedData, err := resolvePageData(c, defaultedData, content, pathValue)
-	if err != nil {
-		return c.Error(err)
-	}
-	currentSchema.Data = resolvedData
 
 	return c.JSON(currentSchema)
 }
 
-func parseSchema(pathValue string, content []byte) (schema, error) {
+func BuildInfo(c *server.Context, pathValue string) (Schema, error) {
+	content, err := ReadContent(pathValue)
+	if err != nil {
+		return Schema{}, err
+	}
+
+	currentSchema, err := parseSchema(pathValue, content)
+	if err != nil {
+		return Schema{}, err
+	}
+
+	defaultedData, err := applyNodeDefaults(c, currentSchema.Layout, currentSchema.Nodes, currentSchema.Data, pathValue)
+	if err != nil {
+		return Schema{}, err
+	}
+
+	resolvedData, err := resolvePageData(c, defaultedData, content, pathValue)
+	if err != nil {
+		return Schema{}, err
+	}
+	currentSchema.Data = resolvedData
+
+	return currentSchema, nil
+}
+
+func parseSchema(pathValue string, content []byte) (Schema, error) {
 	signature := Signature(content)
 	if cached, ok := schemaCache.Load(pathValue); ok {
 		entry := cached
@@ -61,17 +70,17 @@ func parseSchema(pathValue string, content []byte) (schema, error) {
 		}
 	}
 
-	var current schema
+	var current Schema
 	if err := json.Unmarshal(content, &current); err != nil {
-		return schema{}, fmt.Errorf("页面配置解析失败")
+		return Schema{}, fmt.Errorf("页面配置解析失败")
 	}
 	if normalizedPage, err := applyPageMetaDefaults(current.Page, pathValue); err != nil {
-		return schema{}, fmt.Errorf("页面 page 默认值解析失败")
+		return Schema{}, fmt.Errorf("页面 page 默认值解析失败")
 	} else {
 		current.Page = normalizedPage
 	}
 	if normalizedNodes, err := applyNodeLabels(current.Nodes, pathValue, content); err != nil {
-		return schema{}, fmt.Errorf("页面 nodes 标签解析失败")
+		return Schema{}, fmt.Errorf("页面 nodes 标签解析失败")
 	} else {
 		current.Nodes = normalizedNodes
 	}

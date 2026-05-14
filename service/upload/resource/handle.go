@@ -6,6 +6,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
+	operationlog "my/package/front/service/operationlog"
 	frontrecord "my/package/front/service/record"
 	uploadrepo "my/package/front/service/upload/repository"
 )
@@ -114,11 +115,31 @@ func HandleAssignCategory(c *server.Context) error {
 		"category_id": categoryID,
 	})
 
+	operationlog.Record(c, operationlog.Entry{
+		Action:      "update",
+		PagePath:    "front/resource/list",
+		TargetModel: "front.NewUploadFileModel",
+		TargetID:    joinUint64IDs(fileIDs),
+		Message:     "调整资源分类",
+		Payload:     input,
+	})
+
 	return c.JSON(map[string]any{
 		"updated":     updated,
 		"file_ids":    fileIDs,
 		"category_id": categoryID,
 	})
+}
+
+func joinUint64IDs(ids []uint64) string {
+	values := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 {
+			continue
+		}
+		values = append(values, util.ToString(id))
+	}
+	return strings.Join(values, ",")
 }
 
 func bootstrapFileModel(c *server.Context) (frontrecord.Model, error) {

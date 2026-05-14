@@ -6,6 +6,7 @@ import (
 	"github.com/shemic/dever/server"
 
 	actionvalidate "my/package/front/service/action/validate"
+	operationlog "my/package/front/service/operationlog"
 	frontpage "my/package/front/service/page"
 	permissionservice "my/package/front/service/permission"
 	frontrecord "my/package/front/service/record"
@@ -48,6 +49,8 @@ func PostAction(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
+	modelName := frontpage.ActionModelName(pathValue, config)
+	primaryKey := frontpage.ActionPrimaryKey(config)
 
 	switch config.Type {
 	case "save":
@@ -71,6 +74,9 @@ func PostAction(c *server.Context) error {
 			}
 			return c.Error(err)
 		}
+		if resultMap, ok := result.(map[string]any); ok {
+			operationlog.RecordAction(c, requestPath, pathValue, modelName, config.Type, primaryKey, payload, resultMap)
+		}
 		return c.JSON(result)
 	case "delete":
 		result, err := runDelete(c, pathValue, config, request.Payload)
@@ -79,6 +85,9 @@ func PostAction(c *server.Context) error {
 				return actionvalidate.RespondError(c, failures)
 			}
 			return c.Error(err)
+		}
+		if resultMap, ok := result.(map[string]any); ok {
+			operationlog.RecordAction(c, requestPath, pathValue, modelName, config.Type, primaryKey, request.Payload, resultMap)
 		}
 		return c.JSON(result)
 	default:

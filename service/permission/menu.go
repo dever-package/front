@@ -27,16 +27,11 @@ func GetMainInfo(c *server.Context) error {
 
 	menu := buildMenu(snapshot)
 	configMeta, _ := loadConfigMeta()
-	entry := strings.TrimSpace(configMeta.Entry)
-	if entry == "" {
-		entry = defaultEntryFromSnapshot(snapshot)
-	}
+	entry := resolveMainEntry(configMeta.Entry, menu)
 
 	return c.JSON(map[string]any{
-		"menu":      menu,
-		"entry":     entry,
-		"auth":      buildAuthKeys(snapshot),
-		"authRules": buildAuthRules(snapshot),
+		"menu":  menu,
+		"entry": entry,
 	})
 }
 
@@ -104,40 +99,60 @@ func buildMenuChildren(children map[uint64][]menuNode, parentID uint64) []map[st
 		if node.Type != 1 {
 			continue
 		}
-		item, _ := buildMenuItem(children, node)
+		item := buildMenuItem(children, node)
 		items = append(items, item)
 	}
 	return items
 }
 
-func buildMenuItem(children map[uint64][]menuNode, node menuNode) (map[string]any, []string) {
+func buildMenuItem(children map[uint64][]menuNode, node menuNode) map[string]any {
 	childItems := make([]map[string]any, 0, len(children[node.ID]))
 	activePaths := make([]string, 0, 4)
-
-	pathValue := strings.TrimSpace(node.Path)
-	if pathValue != "" && strings.Contains(pathValue, "/") {
-		activePaths = append(activePaths, pathValue)
-	}
+	pathValue := menuSelectablePath(node.Path)
 
 	for _, child := range children[node.ID] {
-		childItem, childPaths := buildMenuItem(children, child)
-		activePaths = appendUniqueStrings(activePaths, childPaths...)
 		if child.Type == 1 {
-			childItems = append(childItems, childItem)
+			childItems = append(childItems, buildMenuItem(children, child))
+			continue
 		}
+		activePaths = appendUniqueStrings(
+			activePaths,
+			collectHiddenMenuPaths(children, child, pathValue)...,
+		)
 	}
 
 	item := map[string]any{
-		"key":          node.Key,
-		"name":         node.Name,
-		"path":         node.Path,
-		"icon":         node.Icon,
-		"active_paths": activePaths,
+		"key":  node.Key,
+		"name": node.Name,
+		"path": node.Path,
+		"icon": node.Icon,
 	}
 	if len(childItems) > 0 {
 		item["children"] = childItems
+	} else if len(activePaths) > 0 {
+		item["active_paths"] = activePaths
 	}
-	return item, activePaths
+	return item
+}
+
+func collectHiddenMenuPaths(children map[uint64][]menuNode, node menuNode, ownerPath string) []string {
+	paths := make([]string, 0, 4)
+	if pathValue := menuSelectablePath(node.Path); pathValue != "" && normalizeMenuPath(pathValue) != normalizeMenuPath(ownerPath) {
+		paths = append(paths, pathValue)
+	}
+
+	for _, child := range children[node.ID] {
+		paths = appendUniqueStrings(paths, collectHiddenMenuPaths(children, child, ownerPath)...)
+	}
+	return paths
+}
+
+func menuSelectablePath(pathValue string) string {
+	pathValue = strings.TrimSpace(pathValue)
+	if pathValue == "" || !strings.Contains(pathValue, "/") {
+		return ""
+	}
+	return pathValue
 }
 
 func appendUniqueStrings(base []string, values ...string) []string {
@@ -164,58 +179,37 @@ func appendUniqueStrings(base []string, values ...string) []string {
 	return base
 }
 
-func buildAuthKeys(snapshot *accessSnapshot) []string {
-	if snapshot == nil || len(snapshot.auth.rows) == 0 {
-		return []string{}
+func resolveMainEntry(configEntry string, menu []map[string]any) string {
+	entry := strings.TrimSpace(configEntry)
+	if entry != "" && menuHasPath(menu, entry) {
+		return entry
 	}
 
-	keys := make([]string, 0, len(snapshot.auth.rows))
-	for _, row := range snapshot.auth.rows {
-		keyValue := authRowKey(row)
-		if authRowID(row) == 0 || !visibleAuthRow(snapshot, row) {
-			continue
-		}
-		if keyValue == "" {
-			continue
-		}
-		keys = append(keys, keyValue)
-	}
-	sort.Strings(keys)
-	return appendUniqueStrings([]string{}, keys...)
+	return defaultEntryFromMenu(menu)
 }
 
-func buildAuthRules(snapshot *accessSnapshot) []map[string]any {
-	if snapshot == nil || len(snapshot.auth.rows) == 0 {
-		return []map[string]any{}
+func menuHasPath(menu []map[string]any, pathValue string) bool {
+	target := normalizeMenuPath(pathValue)
+	if target == "" {
+		return false
 	}
 
-	rules := make([]map[string]any, 0, len(snapshot.auth.rows))
-	for _, row := range snapshot.auth.rows {
-		keyValue := authRowKey(row)
-		pathValue := authRowPath(row)
-		if keyValue == "" || pathValue == "" {
-			continue
+	for _, item := range menu {
+		if normalizeMenuPath(util.ToString(item["path"])) == target {
+			return true
 		}
 
-		rule := map[string]any{
-			"key":  keyValue,
-			"path": pathValue,
-			"type": util.ToIntDefault(row["type"], 0),
+		children, ok := item["children"].([]map[string]any)
+		if ok && menuHasPath(children, target) {
+			return true
 		}
-		if query := parseAuthQuery(row["query"]); len(query) > 0 {
-			rule["query"] = query
-		}
-		rules = append(rules, rule)
 	}
-	return rules
+
+	return false
 }
 
-func defaultEntryFromSnapshot(snapshot *accessSnapshot) string {
-	if snapshot == nil {
-		return ""
-	}
-
-	return defaultEntryFromMenu(buildMenu(snapshot))
+func normalizeMenuPath(pathValue string) string {
+	return strings.Trim(strings.TrimSpace(pathValue), "/")
 }
 
 func defaultEntryFromMenu(menu []map[string]any) string {

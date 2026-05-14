@@ -11,6 +11,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
+	operationlog "my/package/front/service/operationlog"
 	uploadprovider "my/package/front/service/upload/provider"
 	uploadrepo "my/package/front/service/upload/repository"
 )
@@ -207,8 +208,10 @@ func CompleteUpload(c *server.Context) error {
 		_ = cleanupUploadSession(input.SessionID)
 		refreshed, err := uploadrepo.FindUploadFile(c.Context(), existing.ID)
 		if err == nil {
+			logUploadFile(c, refreshed.ID, input)
 			return c.JSON(uploadrepo.BuildUploadFilePayload(refreshed))
 		}
+		logUploadFile(c, existing.ID, input)
 		return c.JSON(uploadrepo.BuildUploadFilePayload(*existing))
 	}
 
@@ -217,7 +220,18 @@ func CompleteUpload(c *server.Context) error {
 		return c.Error(err)
 	}
 	_ = cleanupUploadSession(input.SessionID)
+	logUploadFile(c, fileRecord.ID, input)
 	return c.JSON(uploadrepo.BuildUploadFilePayload(fileRecord))
+}
+
+func logUploadFile(c *server.Context, fileID uint64, payload any) {
+	operationlog.Record(c, operationlog.Entry{
+		Action:      "upload",
+		TargetModel: "front.NewUploadFileModel",
+		TargetID:    fmt.Sprint(fileID),
+		Message:     "上传资源文件",
+		Payload:     payload,
+	})
 }
 
 func OpenUpload(c *server.Context) error {

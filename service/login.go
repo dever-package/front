@@ -11,6 +11,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
+	operationlog "my/package/front/service/operationlog"
 	permissionservice "my/package/front/service/permission"
 	frontrecord "my/package/front/service/record"
 )
@@ -50,6 +51,12 @@ func Login(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
+	operationlog.RecordForAccount(c, accountRow, operationlog.Entry{
+		Action:   "login",
+		PagePath: "front/auth/login",
+		TargetID: fmt.Sprint(accountRow["id"]),
+		Message:  "管理员登录",
+	})
 
 	return c.JSON(map[string]any{
 		"token": token,

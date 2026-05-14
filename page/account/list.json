@@ -54,6 +54,17 @@
             "value": true
           }
         }
+      },
+      {
+        "type": "show-button",
+        "name": "操作日志",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "icon": "history",
+          "to": "/front/account/log/list"
+        }
       }
     ],
     "table-row": [

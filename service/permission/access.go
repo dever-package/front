@@ -16,6 +16,10 @@ import (
 
 type InputLookup func(key string) string
 
+type AccessScope struct {
+	snapshot *accessSnapshot
+}
+
 var errNoPermission = errors.New("暂无权限")
 
 const (
@@ -28,6 +32,21 @@ func EnsurePageAccess(ctx context.Context, pathValue string) error {
 	return EnsurePageAccessWithInput(ctx, pathValue, nil)
 }
 
+func NewAccessScope(ctx context.Context) (*AccessScope, error) {
+	snapshot, err := loadAccessSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &AccessScope{snapshot: snapshot}, nil
+}
+
+func (scope *AccessScope) EnsurePageAccess(ctx context.Context, pathValue string, lookup InputLookup) error {
+	if scope == nil {
+		return nil
+	}
+	return ensurePageAccessWithSnapshot(ctx, scope.snapshot, pathValue, lookup)
+}
+
 func EnsurePageAccessWithInput(ctx context.Context, pathValue string, lookup InputLookup) error {
 	pathValue = frontpage.NormalizePath(pathValue)
 	if pathValue == "" {
@@ -38,10 +57,21 @@ func EnsurePageAccessWithInput(ctx context.Context, pathValue string, lookup Inp
 	if err != nil || snapshot == nil {
 		return err
 	}
+	return ensurePageAccessWithSnapshot(ctx, snapshot, pathValue, lookup)
+}
+
+func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot, pathValue string, lookup InputLookup) error {
+	pathValue = frontpage.NormalizePath(pathValue)
+	if pathValue == "" {
+		return nil
+	}
+	if snapshot == nil {
+		return nil
+	}
 
 	authRow, protected := resolveAccessAuthRow(snapshot.auth, pathValue, lookup)
 	if embedpageservice.HasPath(pathValue) {
-		if canInheritPageAccess(ctx, pathValue, lookup) {
+		if canInheritPageAccess(ctx, snapshot, pathValue, lookup) {
 			return nil
 		}
 		return errNoPermission
@@ -81,7 +111,7 @@ func resolveAccessAuthRow(
 
 	var fallback map[string]any
 	for _, row := range rows {
-		query := parseAuthQuery(row["query"])
+		query := authRowQuery(row)
 		if len(query) == 0 {
 			if fallback == nil || authRowKey(row) == pathValue {
 				fallback = row
@@ -97,6 +127,19 @@ func resolveAccessAuthRow(
 		return fallback, true
 	}
 	return nil, true
+}
+
+func authRowQuery(row map[string]any) authQuery {
+	if len(row) == 0 {
+		return nil
+	}
+	if query, ok := row["query"].(authQuery); ok {
+		return query
+	}
+
+	query := parseAuthQuery(row["query"])
+	row["query"] = query
+	return query
 }
 
 func loadAccessSnapshot(ctx context.Context) (*accessSnapshot, error) {
@@ -196,7 +239,7 @@ func canAccessAuthRow(snapshot *accessSnapshot, row map[string]any) bool {
 	return ok
 }
 
-func canInheritPageAccess(ctx context.Context, pathValue string, lookup InputLookup) bool {
+func canInheritPageAccess(ctx context.Context, snapshot *accessSnapshot, pathValue string, lookup InputLookup) bool {
 	if lookup == nil || !allowsInheritedAccess(lookup(inheritInputKey)) {
 		return false
 	}
@@ -206,7 +249,7 @@ func canInheritPageAccess(ctx context.Context, pathValue string, lookup InputLoo
 		return false
 	}
 
-	return EnsurePageAccessWithInput(ctx, parentPath, parentAccessLookup(lookup)) == nil
+	return ensurePageAccessWithSnapshot(ctx, snapshot, parentPath, parentAccessLookup(lookup)) == nil
 }
 
 func allowsInheritedAccess(value string) bool {

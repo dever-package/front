@@ -30,6 +30,7 @@ func ImportURLUpload(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
+	logUploadFile(c, fileRecord.ID, input)
 	return c.JSON(uploadrepo.BuildUploadFilePayload(fileRecord))
 }
 
