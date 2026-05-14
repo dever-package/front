@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
+	operationlog "my/package/front/service/operationlog"
 	permissionservice "my/package/front/service/permission"
 )
 
@@ -13,5 +14,13 @@ func (Main) GetInfo(c *server.Context) error {
 }
 
 func (Main) PostSync(c *server.Context) error {
-	return permissionservice.SyncMainInfo(c)
+	err := permissionservice.SyncMainInfo(c)
+	if err == nil {
+		operationlog.Record(c, operationlog.Entry{
+			Action:   "sync",
+			PagePath: "front/auth/list",
+			Message:  "同步权限",
+		})
+	}
+	return err
 }
