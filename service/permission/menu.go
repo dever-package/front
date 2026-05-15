@@ -29,10 +29,15 @@ func GetMainInfo(c *server.Context) error {
 	configMeta, _ := loadConfigMeta()
 	entry := resolveMainEntry(configMeta.Entry, menu)
 
-	return c.JSON(map[string]any{
+	payload := map[string]any{
 		"menu":  menu,
 		"entry": entry,
-	})
+	}
+	if shouldIncludePermissionContext(c.Input("include"), c.Input("permissions")) {
+		payload["permissions"] = buildPermissionContext(snapshot)
+	}
+
+	return c.JSON(payload)
 }
 
 func SyncMainInfo(c *server.Context) error {
@@ -67,6 +72,57 @@ func buildMenu(snapshot *accessSnapshot) []map[string]any {
 	}
 
 	return buildMenuChildren(children, 0)
+}
+
+func buildPermissionContext(snapshot *accessSnapshot) []map[string]any {
+	if snapshot == nil || len(snapshot.auth.rows) == 0 {
+		return []map[string]any{}
+	}
+
+	rowByID := make(map[uint64]map[string]any, len(snapshot.auth.rows))
+	for _, row := range snapshot.auth.rows {
+		if id := authRowID(row); id > 0 {
+			rowByID[id] = row
+		}
+	}
+
+	items := make([]map[string]any, 0, len(snapshot.auth.rows))
+	for _, row := range snapshot.auth.rows {
+		if !visibleAuthRow(snapshot, row) {
+			continue
+		}
+		parentID := util.ToUint64(row["parent_id"])
+		item := map[string]any{
+			"id":        authRowID(row),
+			"key":       authRowKey(row),
+			"name":      util.ToStringTrimmed(row["name"]),
+			"icon":      util.ToStringTrimmed(row["icon"]),
+			"path":      authRowPath(row),
+			"parent_id": parentID,
+			"type":      util.ToIntDefault(row["type"], 0),
+			"sort":      util.ToIntDefault(row["sort"], 0),
+		}
+		if parent := rowByID[parentID]; len(parent) > 0 {
+			item["parent_key"] = authRowKey(parent)
+		}
+		if query := authRowQuery(row); len(query) > 0 {
+			item["query"] = query
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func shouldIncludePermissionContext(values ...string) bool {
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			switch strings.ToLower(strings.TrimSpace(part)) {
+			case "1", "true", "permission", "permissions", "auth", "all":
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func menuNodeFromRow(row map[string]any) menuNode {
