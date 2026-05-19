@@ -332,13 +332,22 @@ func resolveModelOptionSearchFields(
 }
 
 func getServiceOptions(c *server.Context) ([]map[string]any, error) {
-	serviceName := strings.TrimSpace(c.Input("use", "required", "服务名"))
+	return GetServiceOptionsByInput(c, func(key string) string {
+		return c.Input(key)
+	})
+}
+
+func GetServiceOptionsByInput(c *server.Context, getInput func(string) string) ([]map[string]any, error) {
+	serviceName := strings.TrimSpace(getInput("use"))
+	if serviceName == "" {
+		return nil, fmt.Errorf("服务名不能为空")
+	}
 	payload := map[string]any{
-		"parent_id":    normalizeOptionFilterValue(util.FirstNonEmpty(c.Input("parentId"), c.Input("rootValue"))),
-		"parent_field": util.FirstNonEmpty(c.Input("parentField"), "parent_id"),
-		"value_field":  util.FirstNonEmpty(c.Input("valueField"), "id"),
-		"label_field":  util.FirstNonEmpty(c.Input("labelField"), "name"),
-		"leaf_field":   strings.TrimSpace(c.Input("leafField")),
+		"parent_id":    normalizeOptionFilterValue(util.FirstNonEmpty(getInput("parentId"), getInput("rootValue"))),
+		"parent_field": util.FirstNonEmpty(getInput("parentField"), "parent_id"),
+		"value_field":  util.FirstNonEmpty(getInput("valueField"), "id"),
+		"label_field":  util.FirstNonEmpty(getInput("labelField"), "name"),
+		"leaf_field":   strings.TrimSpace(getInput("leafField")),
 	}
 
 	result, err := frontcall.Service(c, serviceName, payload)

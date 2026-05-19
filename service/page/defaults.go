@@ -582,13 +582,18 @@ func resolveRemoteDefaultCategoryOptions(c *server.Context, source string) ([]ma
 	if optionType == "" {
 		optionType = "model"
 	}
-	if optionType != "model" {
+	switch optionType {
+	case "model":
+		return frontoption.GetModelOptionsByInput(c.Context(), func(key string) string {
+			return queryValues.Get(key)
+		})
+	case "service":
+		return frontoption.GetServiceOptionsByInput(c, func(key string) string {
+			return queryValues.Get(key)
+		})
+	default:
 		return nil, nil
 	}
-
-	return frontoption.GetModelOptionsByInput(c.Context(), func(key string) string {
-		return queryValues.Get(key)
-	})
 }
 
 func extractFirstOptionValue(items []any) (any, bool) {
