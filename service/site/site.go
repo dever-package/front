@@ -3,6 +3,7 @@ package site
 import (
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -12,11 +13,14 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/shemic/dever/config"
 	"github.com/shemic/dever/server"
+
+	frontroot "my/package/front"
 )
 
 const (
 	defaultPath = "/_admin"
 	defaultDir  = "package/front/html"
+	embedDir    = "html"
 	indexFile   = "index.html"
 )
 
@@ -69,26 +73,36 @@ func settingsFromConfig(cfg config.FrontSite) settings {
 }
 
 func openFile(c *server.Context, site settings) error {
-	file, cache, err := resolveFile(site.dir, c.Input("*"))
-	if err != nil {
-		return c.Error(err, http.StatusNotFound)
-	}
-
 	raw, ok := c.Raw.(*fiber.Ctx)
 	if !ok {
 		return c.Error("当前环境不支持静态文件输出", http.StatusInternalServerError)
 	}
+
+	rel := cleanAssetPath(c.Input("*"))
+	file, cache, err := resolveDiskFile(site.dir, rel)
+	if err == nil {
+		raw.Set("Cache-Control", cache)
+		return raw.SendFile(file)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return c.Error(err, http.StatusNotFound)
+	}
+
+	content, servedRel, cache, err := resolveEmbeddedFile(rel)
+	if err != nil {
+		return c.Error(err, http.StatusNotFound)
+	}
 	raw.Set("Cache-Control", cache)
-	return raw.SendFile(file)
+	setContentType(raw, servedRel)
+	return raw.Send(content)
 }
 
-func resolveFile(rootDir, requestPath string) (string, string, error) {
+func resolveDiskFile(rootDir, rel string) (string, string, error) {
 	root, err := filepath.Abs(rootDir)
 	if err != nil {
 		return "", "", err
 	}
 
-	rel := cleanAssetPath(requestPath)
 	file := filepath.Join(root, filepath.FromSlash(rel))
 	if err := ensureInside(root, file); err != nil {
 		return "", "", err
@@ -113,6 +127,46 @@ func resolveFile(rootDir, requestPath string) (string, string, error) {
 		return "", "", os.ErrNotExist
 	}
 	return index, cacheHeader(indexFile), nil
+}
+
+func resolveEmbeddedFile(rel string) ([]byte, string, string, error) {
+	content, servedRel, err := readEmbeddedFile(rel)
+	if err == nil {
+		return content, servedRel, cacheHeader(servedRel), nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, "", "", err
+	}
+	if isAssetRequest(rel) {
+		return nil, "", "", os.ErrNotExist
+	}
+
+	content, servedRel, err = readEmbeddedFile(indexFile)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return content, servedRel, cacheHeader(indexFile), nil
+}
+
+func readEmbeddedFile(rel string) ([]byte, string, error) {
+	servedRel := cleanAssetPath(rel)
+	embeddedPath := path.Join(embedDir, filepath.ToSlash(servedRel))
+	content, err := frontroot.SiteFS.ReadFile(embeddedPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, "", os.ErrNotExist
+		}
+		return nil, "", err
+	}
+	return content, servedRel, nil
+}
+
+func setContentType(raw *fiber.Ctx, rel string) {
+	contentType := mime.TypeByExtension(path.Ext(filepath.ToSlash(rel)))
+	if contentType == "" {
+		return
+	}
+	raw.Set("Content-Type", contentType)
 }
 
 func cleanDir(value string) string {
