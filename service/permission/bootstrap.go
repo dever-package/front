@@ -266,12 +266,8 @@ func walkDiskPageAuthRecords(
 			return nil
 		}
 
-		cleanPath := filepath.ToSlash(filepath.Clean(path))
-		parts := strings.Split(cleanPath, "/")
-		if len(parts) < 4 || parts[0] != root || !frontpage.IsPageDir(parts[2]) {
-			return nil
-		}
-		if parts[1] == "front" {
+		moduleName, routePath, ok := frontpage.DiskPageRoute(root, path)
+		if !ok || moduleName == "front" {
 			return nil
 		}
 
@@ -284,11 +280,6 @@ func walkDiskPageAuthRecords(
 			return nil
 		}
 
-		routePath := frontpage.TrimPageFileExt(strings.Join(append([]string{parts[1]}, parts[3:]...), "/"))
-		routePath = frontpage.NormalizePath(routePath)
-		if routePath == "" {
-			return nil
-		}
 		if _, embedded := embeddedPaths[routePath]; embedded {
 			return nil
 		}

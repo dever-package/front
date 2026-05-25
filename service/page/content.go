@@ -65,17 +65,60 @@ func ReadContent(pathValue string) ([]byte, error) {
 
 func readDiskPageContent(root, moduleName, fileName string) ([]byte, bool, error) {
 	for _, ext := range pageFileExtCandidates {
-		diskPath := filepath.Join(root, moduleName, pageDirName, fileName+ext)
-		content, _, readErr := util.ReadJSONCFile(diskPath)
-		if readErr != nil {
-			continue
+		for _, diskPath := range diskPageContentPaths(root, moduleName, fileName+ext) {
+			content, _, readErr := util.ReadJSONCFile(diskPath)
+			if readErr != nil {
+				continue
+			}
+			if !json.Valid(content) {
+				return nil, false, fmt.Errorf("页面配置格式错误")
+			}
+			return content, true, nil
 		}
-		if !json.Valid(content) {
-			return nil, false, fmt.Errorf("页面配置格式错误")
-		}
-		return content, true, nil
 	}
 	return nil, false, nil
+}
+
+func diskPageContentPaths(root, moduleName, fileName string) []string {
+	paths := make([]string, 0, 2)
+	if moduleName != "front" {
+		paths = append(paths, filepath.Join(root, moduleName, "front", pageDirName, fileName))
+	}
+	paths = append(paths, filepath.Join(root, moduleName, pageDirName, fileName))
+	return paths
+}
+
+func DiskPageRoute(root, diskPath string) (string, string, bool) {
+	cleanPath := filepath.ToSlash(filepath.Clean(diskPath))
+	parts := strings.Split(cleanPath, "/")
+	if len(parts) < 4 || parts[0] != root {
+		return "", "", false
+	}
+
+	moduleName := strings.TrimSpace(parts[1])
+	if moduleName == "" {
+		return "", "", false
+	}
+
+	var relativeParts []string
+	switch {
+	case len(parts) >= 5 && parts[2] == "front" && IsPageDir(parts[3]):
+		relativeParts = parts[4:]
+	case IsPageDir(parts[2]):
+		relativeParts = parts[3:]
+	default:
+		return "", "", false
+	}
+	if len(relativeParts) == 0 {
+		return "", "", false
+	}
+
+	routePath := TrimPageFileExt(strings.Join(append([]string{moduleName}, relativeParts...), "/"))
+	routePath = NormalizePath(routePath)
+	if routePath == "" {
+		return "", "", false
+	}
+	return moduleName, routePath, true
 }
 
 func IsPageDir(name string) bool {

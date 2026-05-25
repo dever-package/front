@@ -116,9 +116,8 @@ func walkDiskParents(root string, result map[string]map[string]struct{}) error {
 			return nil
 		}
 
-		cleanPath := filepath.ToSlash(filepath.Clean(path))
-		parts := strings.Split(cleanPath, "/")
-		if len(parts) < 4 || parts[0] != root || parts[1] == "front" || parts[2] != "page" {
+		moduleName, routePath, ok := frontpage.DiskPageRoute(root, path)
+		if !ok || moduleName == "front" {
 			return nil
 		}
 
@@ -127,7 +126,6 @@ func walkDiskParents(root string, result map[string]map[string]struct{}) error {
 			return err
 		}
 
-		routePath := trimPageFileExt(strings.Join(append([]string{parts[1]}, parts[3:]...), "/"))
 		collectParents(result, routePath, content)
 		return nil
 	})
@@ -184,21 +182,13 @@ func embeddedRoute(item map[string]any) string {
 }
 
 func isPageFileName(name string) bool {
-	return strings.HasSuffix(name, ".json") || strings.HasSuffix(name, ".jsonc")
+	return frontpage.IsPageFileName(name)
 }
 
 func trimPageFileExt(path string) string {
-	for _, ext := range []string{".jsonc", ".json"} {
-		if strings.HasSuffix(path, ext) {
-			return strings.TrimSuffix(path, ext)
-		}
-	}
-	return path
+	return frontpage.TrimPageFileExt(path)
 }
 
 func normalizePath(path string) string {
-	path = strings.TrimSpace(path)
-	path = strings.Trim(path, "/")
-	path = strings.ReplaceAll(path, "\\", "/")
-	return path
+	return frontpage.NormalizePath(path)
 }
