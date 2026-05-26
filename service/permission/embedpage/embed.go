@@ -8,6 +8,7 @@ import (
 
 	"github.com/shemic/dever/util"
 	frontroot "my/package/front"
+	frontpagepath "my/package/front/internal/pagepath"
 )
 
 const cacheKey = "default"
@@ -116,7 +117,7 @@ func walkDiskParents(root string, result map[string]map[string]struct{}) error {
 			return nil
 		}
 
-		moduleName, routePath, ok := frontpage.DiskPageRoute(root, path)
+		moduleName, routePath, ok := frontpagepath.DiskPageRoute(root, path)
 		if !ok || moduleName == "front" {
 			return nil
 		}
@@ -182,13 +183,13 @@ func embeddedRoute(item map[string]any) string {
 }
 
 func isPageFileName(name string) bool {
-	return frontpage.IsPageFileName(name)
+	return frontpagepath.IsPageFileName(name)
 }
 
 func trimPageFileExt(path string) string {
-	return frontpage.TrimPageFileExt(path)
+	return frontpagepath.TrimPageFileExt(path)
 }
 
 func normalizePath(path string) string {
-	return frontpage.NormalizePath(path)
+	return frontpagepath.NormalizePath(path)
 }

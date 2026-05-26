@@ -11,7 +11,7 @@ import (
 	"github.com/shemic/dever/util"
 
 	frontservice "my/package/front/service"
-	actionpayload "my/package/front/service/action/payload"
+	actionpayload "my/package/front/service/action/internal/payload"
 	frontmeta "my/package/front/service/meta"
 	permissionservice "my/package/front/service/permission"
 	frontrecord "my/package/front/service/record"

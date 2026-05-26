@@ -11,8 +11,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "my/package/front/service/call"
-	embedpageservice "my/package/front/service/embedpage"
+	frontcall "my/package/front/service/internal/call"
+	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
 )
 

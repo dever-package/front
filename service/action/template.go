@@ -1,7 +1,7 @@
 package action
 
 import (
-	actionpayload "my/package/front/service/action/payload"
+	actionpayload "my/package/front/service/action/internal/payload"
 	frontpage "my/package/front/service/page"
 )
 

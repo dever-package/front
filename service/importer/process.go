@@ -11,7 +11,7 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	actionservice "my/package/front/service/action"
-	frontcall "my/package/front/service/call"
+	frontcall "my/package/front/service/internal/call"
 	frontmeta "my/package/front/service/meta"
 	frontoption "my/package/front/service/option"
 	frontrecord "my/package/front/service/record"

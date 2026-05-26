@@ -8,6 +8,7 @@ import (
 
 	"github.com/shemic/dever/util"
 
+	frontpagepath "my/package/front/internal/pagepath"
 	frontpage "my/package/front/service/page"
 )
 
@@ -52,7 +53,7 @@ func filterPageSchemaWithSnapshot(snapshot *accessSnapshot, pathValue string, cu
 
 	filter := pageSchemaPermissionFilter{
 		snapshot:     snapshot,
-		pagePath:     frontpage.NormalizePath(pathValue),
+		pagePath:     frontpagepath.NormalizePath(pathValue),
 		nodes:        decodeSchemaNodes(currentSchema.Nodes),
 		data:         decodeSchemaObject(currentSchema.Data),
 		state:        decodeSchemaObject(currentSchema.State),
@@ -506,7 +507,7 @@ func (filter pageSchemaPermissionFilter) canUseDeclaredAuth(auth any) bool {
 }
 
 func (filter pageSchemaPermissionFilter) canUseRoute(route string, query map[string]string) bool {
-	pathValue := frontpage.NormalizePath(route)
+	pathValue := frontpagepath.NormalizePath(route)
 	if pathValue == "" {
 		return true
 	}
@@ -775,7 +776,7 @@ func normalizeInlineSavePath(path any) string {
 	pathValue := util.ToString(path)
 	pathValue, _, _ = strings.Cut(pathValue, "?")
 	pathValue, _, _ = strings.Cut(pathValue, "#")
-	return frontpage.NormalizePath(pathValue)
+	return frontpagepath.NormalizePath(pathValue)
 }
 
 func mapSlice(value any) ([]map[string]any, bool) {

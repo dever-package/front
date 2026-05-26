@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"my/package/front/service/transfer"
+	"my/package/front/service/upload/internal/transfer"
 	uploadprovider "my/package/front/service/upload/provider"
 	uploadrepo "my/package/front/service/upload/repository"
 )

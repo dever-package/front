@@ -10,7 +10,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "my/package/front/service/call"
+	frontcall "my/package/front/service/internal/call"
 	frontmeta "my/package/front/service/meta"
 	frontrecord "my/package/front/service/record"
 )
@@ -297,15 +297,15 @@ func shouldUseDefaultFormModel(
 	}
 
 	switch {
-	case strings.HasSuffix(NormalizePath(pathValue), "/update"):
+	case strings.HasSuffix(normalizePath(pathValue), "/update"):
 		return true
-	case strings.HasSuffix(NormalizePath(pathValue), "/create"):
+	case strings.HasSuffix(normalizePath(pathValue), "/create"):
 		return true
-	case strings.HasSuffix(NormalizePath(pathValue), "/view"):
+	case strings.HasSuffix(normalizePath(pathValue), "/view"):
 		return true
-	case strings.HasSuffix(NormalizePath(pathValue), "/detail"):
+	case strings.HasSuffix(normalizePath(pathValue), "/detail"):
 		return true
-	case strings.HasSuffix(NormalizePath(pathValue), "/info"):
+	case strings.HasSuffix(normalizePath(pathValue), "/info"):
 		return true
 	default:
 		return false
@@ -523,7 +523,7 @@ func resolveListModelName(
 }
 
 func shouldUseDefaultListModel(pathValue string, current map[string]any) bool {
-	if !strings.HasSuffix(NormalizePath(pathValue), "/list") {
+	if !strings.HasSuffix(normalizePath(pathValue), "/list") {
 		return false
 	}
 	if _, ok := current["page"]; !ok {

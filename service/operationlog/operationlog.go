@@ -11,9 +11,9 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontauthctx "my/package/front/service/authctx"
+	frontpagepath "my/package/front/internal/pagepath"
+	frontauthctx "my/package/front/service/internal/authctx"
 	frontmeta "my/package/front/service/meta"
-	frontpage "my/package/front/service/page"
 	frontrecord "my/package/front/service/record"
 )
 
@@ -129,7 +129,7 @@ func record(c *server.Context, entry Entry, account map[string]any) {
 		"action":       limitText(firstNonEmptyText(entry.Action, "request"), 32),
 		"method":       limitText(firstNonEmptyText(entry.Method, c.Method()), 16),
 		"path":         limitText(firstNonEmptyText(entry.Path, c.Path()), maxTextLength),
-		"page_path":    limitText(frontpage.NormalizePath(entry.PagePath), maxTextLength),
+		"page_path":    limitText(frontpagepath.NormalizePath(entry.PagePath), maxTextLength),
 		"target_model": limitText(entry.TargetModel, 128),
 		"target_id":    limitText(entry.TargetID, 128),
 		"message":      limitText(entry.Message, maxTextLength),

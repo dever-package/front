@@ -11,7 +11,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	authctx "my/package/front/service/authctx"
+	authctx "my/package/front/service/internal/authctx"
 	permissionservice "my/package/front/service/permission"
 )
 

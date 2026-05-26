@@ -7,7 +7,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "my/package/front/service/call"
+	frontcall "my/package/front/service/internal/call"
 )
 
 type hookConfig struct {

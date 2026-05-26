@@ -5,6 +5,7 @@ import (
 
 	"github.com/shemic/dever/server"
 
+	frontpagepath "my/package/front/internal/pagepath"
 	actionvalidate "my/package/front/service/action/validate"
 	operationlog "my/package/front/service/operationlog"
 	frontpage "my/package/front/service/page"
@@ -13,7 +14,7 @@ import (
 )
 
 func PostAction(c *server.Context) error {
-	requestPath := frontpage.NormalizePath(c.Input("path", "required", "页面路径"))
+	requestPath := frontpagepath.NormalizePath(c.Input("path", "required", "页面路径"))
 
 	var request frontpage.ActionRequest
 	if err := c.BindJSON(&request); err != nil {

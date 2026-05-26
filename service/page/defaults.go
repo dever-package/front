@@ -219,7 +219,7 @@ func applyLinkedPageCategoryDefaults(
 	}
 
 	visited := map[string]bool{
-		NormalizePath(pathValue): true,
+		normalizePath(pathValue): true,
 	}
 	return applyLinkedLayoutCategoryDefaults(c, layout, root, visited)
 }
@@ -393,7 +393,7 @@ func normalizeStaticLayoutPagePath(value any) string {
 	case strings.HasPrefix(path, "parent."):
 		return ""
 	}
-	return NormalizePath(path)
+	return normalizePath(path)
 }
 
 func normalizeParentDataPath(path string) string {

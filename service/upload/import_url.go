@@ -14,7 +14,7 @@ import (
 
 	"github.com/shemic/dever/server"
 
-	"my/package/front/service/transfer"
+	"my/package/front/service/upload/internal/transfer"
 	uploadrepo "my/package/front/service/upload/repository"
 )
 

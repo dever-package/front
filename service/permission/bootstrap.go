@@ -13,8 +13,9 @@ import (
 	"github.com/shemic/dever/util"
 	frontroot "my/package/front"
 
-	embedpageservice "my/package/front/service/embedpage"
+	frontpagepath "my/package/front/internal/pagepath"
 	frontpage "my/package/front/service/page"
+	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
 )
 
@@ -215,7 +216,7 @@ func loadPageAuthRecords() ([]authRecord, error) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry == nil || entry.IsDir() || !frontpage.IsPageFileName(entry.Name()) {
+		if entry == nil || entry.IsDir() || !frontpagepath.IsPageFileName(entry.Name()) {
 			return nil
 		}
 
@@ -229,8 +230,8 @@ func loadPageAuthRecords() ([]authRecord, error) {
 		}
 
 		relativePath := strings.TrimPrefix(filepath.ToSlash(path), "page/")
-		routePath := frontpage.TrimPageFileExt(filepath.ToSlash(filepath.Join("front", relativePath)))
-		routePath = frontpage.NormalizePath(routePath)
+		routePath := frontpagepath.TrimPageFileExt(filepath.ToSlash(filepath.Join("front", relativePath)))
+		routePath = frontpagepath.NormalizePath(routePath)
 		if routePath == "" {
 			return nil
 		}
@@ -262,11 +263,11 @@ func walkDiskPageAuthRecords(
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry == nil || entry.IsDir() || !frontpage.IsPageFileName(entry.Name()) {
+		if entry == nil || entry.IsDir() || !frontpagepath.IsPageFileName(entry.Name()) {
 			return nil
 		}
 
-		moduleName, routePath, ok := frontpage.DiskPageRoute(root, path)
+		moduleName, routePath, ok := frontpagepath.DiskPageRoute(root, path)
 		if !ok || moduleName == "front" {
 			return nil
 		}
@@ -386,7 +387,7 @@ func listParentPath(pathValue string) string {
 }
 
 func pathParts(pathValue string) []string {
-	segments := strings.Split(frontpage.NormalizePath(pathValue), "/")
+	segments := strings.Split(frontpagepath.NormalizePath(pathValue), "/")
 	result := make([]string, 0, len(segments))
 	for _, segment := range segments {
 		segment = strings.TrimSpace(segment)
@@ -564,7 +565,7 @@ func savePageAuthRecord(
 	record authRecord,
 	fileName string,
 ) {
-	priority := frontpage.PageFilePriority(fileName)
+	priority := frontpagepath.PageFilePriority(fileName)
 	if currentPriority, ok := recordPriorityMap[record.Key]; ok && currentPriority <= priority {
 		return
 	}

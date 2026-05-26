@@ -8,9 +8,9 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	authctx "my/package/front/service/authctx"
-	embedpageservice "my/package/front/service/embedpage"
-	frontpage "my/package/front/service/page"
+	frontpagepath "my/package/front/internal/pagepath"
+	authctx "my/package/front/service/internal/authctx"
+	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
 )
 
@@ -48,7 +48,7 @@ func (scope *AccessScope) EnsurePageAccess(ctx context.Context, pathValue string
 }
 
 func EnsurePageAccessWithInput(ctx context.Context, pathValue string, lookup InputLookup) error {
-	pathValue = frontpage.NormalizePath(pathValue)
+	pathValue = frontpagepath.NormalizePath(pathValue)
 	if pathValue == "" {
 		return nil
 	}
@@ -61,7 +61,7 @@ func EnsurePageAccessWithInput(ctx context.Context, pathValue string, lookup Inp
 }
 
 func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot, pathValue string, lookup InputLookup) error {
-	pathValue = frontpage.NormalizePath(pathValue)
+	pathValue = frontpagepath.NormalizePath(pathValue)
 	if pathValue == "" {
 		return nil
 	}
@@ -202,7 +202,7 @@ func EnsureActionAccess(ctx context.Context, pathValue string, actionKey string)
 }
 
 func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) (bool, error) {
-	pathValue = frontpage.NormalizePath(pathValue)
+	pathValue = frontpagepath.NormalizePath(pathValue)
 	actionKey = strings.TrimSpace(actionKey)
 	if pathValue == "" || actionKey == "" {
 		return false, nil
@@ -210,7 +210,7 @@ func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) 
 
 	fullKey := pathValue + "/" + actionKey
 	if strings.Contains(actionKey, "/") {
-		fullKey = frontpage.NormalizePath(actionKey)
+		fullKey = frontpagepath.NormalizePath(actionKey)
 	}
 	snapshot, err := loadAccessSnapshot(ctx)
 	if err != nil || snapshot == nil {
@@ -244,7 +244,7 @@ func canInheritPageAccess(ctx context.Context, snapshot *accessSnapshot, pathVal
 		return false
 	}
 
-	parentPath := frontpage.NormalizePath(lookup(inheritParentPathKey))
+	parentPath := frontpagepath.NormalizePath(lookup(inheritParentPathKey))
 	if parentPath == "" || parentPath == pathValue || !embedpageservice.IsChild(parentPath, pathValue) {
 		return false
 	}

@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
+	frontpagepath "my/package/front/internal/pagepath"
 	actionservice "my/package/front/service/action"
 	optionservice "my/package/front/service/option"
 	pageservice "my/package/front/service/page"
@@ -12,7 +13,7 @@ import (
 type Route struct{}
 
 func (Route) GetInfo(c *server.Context) error {
-	pathValue := pageservice.NormalizePath(c.Input("path", "required", "页面路径"))
+	pathValue := frontpagepath.NormalizePath(c.Input("path", "required", "页面路径"))
 	accessScope, err := permissionservice.NewAccessScope(c.Context())
 	if err != nil {
 		return c.Error(err)
@@ -40,7 +41,7 @@ func (Route) GetInfo(c *server.Context) error {
 }
 
 func (Route) GetOption(c *server.Context) error {
-	pathValue := pageservice.NormalizePath(c.Input("path"))
+	pathValue := frontpagepath.NormalizePath(c.Input("path"))
 	if pathValue != "" {
 		if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, func(key string) string {
 			return c.Input(key)

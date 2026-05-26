@@ -9,7 +9,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "my/package/front/service/call"
+	frontcall "my/package/front/service/internal/call"
 	frontmeta "my/package/front/service/meta"
 	frontpage "my/package/front/service/page"
 	frontrecord "my/package/front/service/record"

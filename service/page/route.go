@@ -4,18 +4,16 @@ import (
 	"fmt"
 	"strings"
 
+	frontpagepath "my/package/front/internal/pagepath"
 	frontrecord "my/package/front/service/record"
 )
 
-func NormalizePath(path string) string {
-	path = strings.TrimSpace(path)
-	path = strings.Trim(path, "/")
-	path = strings.ReplaceAll(path, "\\", "/")
-	return path
+func normalizePath(path string) string {
+	return frontpagepath.NormalizePath(path)
 }
 
 func DefaultModelName(pathValue string) string {
-	pathValue = NormalizePath(pathValue)
+	pathValue = normalizePath(pathValue)
 	segments := splitPathSegments(pathValue)
 	if len(segments) == 0 {
 		return ""
@@ -39,7 +37,7 @@ func DefaultModelName(pathValue string) string {
 }
 
 func splitPathSegments(pathValue string) []string {
-	parts := strings.Split(strings.Trim(NormalizePath(pathValue), "/"), "/")
+	parts := strings.Split(strings.Trim(normalizePath(pathValue), "/"), "/")
 	result := make([]string, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)

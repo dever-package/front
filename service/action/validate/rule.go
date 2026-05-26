@@ -8,8 +8,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	actionpayload "my/package/front/service/action/payload"
-	frontcall "my/package/front/service/call"
+	actionpayload "my/package/front/service/action/internal/payload"
+	frontcall "my/package/front/service/internal/call"
 	frontpage "my/package/front/service/page"
 	frontrecord "my/package/front/service/record"
 )
@@ -39,7 +39,7 @@ func validateRuleValue(
 		}
 		if strings.TrimSpace(item.Type) == "form-cascader" {
 			requiredLevels := resolveCascaderRequiredLevels(item)
-			if requiredLevels > 0 && sliceLen(normalized) < requiredLevels {
+			if requiredLevels > 0 && isSliceValue(normalized) && sliceLen(normalized) < requiredLevels {
 				return &Failure{Field: fieldPath, Message: util.FirstNonEmpty(rule.Message, "该字段不能为空。")}, nil
 			}
 		}

@@ -43,7 +43,7 @@ var actionEnvelopeCache util.ConcurrentMap[ContentSignature, actionEnvelopeCache
 
 func NormalizeAction(config ActionConfig) ActionConfig {
 	config.Type = strings.ToLower(strings.TrimSpace(config.Type))
-	config.Path = NormalizePath(config.Path)
+	config.Path = normalizePath(config.Path)
 	config.Use = strings.TrimSpace(config.Use)
 	config.PK = strings.TrimSpace(config.PK)
 	return config
@@ -55,7 +55,7 @@ func SubmitModelName(content []byte, pathValue string) string {
 		return ActionModelName(pathValue, config)
 	}
 
-	if strings.HasSuffix(NormalizePath(pathValue), "/list") {
+	if strings.HasSuffix(normalizePath(pathValue), "/list") {
 		return ""
 	}
 
@@ -74,10 +74,10 @@ func ActionPrimaryKey(config ActionConfig) string {
 }
 
 func ActionPath(pathValue string, config ActionConfig) string {
-	if current := NormalizePath(config.Path); current != "" {
+	if current := normalizePath(config.Path); current != "" {
 		return current
 	}
-	return NormalizePath(pathValue)
+	return normalizePath(pathValue)
 }
 
 func parseNamedAction(content []byte, name string) (ActionConfig, bool, error) {

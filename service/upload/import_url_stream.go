@@ -56,25 +56,16 @@ func ImportURLUploadStream(c *server.Context) error {
 }
 
 func ReadUploadStream(c *server.Context) error {
-	requestID := strings.TrimSpace(frontstream.InputText(c.Input("request_id")))
-	if requestID == "" {
-		requestID = strings.TrimSpace(frontstream.InputText(c.Input("requestId")))
+	params := frontstream.ReadParamsFromServerContext(c)
+	if frontstream.WantsSSE(c) {
+		return frontstream.ServeSSE(c, uploadStreams.Read, params)
 	}
-	lastID := strings.TrimSpace(frontstream.InputText(c.Input("last_id")))
-	if lastID == "" {
-		lastID = strings.TrimSpace(frontstream.InputText(c.Input("lastId")))
-	}
-	count := frontstream.InputInt64(c.Input("count"), 1)
-	if count != 1 {
-		count = 1
-	}
-	block := time.Duration(frontstream.InputInt64(c.Input("block"), 0)) * time.Millisecond
 
-	entries, err := uploadStreams.Read(c.Context(), requestID, lastID, count, block)
+	entries, err := uploadStreams.Read(c.Context(), params.RequestID, params.LastID, params.Count, params.Block)
 	if err != nil {
-		return c.JSONPayload(200, frontstream.ResponsePayload(requestID, "result", map[string]any{}, err.Error(), 2))
+		return c.JSONPayload(200, frontstream.ResponsePayload(params.RequestID, "result", map[string]any{}, err.Error(), 2))
 	}
-	return c.JSONPayload(200, frontstream.NextPayload(requestID, lastID, entries))
+	return c.JSONPayload(200, frontstream.NextPayload(params.RequestID, params.LastID, entries))
 }
 
 func runImportURLUploadStream(requestID string, input uploadImportURLInput) {

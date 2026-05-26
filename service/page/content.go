@@ -9,14 +9,8 @@ import (
 
 	"github.com/shemic/dever/util"
 	frontroot "my/package/front"
+	frontpagepath "my/package/front/internal/pagepath"
 )
-
-const pageDirName = "page"
-
-var pageFileExtCandidates = []string{
-	".jsonc",
-	".json",
-}
 
 var embeddedContentCache util.ConcurrentMap[string, []byte]
 
@@ -64,7 +58,7 @@ func ReadContent(pathValue string) ([]byte, error) {
 }
 
 func readDiskPageContent(root, moduleName, fileName string) ([]byte, bool, error) {
-	for _, ext := range pageFileExtCandidates {
+	for _, ext := range frontpagepath.FileExtCandidates() {
 		for _, diskPath := range diskPageContentPaths(root, moduleName, fileName+ext) {
 			content, _, readErr := util.ReadJSONCFile(diskPath)
 			if readErr != nil {
@@ -82,74 +76,10 @@ func readDiskPageContent(root, moduleName, fileName string) ([]byte, bool, error
 func diskPageContentPaths(root, moduleName, fileName string) []string {
 	paths := make([]string, 0, 2)
 	if moduleName != "front" {
-		paths = append(paths, filepath.Join(root, moduleName, "front", pageDirName, fileName))
+		paths = append(paths, filepath.Join(root, moduleName, "front", frontpagepath.DirName, fileName))
 	}
-	paths = append(paths, filepath.Join(root, moduleName, pageDirName, fileName))
+	paths = append(paths, filepath.Join(root, moduleName, frontpagepath.DirName, fileName))
 	return paths
-}
-
-func DiskPageRoute(root, diskPath string) (string, string, bool) {
-	cleanPath := filepath.ToSlash(filepath.Clean(diskPath))
-	parts := strings.Split(cleanPath, "/")
-	if len(parts) < 4 || parts[0] != root {
-		return "", "", false
-	}
-
-	moduleName := strings.TrimSpace(parts[1])
-	if moduleName == "" {
-		return "", "", false
-	}
-
-	var relativeParts []string
-	switch {
-	case len(parts) >= 5 && parts[2] == "front" && IsPageDir(parts[3]):
-		relativeParts = parts[4:]
-	case IsPageDir(parts[2]):
-		relativeParts = parts[3:]
-	default:
-		return "", "", false
-	}
-	if len(relativeParts) == 0 {
-		return "", "", false
-	}
-
-	routePath := TrimPageFileExt(strings.Join(append([]string{moduleName}, relativeParts...), "/"))
-	routePath = NormalizePath(routePath)
-	if routePath == "" {
-		return "", "", false
-	}
-	return moduleName, routePath, true
-}
-
-func IsPageDir(name string) bool {
-	return name == pageDirName
-}
-
-func IsPageFileName(name string) bool {
-	for _, ext := range pageFileExtCandidates {
-		if strings.HasSuffix(name, ext) {
-			return true
-		}
-	}
-	return false
-}
-
-func TrimPageFileExt(path string) string {
-	for _, ext := range pageFileExtCandidates {
-		if strings.HasSuffix(path, ext) {
-			return strings.TrimSuffix(path, ext)
-		}
-	}
-	return path
-}
-
-func PageFilePriority(name string) int {
-	for index, ext := range pageFileExtCandidates {
-		if strings.HasSuffix(name, ext) {
-			return index
-		}
-	}
-	return len(pageFileExtCandidates)
 }
 
 func splitPagePath(pathValue string) (string, string, error) {
@@ -175,18 +105,20 @@ func splitPagePath(pathValue string) (string, string, error) {
 }
 
 func buildJSONPaths(moduleName, fileName string) []string {
-	result := make([]string, 0, len(pageFileExtCandidates))
-	for _, ext := range pageFileExtCandidates {
-		fullPath := filepath.ToSlash(filepath.Join(moduleName, pageDirName, fileName+ext))
+	candidates := frontpagepath.FileExtCandidates()
+	result := make([]string, 0, len(candidates))
+	for _, ext := range candidates {
+		fullPath := filepath.ToSlash(filepath.Join(moduleName, frontpagepath.DirName, fileName+ext))
 		result = append(result, filepath.Clean(fullPath))
 	}
 	return result
 }
 
 func buildEmbeddedJSONPaths(fileName string) []string {
-	result := make([]string, 0, len(pageFileExtCandidates))
-	for _, ext := range pageFileExtCandidates {
-		fullPath := filepath.ToSlash(filepath.Join(pageDirName, fileName+ext))
+	candidates := frontpagepath.FileExtCandidates()
+	result := make([]string, 0, len(candidates))
+	for _, ext := range candidates {
+		fullPath := filepath.ToSlash(filepath.Join(frontpagepath.DirName, fileName+ext))
 		result = append(result, filepath.Clean(fullPath))
 	}
 	return result
