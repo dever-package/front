@@ -26,11 +26,14 @@ const (
 	siteAssetPrefix          = "assets/"
 	siteAssetDir             = "config/front/assets"
 	defaultBundledAssetScope = "assets/images"
+	defaultPluginDevURL      = "http://127.0.0.1:5174"
 )
 
 type settings struct {
-	enabled bool
-	dir     string
+	enabled      bool
+	dir          string
+	pluginDev    bool
+	pluginDevURL string
 }
 
 // Register 按配置把前端静态文件挂到后端路由。
@@ -52,7 +55,7 @@ func Allows(requestPath string) bool {
 		return false
 	}
 	requestPath = cleanRequestPath(requestPath)
-	_, ok := frontConfig.FindBySitePath(requestPath)
+	_, ok := frontConfig.FindByStaticSitePath(requestPath)
 	return ok
 }
 
@@ -61,8 +64,11 @@ func register(s server.Server, siteSettings settings, frontConfig siteconfig.Con
 		return
 	}
 
+	registerPluginDevProxy(s, siteSettings)
+
 	for _, site := range frontConfig.Sites {
 		currentSite := site
+		registerPluginAssets(s, currentSite, siteSettings)
 		registerRuntimeAPI(s, currentSite)
 		open := func(c *server.Context) error {
 			c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
@@ -70,7 +76,7 @@ func register(s server.Server, siteSettings settings, frontConfig siteconfig.Con
 		}
 		runtime := func(c *server.Context) error {
 			c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
-			return writeRuntime(c, currentSite, false)
+			return writeRuntime(c, currentSite, false, siteSettings.pluginDev)
 		}
 		s.Get(currentSite.Path, open)
 		s.Get(currentSite.Path+"/runtime.js", runtime)
@@ -121,8 +127,10 @@ func settingsFromConfig(cfg config.FrontSite) settings {
 		enabled = *cfg.Enabled
 	}
 	return settings{
-		enabled: enabled,
-		dir:     cleanDir(cfg.Dir),
+		enabled:      enabled,
+		dir:          cleanDir(cfg.Dir),
+		pluginDev:    siteconfig.PluginDevEnabled(cfg),
+		pluginDevURL: frontPluginDevURL(cfg),
 	}
 }
 
@@ -149,7 +157,7 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 			if err != nil {
 				return c.Error(err, http.StatusNotFound)
 			}
-			content, err = injectRuntime(content, currentSite, false, raw.Hostname())
+			content, err = injectRuntime(content, currentSite, false, raw.Hostname(), site.pluginDev)
 			if err != nil {
 				return c.Error(err, http.StatusInternalServerError)
 			}
@@ -169,12 +177,28 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 	raw.Set("Cache-Control", cache)
 	setContentType(raw, servedRel)
 	if servedRel == indexFile {
-		content, err = injectRuntime(content, currentSite, false, raw.Hostname())
+		content, err = injectRuntime(content, currentSite, false, raw.Hostname(), site.pluginDev)
 		if err != nil {
 			return c.Error(err, http.StatusInternalServerError)
 		}
 	}
 	return raw.Send(content)
+}
+
+func frontPluginDevURL(cfg config.FrontSite) string {
+	if value := strings.TrimSpace(os.Getenv("DEVER_FRONT_PLUGIN_DEV_URL")); value != "" {
+		return strings.TrimRight(value, "/")
+	}
+	if value := strings.TrimSpace(cfg.PluginDev.URL); value != "" {
+		return strings.TrimRight(value, "/")
+	}
+	if cfg.PluginDev.Port > 0 {
+		return fmt.Sprintf("http://127.0.0.1:%d", cfg.PluginDev.Port)
+	}
+	if siteconfig.PluginDevEnabled(cfg) {
+		return defaultPluginDevURL
+	}
+	return ""
 }
 
 func openSiteAsset(raw *fiber.Ctx, site siteconfig.Site, rel string) (bool, error) {

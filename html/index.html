@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./assets/images/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- dever:runtime -->
+    <!-- Primary Meta Tags -->
+    <title>Dever Front</title>
+    <meta name="title" content="Dever Front" />
+    <meta
+      name="description"
+      content="基于 Dever 框架的 JSON 驱动前端界面运行时。"
+    />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="/" />
+    <meta property="og:title" content="Dever Front" />
+    <meta
+      property="og:description"
+      content="基于 Dever 框架的 JSON 驱动前端界面运行时。"
+    />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary" />
+    <meta property="twitter:url" content="/" />
+    <meta property="twitter:title" content="Dever Front" />
+    <meta
+      property="twitter:description"
+      content="基于 Dever 框架的 JSON 驱动前端界面运行时。"
+    />
+
+    <!-- font family -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Manrope:wght@200..800&display=swap"
+      rel="stylesheet"
+    />
+
+    <meta name="theme-color" content="#fff" />
+    <script>
+      ;(() => {
+        const resolveRuntimeSite = () => {
+          const runtime = window.appRuntime || {}
+          const basePath = String(runtime.basePath || '').replace(/\/+$/, '')
+          const site = { ...(runtime.site || {}) }
+          if (basePath) {
+            site.url = site.url || basePath
+            site.logo = site.logo || `${basePath}/assets/images/logo.svg`
+            site.favicon =
+              site.favicon || `${basePath}/assets/images/favicon.svg`
+          }
+
+          return site
+        }
+
+        const setMeta = (selector, value) => {
+          if (!value) return
+          const node = document.querySelector(selector)
+          if (node) node.setAttribute('content', value)
+        }
+
+        const setIcon = (type, href) => {
+          if (!href) return
+          const selector = `link[rel='icon'][type='${type}']`
+          const node = document.querySelector(selector)
+          if (node) node.setAttribute('href', href)
+        }
+
+        const applyBootSite = (site) => {
+          const siteName = String(site.name || 'Dever Front').trim()
+          const favicon = String(site.favicon || '').trim()
+          const title = document.getElementById('front-initial-boot-title')
+          const logo = document.getElementById('front-initial-boot-logo')
+
+          if (title) title.textContent = siteName
+          if (!logo) return
+
+          const initials = siteName
+            .split(/\s+/)
+            .map((part) => part.slice(0, 1))
+            .join('')
+            .slice(0, 2)
+            .toUpperCase()
+
+          logo.textContent = ''
+          if (favicon) {
+            const image = document.createElement('img')
+            image.src = favicon
+            image.alt = siteName
+            logo.appendChild(image)
+            return
+          }
+
+          const fallback = document.createElement('span')
+          fallback.className = 'front-boot-initials'
+          fallback.textContent = initials || 'D'
+          logo.appendChild(fallback)
+        }
+
+        window.__deverApplyRuntimeSite = () => {
+          const site = resolveRuntimeSite()
+
+          if (site.name) document.title = site.name
+          setMeta("meta[name='title']", site.shortName || site.name)
+          setMeta("meta[name='description']", site.description)
+          setMeta("meta[property='og:url']", site.url)
+          setMeta("meta[property='og:title']", site.shortName || site.name)
+          setMeta("meta[property='og:description']", site.description)
+          setMeta("meta[property='twitter:url']", site.url)
+          setMeta("meta[property='twitter:title']", site.shortName || site.name)
+          setMeta("meta[property='twitter:description']", site.description)
+          setIcon('image/svg+xml', site.favicon)
+          applyBootSite(site)
+        }
+
+        window.__deverApplyRuntimeSite()
+
+        window.addEventListener('DOMContentLoaded', () => {
+          window.__deverApplyRuntimeSite()
+        })
+      })()
+    </script>
+    <style>
+      .front-boot-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        padding: 24px;
+        box-sizing: border-box;
+        background:
+          radial-gradient(circle at top, #e9f1ff 0%, transparent 34%),
+          linear-gradient(180deg, #fcfdff 0%, #f6f8fc 100%);
+        color: #020617;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+        font-size: 16px;
+        line-height: 1;
+        text-rendering: geometricPrecision;
+        transition:
+          opacity 160ms ease,
+          visibility 160ms ease;
+      }
+
+      .front-boot-screen,
+      .front-boot-screen *,
+      .front-boot-screen *::before,
+      .front-boot-screen *::after {
+        box-sizing: border-box;
+      }
+
+      .front-boot-screen::before {
+        position: absolute;
+        inset: 0;
+        content: '';
+        background: linear-gradient(
+          120deg,
+          transparent 0%,
+          rgba(255, 255, 255, 0.72) 18%,
+          transparent 40%
+        );
+        opacity: 0.7;
+        pointer-events: none;
+      }
+
+      .front-boot-screen.front-boot-screen--hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .front-boot-panel {
+        position: relative;
+        display: flex;
+        width: 100%;
+        max-width: 384px;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        text-align: center;
+      }
+
+      .front-boot-logo {
+        display: flex;
+        flex: 0 0 80px;
+        width: 80px;
+        height: 80px;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(226, 232, 240, 0.8);
+        border-radius: 32px;
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 28px 70px -24px rgba(15, 23, 42, 0.28);
+        animation: frontBootPulse 1.8s ease-in-out infinite;
+        backdrop-filter: blur(8px);
+      }
+
+      .front-boot-logo img {
+        display: block;
+        width: 40px;
+        height: 40px;
+        border: 0;
+        object-fit: contain;
+      }
+
+      .front-boot-initials {
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1;
+        color: #0f172a;
+      }
+
+      .front-boot-title {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 600;
+        line-height: 32px;
+        letter-spacing: 0;
+      }
+
+      .front-boot-text {
+        margin: 8px 0 0;
+        font-size: 14px;
+        font-weight: 400;
+        line-height: 24px;
+        color: #64748b;
+      }
+
+      .front-boot-progress {
+        flex: 0 0 6px;
+        width: 176px;
+        height: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(226, 232, 240, 0.8);
+      }
+
+      .front-boot-progress-bar {
+        width: 96px;
+        height: 100%;
+        border-radius: 999px;
+        background: #0f172a;
+        animation: frontBootProgress 1.2s ease-in-out infinite;
+      }
+
+      @keyframes frontBootPulse {
+        0%,
+        100% {
+          transform: scale(1);
+          box-shadow: 0 28px 70px -24px rgba(15, 23, 42, 0.28);
+        }
+        50% {
+          transform: scale(1.04);
+          box-shadow: 0 30px 80px -22px rgba(15, 23, 42, 0.34);
+        }
+      }
+
+      @keyframes frontBootProgress {
+        0% {
+          transform: translateX(-115%);
+        }
+        100% {
+          transform: translateX(240%);
+        }
+      }
+    </style>
+    <script type="module" crossorigin src="/admin/assets/index-7vEwULsI.js"></script>
+    <link rel="stylesheet" crossorigin href="/admin/assets/style-D7tpKsN4.css">
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <div id="front-initial-boot" class="front-boot-screen" aria-hidden="true">
+      <div class="front-boot-panel">
+        <div class="front-boot-logo" id="front-initial-boot-logo">
+          <span class="front-boot-initials" id="front-initial-boot-initials">
+          </span>
+        </div>
+        <div>
+          <h1 class="front-boot-title" id="front-initial-boot-title"></h1>
+          <p class="front-boot-text">正在加载，请稍后</p>
+        </div>
+        <div class="front-boot-progress">
+          <div class="front-boot-progress-bar"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      ;(() => {
+        const boot = document.getElementById('front-initial-boot')
+
+        window.__deverHideInitialBoot = () => {
+          if (!boot) return
+          boot.classList.add('front-boot-screen--hidden')
+          window.setTimeout(() => boot.remove(), 180)
+        }
+
+        window.__deverApplyRuntimeSite?.()
+      })()
+    </script>
+  </body>
+</html>

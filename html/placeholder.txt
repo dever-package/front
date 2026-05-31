@@ -1,1 +1,0 @@
-This placeholder keeps the embedded html directory valid before frontend assets are built.

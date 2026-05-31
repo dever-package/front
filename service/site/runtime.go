@@ -16,6 +16,7 @@ const runtimeHTMLPlaceholder = "<!-- dever:runtime -->"
 type runtimePayload struct {
 	SiteKey    string                       `json:"siteKey"`
 	BasePath   string                       `json:"basePath"`
+	APIPrefix  string                       `json:"apiPrefix"`
 	APIHost    string                       `json:"apiHost"`
 	Site       runtimeSitePayload           `json:"site"`
 	Appearance siteconfig.AppearanceSetting `json:"appearance,omitempty"`
@@ -32,13 +33,13 @@ type runtimeSitePayload struct {
 	Favicon     string `json:"favicon,omitempty"`
 }
 
-func writeRuntime(c *server.Context, site siteconfig.Site, dev bool) error {
+func writeRuntime(c *server.Context, site siteconfig.Site, dev bool, pluginDev bool) error {
 	raw, ok := c.Raw.(*fiber.Ctx)
 	if !ok {
 		return c.Error("当前环境不支持 runtime 输出")
 	}
 
-	content, err := runtimeContent(site, dev, raw.Hostname())
+	content, err := runtimeContent(site, dev, raw.Hostname(), pluginDev)
 	if err != nil {
 		return c.Error(err)
 	}
@@ -48,11 +49,15 @@ func writeRuntime(c *server.Context, site siteconfig.Site, dev bool) error {
 	return raw.Send(content)
 }
 
-func runtimeContent(site siteconfig.Site, dev bool, hostname string) ([]byte, error) {
+func runtimeContent(site siteconfig.Site, dev bool, hostname string, pluginDev bool) ([]byte, error) {
+	runtimeSetting := site.Setting.Runtime
+	runtimeSetting.Plugins = runtimePluginURLs(site, pluginDev)
+
 	payload := runtimePayload{
-		SiteKey:  site.Key,
-		BasePath: site.Path,
-		APIHost:  runtimeAPIHost(site, dev, hostname),
+		SiteKey:   site.Key,
+		BasePath:  site.Path,
+		APIPrefix: strings.Trim(site.APIPrefix(), "/"),
+		APIHost:   runtimeAPIHost(site, dev, hostname),
 		Site: runtimeSitePayload{
 			Name:        site.Name,
 			Subtitle:    site.Subtitle,
@@ -62,7 +67,7 @@ func runtimeContent(site siteconfig.Site, dev bool, hostname string) ([]byte, er
 			Favicon:     site.FaviconURL(),
 		},
 		Appearance: site.Setting.Appearance,
-		Runtime:    site.Setting.Runtime,
+		Runtime:    runtimeSetting,
 		Access:     site.Access,
 	}
 	content, err := json.Marshal(payload)
@@ -73,8 +78,8 @@ func runtimeContent(site siteconfig.Site, dev bool, hostname string) ([]byte, er
 	return []byte("window.appRuntime = " + string(content) + ";\n"), nil
 }
 
-func injectRuntime(content []byte, site siteconfig.Site, dev bool, hostname string) ([]byte, error) {
-	runtime, err := runtimeContent(site, dev, hostname)
+func injectRuntime(content []byte, site siteconfig.Site, dev bool, hostname string, pluginDev bool) ([]byte, error) {
+	runtime, err := runtimeContent(site, dev, hostname, pluginDev)
 	if err != nil {
 		return nil, err
 	}

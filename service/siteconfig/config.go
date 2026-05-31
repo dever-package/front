@@ -31,10 +31,11 @@ var (
 		"/site/info",
 		"/qiniu/callback",
 	}
-	defaultSitePublic = []string{"auth/login"}
-	loadOnce          sync.Once
-	loadedConfig      Config
-	loadedErr         error
+	defaultSitePublic   = []string{"auth/login"}
+	defaultSiteAPIRoots = []string{"main", "route", "upload", "resource", "import", "export"}
+	loadOnce            sync.Once
+	loadedConfig        Config
+	loadedErr           error
 )
 
 type Config struct {
@@ -51,6 +52,7 @@ type Site struct {
 	Description string
 	URL         string
 	API         string
+	APIRoots    []string
 	Public      []string
 	Assets      SiteAssets
 	Setting     SiteSetting
@@ -116,6 +118,7 @@ type rawSite struct {
 	URL         string      `json:"url"`
 	Page        string      `json:"page"`
 	API         string      `json:"api"`
+	APIRoots    []string    `json:"apiRoots"`
 	Public      []string    `json:"public"`
 	Assets      SiteAssets  `json:"assets"`
 	Setting     SiteSetting `json:"setting"`
@@ -217,10 +220,37 @@ func (cfg Config) FindByAPIPrefix(apiPrefix string) (Site, bool) {
 
 func (cfg Config) FindByRequestPath(requestPath string) (Site, bool) {
 	requestPath = cleanAbsPath(requestPath)
-	if site, ok := cfg.FindByAPIPrefix(requestPath); ok {
+	if site, ok := cfg.FindByAPIRequestPath(requestPath); ok {
 		return site, true
 	}
 	return cfg.FindBySitePath(requestPath)
+}
+
+func (cfg Config) FindByAPIRequestPath(requestPath string) (Site, bool) {
+	requestPath = cleanAbsPath(requestPath)
+	site, ok := cfg.FindByAPIPrefix(requestPath)
+	if !ok {
+		return Site{}, false
+	}
+	if site.APIPrefix() != site.Path {
+		return site, true
+	}
+	if isSiteReservedAPIRoot(site, requestPath) {
+		return site, true
+	}
+	return Site{}, false
+}
+
+func (cfg Config) FindByStaticSitePath(requestPath string) (Site, bool) {
+	requestPath = cleanAbsPath(requestPath)
+	site, ok := cfg.FindBySitePath(requestPath)
+	if !ok {
+		return Site{}, false
+	}
+	if site.APIPrefix() == site.Path && isSiteReservedAPIRoot(site, requestPath) {
+		return Site{}, false
+	}
+	return site, true
 }
 
 func (cfg Config) FindBySitePath(requestPath string) (Site, bool) {
@@ -301,6 +331,50 @@ func (cfg Config) findByPath(requestPath string, prefix func(Site) string) (Site
 
 func (site Site) APIPrefix() string {
 	return cleanAbsPath(site.API)
+}
+
+func isSiteReservedAPIRoot(site Site, requestPath string) bool {
+	root := requestRootAfterPrefix(requestPath, site.APIPrefix())
+	if root == "" {
+		return false
+	}
+	for _, item := range defaultSiteAPIRoots {
+		if root == item {
+			return true
+		}
+	}
+	for _, item := range site.APIRoots {
+		if root == item {
+			return true
+		}
+	}
+	for _, item := range site.Public {
+		if root == firstPathSegment(item) {
+			return true
+		}
+	}
+	return false
+}
+
+func requestRootAfterPrefix(requestPath string, prefix string) string {
+	requestPath = cleanAbsPath(requestPath)
+	prefix = cleanAbsPath(prefix)
+	if !matchPathPrefix(prefix, requestPath) {
+		return ""
+	}
+	rel := strings.Trim(strings.TrimPrefix(requestPath, prefix), "/")
+	return firstPathSegment(rel)
+}
+
+func firstPathSegment(value string) string {
+	value = cleanRelativePath(value)
+	if value == "" {
+		return ""
+	}
+	if index := strings.Index(value, "/"); index >= 0 {
+		return value[:index]
+	}
+	return value
 }
 
 func (site Site) SystemPagePath(pageName string) string {
@@ -438,6 +512,7 @@ func normalizeSite(siteKey string, raw rawSite) Site {
 		Description: strings.TrimSpace(raw.Description),
 		URL:         strings.TrimSpace(raw.URL),
 		API:         api,
+		APIRoots:    normalizeAPIRoots(raw.APIRoots),
 		Public:      normalizeSitePublic(raw.Public),
 		Assets:      normalizeAssets(raw.Assets),
 		Setting:     normalizeSetting(raw.Setting),
@@ -510,6 +585,18 @@ func normalizeSitePublic(items []string) []string {
 		paths = append(paths, item)
 	}
 	return uniqueStrings(paths)
+}
+
+func normalizeAPIRoots(items []string) []string {
+	roots := make([]string, 0, len(items))
+	for _, item := range items {
+		root := firstPathSegment(item)
+		if root == "" {
+			continue
+		}
+		roots = append(roots, root)
+	}
+	return uniqueStrings(roots)
 }
 
 func normalizeSiteKey(value string) string {

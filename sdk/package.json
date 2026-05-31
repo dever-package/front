@@ -1,0 +1,16 @@
+{
+  "name": "@dever/front-plugin",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}
