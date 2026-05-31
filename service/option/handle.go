@@ -14,6 +14,7 @@ import (
 	frontcall "my/package/front/service/internal/call"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/siteconfig"
 )
 
 func Get(c *server.Context) error {
@@ -128,7 +129,7 @@ func GetModelOptionsByInput(ctx context.Context, getInput func(string) string) (
 		getInput("selected"),
 	)
 	if modelName == "front.NewAuthModel" {
-		rows = embedpageservice.FilterRows(rows)
+		rows = embedpageservice.FilterRowsForPage(siteconfig.PageFromContext(ctx), rows)
 	}
 	if len(rows) == 0 {
 		if parentField == "" || treeMode {

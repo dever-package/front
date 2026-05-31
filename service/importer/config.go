@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -16,7 +17,11 @@ type rawPageSchema struct {
 }
 
 func loadPageConfig(pathValue, importKey string) (importConfig, error) {
-	content, err := frontpage.ReadContent(pathValue)
+	return loadPageConfigForContext(context.Background(), pathValue, importKey)
+}
+
+func loadPageConfigForContext(ctx context.Context, pathValue, importKey string) (importConfig, error) {
+	content, err := frontpage.ReadContentForContext(ctx, pathValue)
 	if err != nil {
 		return importConfig{}, err
 	}
@@ -178,7 +183,18 @@ func resolveImportConfig(pathValue, importKey string) (importConfig, error) {
 	if err != nil {
 		return importConfig{}, err
 	}
+	return resolveImportConfigFromPageConfig(pathValue, pageConfig)
+}
 
+func resolveImportConfigForContext(ctx context.Context, pathValue, importKey string) (importConfig, error) {
+	pageConfig, err := loadPageConfigForContext(ctx, pathValue, importKey)
+	if err != nil {
+		return importConfig{}, err
+	}
+	return resolveImportConfigFromPageConfig(pathValue, pageConfig)
+}
+
+func resolveImportConfigFromPageConfig(pathValue string, pageConfig importConfig) (importConfig, error) {
 	modelName := strings.TrimSpace(pageConfig.Model)
 	if modelName == "" {
 		modelName = frontpage.DefaultModelName(pathValue)

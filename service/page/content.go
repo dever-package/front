@@ -1,6 +1,7 @@
 package page
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"hash/crc32"
@@ -10,6 +11,7 @@ import (
 	"github.com/shemic/dever/util"
 	frontroot "my/package/front"
 	frontpagepath "my/package/front/internal/pagepath"
+	"my/package/front/service/siteconfig"
 )
 
 var embeddedContentCache util.ConcurrentMap[string, []byte]
@@ -27,13 +29,31 @@ func Signature(content []byte) ContentSignature {
 }
 
 func ReadContent(pathValue string) ([]byte, error) {
+	return ReadContentForPage(siteconfig.DefaultPage, pathValue)
+}
+
+func ReadContentForContext(ctx context.Context, pathValue string) ([]byte, error) {
+	return ReadContentForPage(siteconfig.PageFromContext(ctx), pathValue)
+}
+
+func ReadContentForSite(siteKey string, pathValue string) ([]byte, error) {
+	cfg, err := siteconfig.Load(context.Background())
+	if err == nil {
+		if site, ok := cfg.FindBySiteKey(siteKey); ok {
+			return ReadContentForPage(site.Page, pathValue)
+		}
+	}
+	return ReadContentForPage(siteKey, pathValue)
+}
+
+func ReadContentForPage(pageName string, pathValue string) ([]byte, error) {
 	moduleName, fileName, err := splitPagePath(pathValue)
 	if err != nil {
 		return nil, err
 	}
 
 	for _, root := range []string{"module", "package"} {
-		content, ok, err := readDiskPageContent(root, moduleName, fileName)
+		content, ok, err := readDiskPageContent(root, moduleName, pageName, fileName)
 		if err != nil {
 			return nil, err
 		}
@@ -43,7 +63,7 @@ func ReadContent(pathValue string) ([]byte, error) {
 	}
 
 	if moduleName == "front" {
-		for _, fullPath := range buildEmbeddedJSONPaths(fileName) {
+		for _, fullPath := range buildEmbeddedJSONPaths(pageName, fileName) {
 			content, ok, readErr := readCachedEmbeddedContent(fullPath)
 			if readErr != nil {
 				return nil, readErr
@@ -57,9 +77,9 @@ func ReadContent(pathValue string) ([]byte, error) {
 	return nil, fmt.Errorf("页面配置不存在")
 }
 
-func readDiskPageContent(root, moduleName, fileName string) ([]byte, bool, error) {
+func readDiskPageContent(root, moduleName, pageName, fileName string) ([]byte, bool, error) {
 	for _, ext := range frontpagepath.FileExtCandidates() {
-		for _, diskPath := range diskPageContentPaths(root, moduleName, fileName+ext) {
+		for _, diskPath := range diskPageContentPaths(root, moduleName, pageName, fileName+ext) {
 			content, _, readErr := util.ReadJSONCFile(diskPath)
 			if readErr != nil {
 				continue
@@ -73,13 +93,28 @@ func readDiskPageContent(root, moduleName, fileName string) ([]byte, bool, error
 	return nil, false, nil
 }
 
-func diskPageContentPaths(root, moduleName, fileName string) []string {
-	paths := make([]string, 0, 2)
+func diskPageContentPaths(root, moduleName, pageName, fileName string) []string {
+	pageName = strings.Trim(strings.TrimSpace(pageName), "/")
+	paths := make([]string, 0, 4)
 	if moduleName != "front" {
-		paths = append(paths, filepath.Join(root, moduleName, "front", frontpagepath.DirName, fileName))
+		if pageName != "" {
+			paths = append(paths, filepath.Join(root, moduleName, "front", frontpagepath.DirName, pageName, fileName))
+		}
+		if shouldReadLegacyPageDir(pageName) {
+			paths = append(paths, filepath.Join(root, moduleName, "front", frontpagepath.DirName, fileName))
+		}
 	}
-	paths = append(paths, filepath.Join(root, moduleName, frontpagepath.DirName, fileName))
+	if pageName != "" {
+		paths = append(paths, filepath.Join(root, moduleName, frontpagepath.DirName, pageName, fileName))
+	}
+	if shouldReadLegacyPageDir(pageName) {
+		paths = append(paths, filepath.Join(root, moduleName, frontpagepath.DirName, fileName))
+	}
 	return paths
+}
+
+func shouldReadLegacyPageDir(pageName string) bool {
+	return pageName == "" || pageName == siteconfig.DefaultPage
 }
 
 func splitPagePath(pathValue string) (string, string, error) {
@@ -104,22 +139,19 @@ func splitPagePath(pathValue string) (string, string, error) {
 	return parts[0], filepath.Join(parts[1:]...), nil
 }
 
-func buildJSONPaths(moduleName, fileName string) []string {
+func buildEmbeddedJSONPaths(pageName, fileName string) []string {
 	candidates := frontpagepath.FileExtCandidates()
-	result := make([]string, 0, len(candidates))
+	pageName = strings.Trim(strings.TrimSpace(pageName), "/")
+	result := make([]string, 0, len(candidates)*2)
 	for _, ext := range candidates {
-		fullPath := filepath.ToSlash(filepath.Join(moduleName, frontpagepath.DirName, fileName+ext))
-		result = append(result, filepath.Clean(fullPath))
-	}
-	return result
-}
-
-func buildEmbeddedJSONPaths(fileName string) []string {
-	candidates := frontpagepath.FileExtCandidates()
-	result := make([]string, 0, len(candidates))
-	for _, ext := range candidates {
-		fullPath := filepath.ToSlash(filepath.Join(frontpagepath.DirName, fileName+ext))
-		result = append(result, filepath.Clean(fullPath))
+		if pageName != "" {
+			sitePath := filepath.ToSlash(filepath.Join(frontpagepath.DirName, pageName, fileName+ext))
+			result = append(result, filepath.Clean(sitePath))
+		}
+		if shouldReadLegacyPageDir(pageName) {
+			fullPath := filepath.ToSlash(filepath.Join(frontpagepath.DirName, fileName+ext))
+			result = append(result, filepath.Clean(fullPath))
+		}
 	}
 	return result
 }

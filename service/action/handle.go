@@ -46,7 +46,7 @@ func PostAction(c *server.Context) error {
 		}
 	}
 
-	content, err := frontpage.ReadContent(pathValue)
+	content, err := frontpage.ReadContentForContext(c.Context(), pathValue)
 	if err != nil {
 		return c.Error(err)
 	}

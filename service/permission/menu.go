@@ -1,11 +1,14 @@
 package permission
 
 import (
+	"context"
 	"sort"
 	"strings"
 
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
+
+	"my/package/front/service/siteconfig"
 )
 
 type menuNode struct {
@@ -20,13 +23,25 @@ type menuNode struct {
 }
 
 func GetMainInfo(c *server.Context) error {
+	if site, ok := siteconfig.FromContext(c.Context()); ok && shouldBypassRBAC(site) {
+		menu, entry := buildLoginSiteMenu(c.Context())
+		payload := map[string]any{
+			"menu":  menu,
+			"entry": entry,
+		}
+		if shouldIncludePermissionContext(c.Input("include"), c.Input("permissions")) {
+			payload["permissions"] = []map[string]any{}
+		}
+		return c.JSON(payload)
+	}
+
 	snapshot, err := loadAccessSnapshot(c.Context())
 	if err != nil {
 		return c.Error(err)
 	}
 
 	menu := buildMenu(snapshot)
-	configMeta, _ := loadConfigMeta()
+	configMeta, _ := loadConfigMetaForSite(siteconfig.SiteKeyFromContext(c.Context()))
 	entry := resolveMainEntry(configMeta.Entry, menu)
 
 	payload := map[string]any{
@@ -41,11 +56,79 @@ func GetMainInfo(c *server.Context) error {
 }
 
 func SyncMainInfo(c *server.Context) error {
-	if err := ForceBootstrap(c.Context()); err != nil {
+	site, _ := siteconfig.FromContext(c.Context())
+	if err := ForceBootstrapForSite(c.Context(), site); err != nil {
 		return c.Error(err)
 	}
 
 	return c.JSON(BuildAuthTablePayload(c.Context()))
+}
+
+func buildLoginSiteMenu(ctx context.Context) ([]map[string]any, string) {
+	records, err := collectAuthRecords(ctx)
+	if err != nil {
+		return []map[string]any{}, ""
+	}
+
+	nodes := make([]loginMenuNode, 0, len(records))
+	for _, record := range records {
+		if record.Type != 1 {
+			continue
+		}
+		nodes = append(nodes, loginMenuNode{
+			Key:       record.Key,
+			Name:      record.Name,
+			Icon:      record.Icon,
+			Path:      record.Path,
+			ParentKey: record.ParentKey,
+			Sort:      record.Sort,
+		})
+	}
+
+	menu := buildLoginMenu(nodes, "")
+	configMeta, _ := loadConfigMetaForSite(siteconfig.SiteKeyFromContext(ctx))
+	entry := resolveMainEntry(configMeta.Entry, menu)
+	return menu, entry
+}
+
+type loginMenuNode struct {
+	Key       string
+	Name      string
+	Icon      string
+	Path      string
+	ParentKey string
+	Sort      int
+}
+
+func buildLoginMenu(nodes []loginMenuNode, parentKey string) []map[string]any {
+	children := make([]loginMenuNode, 0)
+	for _, node := range nodes {
+		if strings.TrimSpace(node.ParentKey) == parentKey {
+			children = append(children, node)
+		}
+	}
+
+	sort.SliceStable(children, func(i, j int) bool {
+		if children[i].Sort != children[j].Sort {
+			return children[i].Sort < children[j].Sort
+		}
+		return children[i].Key < children[j].Key
+	})
+
+	result := make([]map[string]any, 0, len(children))
+	for _, node := range children {
+		item := map[string]any{
+			"key":  node.Key,
+			"name": node.Name,
+			"path": node.Path,
+			"icon": node.Icon,
+		}
+		if nested := buildLoginMenu(nodes, node.Key); len(nested) > 0 {
+			item["children"] = nested
+		}
+		result = append(result, item)
+	}
+	return result
 }
 
 func buildMenu(snapshot *accessSnapshot) []map[string]any {

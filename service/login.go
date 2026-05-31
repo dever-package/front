@@ -14,6 +14,7 @@ import (
 	operationlog "my/package/front/service/operationlog"
 	permissionservice "my/package/front/service/permission"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/siteconfig"
 )
 
 func Login(c *server.Context) error {
@@ -46,8 +47,12 @@ func Login(c *server.Context) error {
 		c.Context(),
 		permissionservice.ResolveAccountRoleIDs(c.Context(), util.ToUint64(accountRow["id"])),
 	)
+	site, ok := siteconfig.FromContext(c.Context())
+	if !ok {
+		site, _ = siteconfig.MustLoad().FindBySiteKey(siteconfig.DefaultSiteKey)
+	}
 	expiredAt := time.Now().Add(7 * 24 * time.Hour)
-	token, err := createLoginToken(util.ToUint64(accountRow["id"]), expiredAt)
+	token, err := createLoginToken(util.ToUint64(accountRow["id"]), expiredAt, site)
 	if err != nil {
 		return c.Error(err)
 	}
@@ -70,7 +75,7 @@ func Login(c *server.Context) error {
 	})
 }
 
-func createLoginToken(uid uint64, expiredAt time.Time) (string, error) {
+func createLoginToken(uid uint64, expiredAt time.Time, site siteconfig.Site) (string, error) {
 	cfg, err := config.Load("")
 	if err != nil {
 		return "", fmt.Errorf("读取配置失败")
@@ -82,9 +87,11 @@ func createLoginToken(uid uint64, expiredAt time.Time) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"uid": fmt.Sprintf("%d", uid),
-		"exp": expiredAt.Unix(),
-		"iat": time.Now().Unix(),
+		"uid":   fmt.Sprintf("%d", uid),
+		"site":  site.Key,
+		"scope": site.Access.AuthProvider,
+		"exp":   expiredAt.Unix(),
+		"iat":   time.Now().Unix(),
 	})
 	return token.SignedString([]byte(signer.Secret))
 }

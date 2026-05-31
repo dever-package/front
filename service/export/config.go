@@ -45,7 +45,7 @@ type exportActionSnapshot struct {
 }
 
 func resolveTaskPlan(ctx context.Context, task taskSnapshot) (workbookPlan, error) {
-	pageConfig, err := loadPageConfig(task.PagePath, task.TableID, task.ExportKey)
+	pageConfig, err := loadPageConfigForContext(ctx, task.PagePath, task.TableID, task.ExportKey)
 	if err != nil {
 		return workbookPlan{}, err
 	}
@@ -75,7 +75,11 @@ func resolveTaskPlan(ctx context.Context, task taskSnapshot) (workbookPlan, erro
 }
 
 func loadPageConfig(pathValue, tableID, exportKey string) (pageConfigSnapshot, error) {
-	content, err := frontpage.ReadContent(pathValue)
+	return loadPageConfigForContext(context.Background(), pathValue, tableID, exportKey)
+}
+
+func loadPageConfigForContext(ctx context.Context, pathValue, tableID, exportKey string) (pageConfigSnapshot, error) {
+	content, err := frontpage.ReadContentForContext(ctx, pathValue)
 	if err != nil {
 		return pageConfigSnapshot{}, err
 	}

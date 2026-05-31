@@ -1,0 +1,59 @@
+{
+  "page": {
+    "name": "主框架",
+    "type": 2
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "sidebar": {
+        "type": "container"
+      },
+      "shell": {
+        "type": "shell-sidebar-inset",
+        "children": {
+          "topbar": {
+            "type": "container"
+          },
+          "content": {
+            "type": "container",
+            "className": "flex min-h-0 flex-1 flex-col"
+          }
+        }
+      },
+      "assistant": {
+        "type": "container"
+      }
+    }
+  },
+  "nodes": {
+    "__root__": [
+      {
+        "type": "app-skip-to-main"
+      }
+    ],
+    "sidebar": [
+      {
+        "type": "app-sidebar"
+      }
+    ],
+    "topbar": [
+      {
+        "type": "app-topbar"
+      }
+    ],
+    "content": [
+      {
+        "type": "app-outlet"
+      }
+    ],
+    "assistant": [
+      {
+        "type": "app-assistant"
+      }
+    ]
+  },
+  "data": {},
+  "state": {},
+  "action": {}
+}

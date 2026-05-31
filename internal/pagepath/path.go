@@ -5,7 +5,10 @@ import (
 	"strings"
 )
 
-const DirName = "page"
+const (
+	DirName         = "page"
+	defaultPageName = "admin"
+)
 
 var fileExtCandidates = []string{
 	".jsonc",
@@ -17,27 +20,26 @@ func FileExtCandidates() []string {
 }
 
 func DiskPageRoute(root, diskPath string) (string, string, bool) {
-	cleanPath := filepath.ToSlash(filepath.Clean(diskPath))
-	parts := strings.Split(cleanPath, "/")
-	if len(parts) < 4 || parts[0] != root {
-		return "", "", false
-	}
+	return DiskPageRouteForPage(root, diskPath, "")
+}
 
-	moduleName := strings.TrimSpace(parts[1])
-	if moduleName == "" {
-		return "", "", false
-	}
-
-	var relativeParts []string
-	switch {
-	case len(parts) >= 5 && parts[2] == "front" && IsPageDir(parts[3]):
-		relativeParts = parts[4:]
-	case IsPageDir(parts[2]):
-		relativeParts = parts[3:]
-	default:
+func DiskPageRouteForPage(root, diskPath, pageName string) (string, string, bool) {
+	moduleName, relativeParts, ok := DiskPageRelativeParts(root, diskPath)
+	if !ok {
 		return "", "", false
 	}
 	if len(relativeParts) == 0 {
+		return "", "", false
+	}
+	hadPagePrefix := pageName != "" && len(relativeParts) > 0 && relativeParts[0] == pageName
+	relativeParts = stripPagePathPrefix(relativeParts, pageName)
+	if len(relativeParts) == 0 {
+		return "", "", false
+	}
+	if pageName != "" && pageName != defaultPageName && !hadPagePrefix {
+		return "", "", false
+	}
+	if pageName != "" && !hadPagePrefix && strings.HasPrefix(relativeParts[0], "_") {
 		return "", "", false
 	}
 
@@ -47,6 +49,87 @@ func DiskPageRoute(root, diskPath string) (string, string, bool) {
 		return "", "", false
 	}
 	return moduleName, routePath, true
+}
+
+func DiskPageRelativeParts(root, diskPath string) (string, []string, bool) {
+	cleanPath := filepath.ToSlash(filepath.Clean(diskPath))
+	parts := strings.Split(cleanPath, "/")
+	if len(parts) < 4 || parts[0] != root {
+		return "", nil, false
+	}
+
+	moduleName := strings.TrimSpace(parts[1])
+	if moduleName == "" {
+		return "", nil, false
+	}
+
+	switch {
+	case len(parts) >= 5 && parts[2] == "front" && IsPageDir(parts[3]):
+		return moduleName, parts[4:], true
+	case IsPageDir(parts[2]):
+		return moduleName, parts[3:], true
+	default:
+		return "", nil, false
+	}
+}
+
+func DiskPageBelongsToOtherPage(root, diskPath, pageName string, pageNames map[string]struct{}) bool {
+	_, relativeParts, ok := DiskPageRelativeParts(root, diskPath)
+	if !ok || len(relativeParts) == 0 {
+		return false
+	}
+	return IsOtherPageName(relativeParts[0], pageName, pageNames)
+}
+
+func RelativePartsForPage(relativePath, pageName string, pageNames map[string]struct{}) []string {
+	pageName = strings.Trim(strings.TrimSpace(pageName), "/")
+	if pageName == "" {
+		pageName = defaultPageName
+	}
+
+	parts := strings.Split(filepath.ToSlash(relativePath), "/")
+	hadPagePrefix := len(parts) > 0 && parts[0] == pageName
+	if len(parts) > 0 && !hadPagePrefix && IsOtherPageName(parts[0], pageName, pageNames) {
+		return nil
+	}
+
+	parts = StripPagePathPrefix(parts, pageName)
+	if len(parts) == 0 {
+		return nil
+	}
+	if pageName != defaultPageName && !hadPagePrefix {
+		return nil
+	}
+	if !hadPagePrefix && strings.HasPrefix(parts[0], "_") {
+		return nil
+	}
+	return parts
+}
+
+func IsOtherPageName(candidate, pageName string, pageNames map[string]struct{}) bool {
+	candidate = strings.Trim(strings.TrimSpace(candidate), "/")
+	pageName = strings.Trim(strings.TrimSpace(pageName), "/")
+	if candidate == "" || candidate == pageName {
+		return false
+	}
+	_, ok := pageNames[candidate]
+	return ok
+}
+
+func StripSitePathPrefix(parts []string, siteKey string) []string {
+	return StripPagePathPrefix(parts, siteKey)
+}
+
+func StripPagePathPrefix(parts []string, pageName string) []string {
+	return stripPagePathPrefix(parts, pageName)
+}
+
+func stripPagePathPrefix(parts []string, pageName string) []string {
+	pageName = strings.Trim(strings.TrimSpace(pageName), "/")
+	if pageName == "" || len(parts) == 0 || parts[0] != pageName {
+		return parts
+	}
+	return parts[1:]
 }
 
 func IsPageDir(name string) bool {

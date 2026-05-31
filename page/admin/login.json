@@ -1,0 +1,61 @@
+{
+  "page": {
+    "name": "登录",
+    "type": 2
+  },
+  "layout": {
+    "type": "container",
+    "className": "container grid h-svh max-w-none items-center justify-center",
+    "children": {
+      "login-shell": {
+        "type": "container",
+        "className": "mx-auto flex w-full flex-col justify-center space-y-2 py-8 sm:w-[480px] sm:p-8",
+        "children": {
+          "login-brand": {
+            "type": "container",
+            "className": "mb-4 flex items-center justify-center"
+          },
+          "login-card": {
+            "type": "card",
+            "className": "gap-4",
+            "children": {
+              "login-header": {
+                "type": "card-header"
+              },
+              "login-content": {
+                "type": "card-content"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "login-brand": [
+      {
+        "type": "app-site-brand"
+      }
+    ],
+    "login-header": [
+      {
+        "type": "show-title",
+        "name": "登录系统",
+        "info": "请输入账户和密码后登录后台，\n如果系统中还没有账户，首次输入的账户和密码会自动创建默认管理员",
+        "meta": {
+          "variant": "section",
+          "titleClassName": "text-lg",
+          "descriptionClassName": "whitespace-pre-line"
+        }
+      }
+    ],
+    "login-content": [
+      {
+        "type": "app-login-form"
+      }
+    ]
+  },
+  "data": {},
+  "state": {},
+  "action": {}
+}

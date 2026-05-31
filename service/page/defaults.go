@@ -10,6 +10,7 @@ import (
 	"github.com/shemic/dever/util"
 
 	frontoption "my/package/front/service/option"
+	"my/package/front/service/siteconfig"
 )
 
 func applyNodeDefaults(
@@ -282,12 +283,12 @@ func applyLinkedPageNodeCategoryDefaults(
 	root map[string]any,
 	visited map[string]bool,
 ) (bool, error) {
-	content, err := ReadContent(pagePath)
+	content, err := ReadContentForContext(c.Context(), pagePath)
 	if err != nil {
 		return false, err
 	}
 
-	linkedSchema, err := parseSchema(pagePath, content)
+	linkedSchema, err := parseSchema(siteconfig.PageFromContext(c.Context()), pagePath, content)
 	if err != nil {
 		return false, err
 	}

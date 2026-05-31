@@ -37,7 +37,7 @@ func CreateTask(c *server.Context) error {
 			"data":   nil,
 		})
 	}
-	if _, err := loadPageConfig(pagePath, tableID, exportKey); err != nil {
+	if _, err := loadPageConfigForContext(c.Context(), pagePath, tableID, exportKey); err != nil {
 		return c.Error(err)
 	}
 

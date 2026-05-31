@@ -12,6 +12,7 @@ import (
 	authctx "my/package/front/service/internal/authctx"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/siteconfig"
 )
 
 type InputLookup func(key string) string
@@ -33,6 +34,11 @@ func EnsurePageAccess(ctx context.Context, pathValue string) error {
 }
 
 func NewAccessScope(ctx context.Context) (*AccessScope, error) {
+	site, _ := siteconfig.FromContext(ctx)
+	if shouldBypassRBAC(site) {
+		return &AccessScope{}, nil
+	}
+
 	snapshot, err := loadAccessSnapshot(ctx)
 	if err != nil {
 		return nil, err
@@ -50,6 +56,9 @@ func (scope *AccessScope) EnsurePageAccess(ctx context.Context, pathValue string
 func EnsurePageAccessWithInput(ctx context.Context, pathValue string, lookup InputLookup) error {
 	pathValue = frontpagepath.NormalizePath(pathValue)
 	if pathValue == "" {
+		return nil
+	}
+	if site, ok := siteconfig.FromContext(ctx); ok && shouldBypassRBAC(site) {
 		return nil
 	}
 
@@ -70,7 +79,8 @@ func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot,
 	}
 
 	authRow, protected := resolveAccessAuthRow(snapshot.auth, pathValue, lookup)
-	if embedpageservice.HasPath(pathValue) {
+	pageName := siteconfig.PageFromContext(ctx)
+	if embedpageservice.HasPathForPage(pageName, pathValue) {
 		if canInheritPageAccess(ctx, snapshot, pathValue, lookup) {
 			return nil
 		}
@@ -172,6 +182,8 @@ func loadAuthGraph(ctx context.Context) (authGraph, error) {
 		"field": "main.id, main.key, main.name, main.icon, main.path, main.parent_id, main.sort, main.type, main.query",
 		"order": "main.sort asc, main.id asc",
 	})
+	rows = filterAuthRowsForCurrentSite(ctx, rows)
+
 	graph := authGraph{
 		rows:       rows,
 		rowByPath:  make(map[string][]map[string]any, len(rows)),
@@ -196,6 +208,43 @@ func loadAuthGraph(ctx context.Context) (authGraph, error) {
 	return graph, nil
 }
 
+func filterAuthRowsForCurrentSite(ctx context.Context, rows []map[string]any) []map[string]any {
+	if len(rows) == 0 {
+		return rows
+	}
+
+	records, err := collectAuthRecords(ctx)
+	if err != nil || len(records) == 0 {
+		return rows
+	}
+
+	validKeys := make(map[string]struct{}, len(records))
+	validPaths := make(map[string]struct{}, len(records))
+	for _, record := range records {
+		if key := strings.TrimSpace(record.Key); key != "" {
+			validKeys[key] = struct{}{}
+		}
+		if pathValue := strings.TrimSpace(record.Path); pathValue != "" {
+			validPaths[pathValue] = struct{}{}
+		}
+	}
+	if len(validKeys) == 0 && len(validPaths) == 0 {
+		return rows
+	}
+
+	filtered := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		if _, ok := validKeys[authRowKey(row)]; ok {
+			filtered = append(filtered, row)
+			continue
+		}
+		if _, ok := validPaths[authRowPath(row)]; ok {
+			filtered = append(filtered, row)
+		}
+	}
+	return filtered
+}
+
 func EnsureActionAccess(ctx context.Context, pathValue string, actionKey string) error {
 	_, err := CheckActionAccess(ctx, pathValue, actionKey)
 	return err
@@ -205,6 +254,9 @@ func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) 
 	pathValue = frontpagepath.NormalizePath(pathValue)
 	actionKey = strings.TrimSpace(actionKey)
 	if pathValue == "" || actionKey == "" {
+		return false, nil
+	}
+	if site, ok := siteconfig.FromContext(ctx); ok && shouldBypassRBAC(site) {
 		return false, nil
 	}
 
@@ -228,6 +280,10 @@ func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) 
 	return true, errNoPermission
 }
 
+func shouldBypassRBAC(site siteconfig.Site) bool {
+	return site.Key != "" && site.UsesLogin()
+}
+
 func canAccessAuthRow(snapshot *accessSnapshot, row map[string]any) bool {
 	if snapshot == nil || len(row) == 0 {
 		return false
@@ -245,7 +301,8 @@ func canInheritPageAccess(ctx context.Context, snapshot *accessSnapshot, pathVal
 	}
 
 	parentPath := frontpagepath.NormalizePath(lookup(inheritParentPathKey))
-	if parentPath == "" || parentPath == pathValue || !embedpageservice.IsChild(parentPath, pathValue) {
+	pageName := siteconfig.PageFromContext(ctx)
+	if parentPath == "" || parentPath == pathValue || !embedpageservice.IsChildForPage(pageName, parentPath, pathValue) {
 		return false
 	}
 

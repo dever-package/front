@@ -12,10 +12,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/shemic/dever/server"
+
+	"my/package/front/service/siteconfig"
 )
 
 const (
-	mountBasePath   = "/_admin/plugins"
 	defaultEmbedDir = "front/dist"
 	manifestFile    = "manifest.json"
 )
@@ -24,6 +25,7 @@ type Options struct {
 	Name     string
 	DiskDir  string
 	EmbedDir string
+	Mount    string
 	FS       fs.FS
 }
 
@@ -38,7 +40,7 @@ func Register(s server.Server, options Options) {
 		return
 	}
 
-	mountPath := mountBasePath + "/" + plugin.Name
+	mountPath := strings.TrimRight(plugin.Mount, "/") + "/" + plugin.Name
 	open := func(c *server.Context) error {
 		return openFile(c, plugin)
 	}
@@ -54,7 +56,19 @@ func normalizeOptions(options Options) Options {
 	if strings.TrimSpace(options.EmbedDir) == "" {
 		options.EmbedDir = defaultEmbedDir
 	}
+	if strings.TrimSpace(options.Mount) == "" {
+		options.Mount = defaultMountPath()
+	}
 	return options
+}
+
+func defaultMountPath() string {
+	cfg := siteconfig.MustLoad()
+	site, ok := cfg.FindBySiteKey(siteconfig.DefaultSiteKey)
+	if !ok {
+		return "/plugins"
+	}
+	return strings.TrimRight(site.Path, "/") + "/plugins"
 }
 
 func openFile(c *server.Context, options Options) error {

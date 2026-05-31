@@ -9,6 +9,7 @@ import (
 	"github.com/shemic/dever/util"
 
 	frontmeta "my/package/front/service/meta"
+	"my/package/front/service/siteconfig"
 )
 
 type Schema struct {
@@ -37,12 +38,13 @@ func GetInfo(c *server.Context, pathValue string) error {
 }
 
 func BuildInfo(c *server.Context, pathValue string) (Schema, error) {
-	content, err := ReadContent(pathValue)
+	pageName := siteconfig.PageFromContext(c.Context())
+	content, err := ReadContentForPage(pageName, pathValue)
 	if err != nil {
 		return Schema{}, err
 	}
 
-	currentSchema, err := parseSchema(pathValue, content)
+	currentSchema, err := parseSchema(pageName, pathValue, content)
 	if err != nil {
 		return Schema{}, err
 	}
@@ -61,9 +63,10 @@ func BuildInfo(c *server.Context, pathValue string) (Schema, error) {
 	return currentSchema, nil
 }
 
-func parseSchema(pathValue string, content []byte) (Schema, error) {
+func parseSchema(pageName, pathValue string, content []byte) (Schema, error) {
 	signature := Signature(content)
-	if cached, ok := schemaCache.Load(pathValue); ok {
+	cacheKey := pageName + ":" + pathValue
+	if cached, ok := schemaCache.Load(cacheKey); ok {
 		entry := cached
 		if entry.signature == signature {
 			return entry.schema, nil
@@ -85,7 +88,7 @@ func parseSchema(pathValue string, content []byte) (Schema, error) {
 		current.Nodes = normalizedNodes
 	}
 
-	schemaCache.Store(pathValue, schemaCacheEntry{
+	schemaCache.Store(cacheKey, schemaCacheEntry{
 		signature: signature,
 		schema:    current,
 	})

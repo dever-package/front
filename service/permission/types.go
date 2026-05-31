@@ -3,9 +3,7 @@ package permission
 import (
 	"sync"
 
-	"github.com/shemic/dever/util"
-
-	frontpage "my/package/front/service/page"
+	"my/package/front/service/siteconfig"
 )
 
 const (
@@ -31,23 +29,7 @@ type configMeta struct {
 	Entry string     `json:"entry"`
 }
 
-type configMetaCacheEntry struct {
-	signature frontpage.ContentSignature
-	value     configMeta
-}
-
-type authSeed struct {
-	Key      string     `json:"key"`
-	ID       string     `json:"id"`
-	Path     string     `json:"path"`
-	Name     string     `json:"name"`
-	Icon     string     `json:"icon"`
-	Parent   string     `json:"parent"`
-	Type     int        `json:"type"`
-	Sort     int        `json:"sort"`
-	Query    authQuery  `json:"query"`
-	Children []authSeed `json:"children"`
-}
+type authSeed = siteconfig.AuthSeed
 
 type authQuery map[string]string
 
@@ -77,8 +59,7 @@ type accessSnapshot struct {
 }
 
 var (
-	configMetaCache util.ConcurrentMap[string, configMetaCacheEntry]
-	bootstrapState  struct {
+	bootstrapState struct {
 		mu   sync.Mutex
 		done bool
 	}

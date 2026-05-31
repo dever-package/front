@@ -36,7 +36,7 @@ func Analyze(c *server.Context) error {
 		})
 	}
 
-	config, err := resolveImportConfig(pagePath, importKey)
+	config, err := resolveImportConfigForContext(c.Context(), pagePath, importKey)
 	if err != nil {
 		return c.Error(err)
 	}
@@ -102,7 +102,7 @@ func CreateTask(c *server.Context) error {
 		})
 	}
 
-	if _, err := resolveImportConfig(pagePath, importKey); err != nil {
+	if _, err := resolveImportConfigForContext(c.Context(), pagePath, importKey); err != nil {
 		return c.Error(err)
 	}
 	if _, _, err := resolveImportFilePath(c.Context(), fileID); err != nil {

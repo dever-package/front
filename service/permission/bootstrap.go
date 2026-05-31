@@ -17,9 +17,22 @@ import (
 	frontpage "my/package/front/service/page"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/siteconfig"
 )
 
 func EnsureBootstrap(ctx context.Context) error {
+	site, ok := siteconfig.FromContext(ctx)
+	if !ok {
+		site = siteconfig.MustLoad().Sites[0]
+	}
+	return EnsureBootstrapForSite(ctx, site)
+}
+
+func EnsureBootstrapForSite(ctx context.Context, site siteconfig.Site) error {
+	if !shouldBootstrapSite(site) {
+		return nil
+	}
+
 	bootstrapState.mu.Lock()
 	defer bootstrapState.mu.Unlock()
 
@@ -35,6 +48,18 @@ func EnsureBootstrap(ctx context.Context) error {
 }
 
 func ForceBootstrap(ctx context.Context) error {
+	site, ok := siteconfig.FromContext(ctx)
+	if !ok {
+		site = siteconfig.MustLoad().Sites[0]
+	}
+	return ForceBootstrapForSite(ctx, site)
+}
+
+func ForceBootstrapForSite(ctx context.Context, site siteconfig.Site) error {
+	if !shouldBootstrapSite(site) {
+		return nil
+	}
+
 	bootstrapState.mu.Lock()
 	defer bootstrapState.mu.Unlock()
 
@@ -44,6 +69,10 @@ func ForceBootstrap(ctx context.Context) error {
 	}
 	bootstrapState.done = true
 	return nil
+}
+
+func shouldBootstrapSite(site siteconfig.Site) bool {
+	return site.UsesRBAC() && strings.TrimSpace(site.Access.AuthProvider) == siteconfig.DefaultAuthProvider
 }
 
 func runBootstrap(ctx context.Context) error {
@@ -80,7 +109,8 @@ func BuildAuthTablePayload(ctx context.Context) map[string]any {
 		}
 	}
 
-	rows := FilterAssignableAuthRows(authModel.SelectMap(ctx, nil))
+	rows := filterAuthRowsForCurrentSite(ctx, authModel.SelectMap(ctx, nil))
+	rows = FilterAssignableAuthRowsForSite(siteconfig.SiteKeyFromContext(ctx), rows)
 	return map[string]any{
 		"page":     1,
 		"pageSize": len(rows),
@@ -91,7 +121,7 @@ func BuildAuthTablePayload(ctx context.Context) map[string]any {
 }
 
 func syncAuthRecords(ctx context.Context) error {
-	records, err := collectAuthRecords()
+	records, err := collectAuthRecords(ctx)
 	if err != nil {
 		return err
 	}
@@ -132,12 +162,12 @@ func syncAuthRecords(ctx context.Context) error {
 	return nil
 }
 
-func collectAuthRecords() ([]authRecord, error) {
-	configAuths, err := loadConfigAuthRecords()
+func collectAuthRecords(ctx context.Context) ([]authRecord, error) {
+	configAuths, err := loadConfigAuthRecords(ctx)
 	if err != nil {
 		return nil, err
 	}
-	pageAuths, err := loadPageAuthRecords()
+	pageAuths, err := loadPageAuthRecords(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -167,8 +197,8 @@ func collectAuthRecords() ([]authRecord, error) {
 	return records, nil
 }
 
-func loadConfigAuthRecords() ([]authRecord, error) {
-	payload, err := loadConfigMeta()
+func loadConfigAuthRecords(ctx context.Context) ([]authRecord, error) {
+	payload, err := loadConfigMetaForSite(siteconfig.SiteKeyFromContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("读取 config/front.json 失败: %w", err)
 	}
@@ -201,13 +231,15 @@ func loadConfigAuthRecords() ([]authRecord, error) {
 	return records, nil
 }
 
-func loadPageAuthRecords() ([]authRecord, error) {
+func loadPageAuthRecords(ctx context.Context) ([]authRecord, error) {
 	recordMap := make(map[string]authRecord)
 	recordPriorityMap := make(map[string]int)
-	embeddedPaths := embedpageservice.Paths()
+	pageName := siteconfig.PageFromContext(ctx)
+	pageNames := siteconfig.LoadPageNames()
+	embeddedPaths := embedpageservice.PathsForPage(pageName)
 
 	for _, root := range []string{"module", "package"} {
-		if err := walkDiskPageAuthRecords(root, embeddedPaths, recordMap, recordPriorityMap); err != nil {
+		if err := walkDiskPageAuthRecords(root, pageName, pageNames, embeddedPaths, recordMap, recordPriorityMap); err != nil {
 			return nil, fmt.Errorf("扫描页面权限失败")
 		}
 	}
@@ -230,7 +262,11 @@ func loadPageAuthRecords() ([]authRecord, error) {
 		}
 
 		relativePath := strings.TrimPrefix(filepath.ToSlash(path), "page/")
-		routePath := frontpagepath.TrimPageFileExt(filepath.ToSlash(filepath.Join("front", relativePath)))
+		relativeParts := frontpagepath.RelativePartsForPage(relativePath, pageName, pageNames)
+		if len(relativeParts) == 0 {
+			return nil
+		}
+		routePath := frontpagepath.TrimPageFileExt(filepath.ToSlash(filepath.Join(append([]string{"front"}, relativeParts...)...)))
 		routePath = frontpagepath.NormalizePath(routePath)
 		if routePath == "" {
 			return nil
@@ -255,6 +291,8 @@ func loadPageAuthRecords() ([]authRecord, error) {
 
 func walkDiskPageAuthRecords(
 	root string,
+	pageName string,
+	pageNames map[string]struct{},
 	embeddedPaths map[string]struct{},
 	recordMap map[string]authRecord,
 	recordPriorityMap map[string]int,
@@ -266,8 +304,11 @@ func walkDiskPageAuthRecords(
 		if entry == nil || entry.IsDir() || !frontpagepath.IsPageFileName(entry.Name()) {
 			return nil
 		}
+		if frontpagepath.DiskPageBelongsToOtherPage(root, path, pageName, pageNames) {
+			return nil
+		}
 
-		moduleName, routePath, ok := frontpagepath.DiskPageRoute(root, path)
+		moduleName, routePath, ok := frontpagepath.DiskPageRouteForPage(root, path, pageName)
 		if !ok || moduleName == "front" {
 			return nil
 		}
@@ -296,6 +337,18 @@ func walkDiskPageAuthRecords(
 
 func FilterAssignableAuthRows(rows []map[string]any) []map[string]any {
 	return embedpageservice.FilterRows(rows)
+}
+
+func FilterAssignableAuthRowsForSite(siteKey string, rows []map[string]any) []map[string]any {
+	cfg, err := siteconfig.Load(context.Background())
+	if err != nil {
+		return rows
+	}
+	site, ok := cfg.FindBySiteKey(siteKey)
+	if !ok {
+		return rows
+	}
+	return embedpageservice.FilterRowsForPage(site.Page, rows)
 }
 
 func buildPageAuthRecords(meta pageMeta, routePath string) []authRecord {
@@ -355,10 +408,13 @@ func savePageAuthRecords(
 	}
 }
 
-// Page-level create/update auth usually lives in update.json, but it should be
-// grouped under the same resource list page as delete/import/export actions.
+// Page-level create/update auth usually lives in update.json. Explicit parent
+// config wins; otherwise it is grouped under the matching list page.
 func pageAuthParentKey(item authSeed, keyValue string, meta pageMeta, routePath string) string {
 	if parent := strings.TrimSpace(item.Parent); parent != "" {
+		return parent
+	}
+	if parent := strings.TrimSpace(meta.Parent); parent != "" {
 		return parent
 	}
 
@@ -367,8 +423,7 @@ func pageAuthParentKey(item authSeed, keyValue string, meta pageMeta, routePath 
 			return parent
 		}
 	}
-
-	return strings.TrimSpace(meta.Parent)
+	return ""
 }
 
 func listParentPath(pathValue string) string {
@@ -599,7 +654,7 @@ func normalizeAuthType(current int, keyValue, pathValue string) int {
 	return 2
 }
 
-func normalizeAuthQuery(query authQuery) authQuery {
+func normalizeAuthQuery(query map[string]string) authQuery {
 	if len(query) == 0 {
 		return nil
 	}
@@ -844,34 +899,20 @@ func SyncModelPrimarySequence(ctx context.Context, modelName string) error {
 	return frontrecord.SyncModelPrimarySequence(ctx, modelName)
 }
 
-func loadConfigMeta() (configMeta, error) {
-	content, actualPath, err := util.ReadJSONCFile(
-		filepath.Join("config", "front.jsonc"),
-		filepath.Join("config", "front.json"),
-	)
+func loadConfigMetaForSite(siteKey string) (configMeta, error) {
+	cfg, err := siteconfig.Load(context.Background())
 	if err != nil {
-		if os.IsNotExist(err) {
-			return configMeta{}, nil
-		}
 		return configMeta{}, err
 	}
-
-	signature := frontpage.Signature(content)
-	if cached, ok := configMetaCache.Load(actualPath); ok {
-		entry := cached
-		if entry.signature == signature {
-			return entry.value, nil
-		}
+	site, ok := cfg.FindBySiteKey(siteKey)
+	if !ok {
+		site, _ = cfg.FindBySiteKey(siteconfig.DefaultSiteKey)
 	}
-
-	var payload configMeta
-	if err := util.UnmarshalNormalizedJSON(content, &payload); err != nil {
-		return configMeta{}, err
+	if site.Key == "" {
+		return configMeta{}, nil
 	}
-
-	configMetaCache.Store(actualPath, configMetaCacheEntry{
-		signature: signature,
-		value:     payload,
-	})
-	return payload, nil
+	return configMeta{
+		Auth:  site.Auth,
+		Entry: site.Entry,
+	}, nil
 }
