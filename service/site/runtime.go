@@ -1,6 +1,7 @@
 package site
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 
@@ -9,6 +10,8 @@ import (
 
 	"my/package/front/service/siteconfig"
 )
+
+const runtimeHTMLPlaceholder = "<!-- dever:runtime -->"
 
 type runtimePayload struct {
 	SiteKey    string                       `json:"siteKey"`
@@ -35,10 +38,21 @@ func writeRuntime(c *server.Context, site siteconfig.Site, dev bool) error {
 		return c.Error("当前环境不支持 runtime 输出")
 	}
 
+	content, err := runtimeContent(site, dev, raw.Hostname())
+	if err != nil {
+		return c.Error(err)
+	}
+
+	raw.Set("Cache-Control", "no-cache")
+	raw.Set("Content-Type", "application/javascript; charset=utf-8")
+	return raw.Send(content)
+}
+
+func runtimeContent(site siteconfig.Site, dev bool, hostname string) ([]byte, error) {
 	payload := runtimePayload{
 		SiteKey:  site.Key,
 		BasePath: site.Path,
-		APIHost:  runtimeAPIHost(site, dev, raw.Hostname()),
+		APIHost:  runtimeAPIHost(site, dev, hostname),
 		Site: runtimeSitePayload{
 			Name:        site.Name,
 			Subtitle:    site.Subtitle,
@@ -53,12 +67,30 @@ func writeRuntime(c *server.Context, site siteconfig.Site, dev bool) error {
 	}
 	content, err := json.Marshal(payload)
 	if err != nil {
-		return c.Error(err)
+		return nil, err
 	}
 
-	raw.Set("Cache-Control", "no-cache")
-	raw.Set("Content-Type", "application/javascript; charset=utf-8")
-	return raw.SendString("window.appRuntime = " + string(content) + ";\n")
+	return []byte("window.appRuntime = " + string(content) + ";\n"), nil
+}
+
+func injectRuntime(content []byte, site siteconfig.Site, dev bool, hostname string) ([]byte, error) {
+	runtime, err := runtimeContent(site, dev, hostname)
+	if err != nil {
+		return nil, err
+	}
+
+	script := []byte("<script>\n" + string(runtime) + "</script>")
+	placeholder := []byte(runtimeHTMLPlaceholder)
+	if bytes.Contains(content, placeholder) {
+		return bytes.Replace(content, placeholder, script, 1), nil
+	}
+
+	headEnd := []byte("</head>")
+	if bytes.Contains(content, headEnd) {
+		return bytes.Replace(content, headEnd, append(script, []byte("\n  </head>")...), 1), nil
+	}
+
+	return append(script, content...), nil
 }
 
 func runtimeAPIHost(site siteconfig.Site, dev bool, hostname string) string {

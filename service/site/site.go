@@ -144,6 +144,18 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 	file, cache, err := resolveDiskFile(site.dir, rel)
 	if err == nil {
 		raw.Set("Cache-Control", cache)
+		if filepath.Base(file) == indexFile {
+			content, err := os.ReadFile(file)
+			if err != nil {
+				return c.Error(err, http.StatusNotFound)
+			}
+			content, err = injectRuntime(content, currentSite, false, raw.Hostname())
+			if err != nil {
+				return c.Error(err, http.StatusInternalServerError)
+			}
+			setContentType(raw, indexFile)
+			return raw.Send(content)
+		}
 		return raw.SendFile(file)
 	}
 	if !errors.Is(err, os.ErrNotExist) {
@@ -156,6 +168,12 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 	}
 	raw.Set("Cache-Control", cache)
 	setContentType(raw, servedRel)
+	if servedRel == indexFile {
+		content, err = injectRuntime(content, currentSite, false, raw.Hostname())
+		if err != nil {
+			return c.Error(err, http.StatusInternalServerError)
+		}
+	}
 	return raw.Send(content)
 }
 
