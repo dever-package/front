@@ -71,7 +71,7 @@
 
         const applyBootSite = (site) => {
           const siteName = String(site.name || 'Dever Front').trim()
-          const favicon = String(site.favicon || '').trim()
+          const logoSrc = String(site.logo || '').trim()
           const title = document.getElementById('front-initial-boot-title')
           const logo = document.getElementById('front-initial-boot-logo')
 
@@ -86,9 +86,9 @@
             .toUpperCase()
 
           logo.textContent = ''
-          if (favicon) {
+          if (logoSrc) {
             const image = document.createElement('img')
-            image.src = favicon
+            image.src = logoSrc
             image.alt = siteName
             logo.appendChild(image)
             return
@@ -277,7 +277,7 @@
         }
       }
     </style>
-    <script type="module" crossorigin src="/admin/assets/index-7vEwULsI.js"></script>
+    <script type="module" crossorigin src="/admin/assets/index-pqj7kxXv.js"></script>
     <link rel="stylesheet" crossorigin href="/admin/assets/style-D7tpKsN4.css">
   </head>
 

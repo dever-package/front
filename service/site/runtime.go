@@ -20,7 +20,7 @@ type runtimePayload struct {
 	APIHost    string                       `json:"apiHost"`
 	Site       runtimeSitePayload           `json:"site"`
 	Appearance siteconfig.AppearanceSetting `json:"appearance,omitempty"`
-	Runtime    siteconfig.RuntimeSetting    `json:"runtime,omitempty"`
+	Runtime    runtimeSettingPayload        `json:"runtime,omitempty"`
 	Access     siteconfig.Access            `json:"access"`
 }
 
@@ -31,6 +31,12 @@ type runtimeSitePayload struct {
 	URL         string `json:"url,omitempty"`
 	Logo        string `json:"logo,omitempty"`
 	Favicon     string `json:"favicon,omitempty"`
+}
+
+type runtimeSettingPayload struct {
+	Skin       string                    `json:"skin,omitempty"`
+	RouterMode string                    `json:"routerMode,omitempty"`
+	Plugins    []runtimePluginDescriptor `json:"plugins,omitempty"`
 }
 
 func writeRuntime(c *server.Context, site siteconfig.Site, dev bool, pluginDev bool) error {
@@ -50,8 +56,11 @@ func writeRuntime(c *server.Context, site siteconfig.Site, dev bool, pluginDev b
 }
 
 func runtimeContent(site siteconfig.Site, dev bool, hostname string, pluginDev bool) ([]byte, error) {
-	runtimeSetting := site.Setting.Runtime
-	runtimeSetting.Plugins = runtimePluginURLs(site, pluginDev)
+	runtimeSetting := runtimeSettingPayload{
+		Skin:       site.Setting.Runtime.Skin,
+		RouterMode: site.Setting.Runtime.RouterMode,
+		Plugins:    runtimePluginDescriptors(site, pluginDev),
+	}
 
 	payload := runtimePayload{
 		SiteKey:   site.Key,

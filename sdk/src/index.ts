@@ -14,6 +14,7 @@ export type NodeComponentRegistry = Record<string, LazyNodeComponent>;
 
 export type DeverFrontPlugin = {
   name: string;
+  depends?: string[];
   nodes?: NodeComponentRegistry;
 };
 
@@ -34,13 +35,14 @@ type DeverFrontSDK = {
 declare global {
   interface Window {
     DeverFront?: {
+      registerPlugin?: (plugin: DeverFrontPlugin) => void;
       sdk?: DeverFrontSDK;
     };
   }
 }
 
 export function defineFrontPlugin(plugin: DeverFrontPlugin) {
-  return frontSDK().defineFrontPlugin(plugin);
+  return window.DeverFront?.sdk?.defineFrontPlugin?.(plugin) || plugin;
 }
 
 export function lazyNode(loader: LazyNodeLoader): LazyNodeComponent {
@@ -65,7 +67,16 @@ export function lazyNode(loader: LazyNodeLoader): LazyNodeComponent {
 }
 
 export function mergePluginNodes(plugins: DeverFrontPlugin[]) {
-  return frontSDK().mergePluginNodes(plugins);
+  const merge = window.DeverFront?.sdk?.mergePluginNodes;
+  if (merge) {
+    return merge(plugins);
+  }
+
+  const nodes: NodeComponentRegistry = {};
+  for (const plugin of plugins) {
+    Object.assign(nodes, plugin.nodes);
+  }
+  return nodes;
 }
 
 export function getCompatModule(path: string) {

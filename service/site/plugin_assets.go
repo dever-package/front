@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -31,6 +32,22 @@ type pluginManifestEntry struct {
 	File    string   `json:"file"`
 	Module  bool     `json:"module,omitempty"`
 	CSS     []string `json:"css,omitempty"`
+}
+
+type runtimePluginDescriptor struct {
+	Name     string   `json:"name"`
+	Manifest string   `json:"manifest,omitempty"`
+	Entry    string   `json:"entry,omitempty"`
+	CSS      []string `json:"css,omitempty"`
+	Nodes    []string `json:"nodes,omitempty"`
+	Depends  []string `json:"depends,omitempty"`
+	Module   bool     `json:"module,omitempty"`
+}
+
+type pluginSourceMetadata struct {
+	Name    string   `json:"name"`
+	Nodes   []string `json:"nodes,omitempty"`
+	Depends []string `json:"depends,omitempty"`
 }
 
 func registerPluginAssets(s server.Server, site siteconfig.Site, siteSettings settings) {
@@ -97,7 +114,7 @@ func openSourcePluginAsset(c *server.Context) error {
 
 	switch rel {
 	case pluginManifest:
-		return sendSourcePluginManifest(raw)
+		return sendSourcePluginManifest(raw, pluginName, sourceRoot)
 	case pluginDevRuntime:
 		entry := filepath.Join(sourceRoot, pluginSourceEntry)
 		runtime := fmt.Sprintf(
@@ -112,9 +129,11 @@ func openSourcePluginAsset(c *server.Context) error {
 	}
 }
 
-func sendSourcePluginManifest(raw *fiber.Ctx) error {
-	content, err := json.Marshal(map[string]pluginManifestEntry{
-		pluginDevRuntime: {
+func sendSourcePluginManifest(raw *fiber.Ctx, pluginName string, sourceRoot string) error {
+	metadata := readPluginSourceMetadata(pluginName, filepath.Join(sourceRoot, pluginSourceEntry))
+	content, err := json.Marshal(map[string]interface{}{
+		"__plugin": metadata,
+		pluginDevRuntime: pluginManifestEntry{
 			IsEntry: true,
 			File:    pluginDevRuntime,
 			Module:  true,
@@ -128,35 +147,196 @@ func sendSourcePluginManifest(raw *fiber.Ctx) error {
 	return raw.Send(content)
 }
 
-func runtimePluginURLs(site siteconfig.Site, pluginDev bool) []string {
-	return uniqueRuntimePluginURLs(
-		append(
-			site.Setting.Runtime.Plugins,
-			discoverRuntimePluginURLs(site, pluginDev)...,
-		),
-	)
+func runtimePluginDescriptors(site siteconfig.Site, pluginDev bool) []runtimePluginDescriptor {
+	descriptors := make([]runtimePluginDescriptor, 0)
+	for _, item := range site.Setting.Runtime.Plugins {
+		if descriptor := configuredRuntimePluginDescriptor(item); descriptor.Name != "" || descriptor.Manifest != "" {
+			descriptors = append(descriptors, descriptor)
+		}
+	}
+	return uniqueRuntimePluginDescriptors(append(descriptors, discoverRuntimePluginDescriptors(site, pluginDev)...))
 }
 
-func discoverRuntimePluginURLs(site siteconfig.Site, pluginDev bool) []string {
+func discoverRuntimePluginDescriptors(site siteconfig.Site, pluginDev bool) []runtimePluginDescriptor {
 	sourceNames := []string{}
 	if pluginDev {
 		sourceNames = discoverSourcePluginNames()
 	}
 	distNames := discoverDistPluginNames()
 
-	urls := make([]string, 0, len(sourceNames)+len(distNames))
+	descriptors := make([]runtimePluginDescriptor, 0, len(sourceNames)+len(distNames))
 	seen := map[string]struct{}{}
 	for _, name := range sourceNames {
 		seen[name] = struct{}{}
-		urls = append(urls, pluginSourceManifestURL(site, name))
+		descriptors = append(descriptors, sourceRuntimePluginDescriptor(site, name))
 	}
 	for _, name := range distNames {
 		if _, ok := seen[name]; ok {
 			continue
 		}
-		urls = append(urls, pluginManifestURL(site, name))
+		descriptors = append(descriptors, distRuntimePluginDescriptor(site, name))
 	}
-	return urls
+	return descriptors
+}
+
+func configuredRuntimePluginDescriptor(value string) runtimePluginDescriptor {
+	manifest := strings.TrimSpace(value)
+	if manifest == "" {
+		return runtimePluginDescriptor{}
+	}
+	return runtimePluginDescriptor{
+		Name:     runtimePluginNameFromURL(manifest),
+		Manifest: manifest,
+	}
+}
+
+func sourceRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtimePluginDescriptor {
+	metadata := pluginSourceMetadata{Name: pluginName}
+	if sourceRoot, err := resolvePluginSourceRoot(pluginName); err == nil {
+		metadata = readPluginSourceMetadata(pluginName, filepath.Join(sourceRoot, pluginSourceEntry))
+	}
+
+	return runtimePluginDescriptor{
+		Name:     metadata.Name,
+		Manifest: pluginSourceManifestURL(site, pluginName),
+		Entry:    pluginSourceRuntimeURL(site, pluginName),
+		Nodes:    metadata.Nodes,
+		Depends:  metadata.Depends,
+		Module:   true,
+	}
+}
+
+func distRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtimePluginDescriptor {
+	metadata := pluginSourceMetadata{Name: pluginName}
+	if sourceRoot, err := resolvePluginSourceRoot(pluginName); err == nil {
+		metadata = readPluginSourceMetadata(pluginName, filepath.Join(sourceRoot, pluginSourceEntry))
+	}
+
+	return runtimePluginDescriptor{
+		Name:     metadata.Name,
+		Manifest: pluginManifestURL(site, pluginName),
+		Nodes:    metadata.Nodes,
+		Depends:  metadata.Depends,
+	}
+}
+
+func readPluginSourceMetadata(defaultName string, entryFile string) pluginSourceMetadata {
+	content, err := os.ReadFile(entryFile)
+	if err != nil {
+		return pluginSourceMetadata{Name: defaultName}
+	}
+	return extractPluginSourceMetadata(defaultName, string(content))
+}
+
+func extractPluginSourceMetadata(defaultName string, content string) pluginSourceMetadata {
+	metadata := pluginSourceMetadata{
+		Name: strings.TrimSpace(defaultName),
+	}
+
+	if name := extractStringProperty(content, "name"); name != "" {
+		metadata.Name = name
+	}
+	if nodesBlock := extractPropertyBlock(content, "nodes", '{', '}'); nodesBlock != "" {
+		metadata.Nodes = extractObjectStringKeys(nodesBlock)
+	}
+	if dependsBlock := extractPropertyBlock(content, "depends", '[', ']'); dependsBlock != "" {
+		metadata.Depends = extractStringLiterals(dependsBlock)
+	}
+
+	return metadata
+}
+
+func extractStringProperty(content string, key string) string {
+	re := regexp.MustCompile(`(?m)\b` + regexp.QuoteMeta(key) + `\s*:\s*` + stringLiteralPattern())
+	match := re.FindStringSubmatch(content)
+	if len(match) < 2 {
+		return ""
+	}
+	return strings.TrimSpace(match[1])
+}
+
+func extractPropertyBlock(content string, key string, open byte, close byte) string {
+	re := regexp.MustCompile(`(?m)\b` + regexp.QuoteMeta(key) + `\s*:`)
+	matches := re.FindAllStringIndex(content, -1)
+	for _, match := range matches {
+		index := match[1]
+		for index < len(content) && isSpace(content[index]) {
+			index++
+		}
+		if index >= len(content) || content[index] != open {
+			continue
+		}
+		return matchDelimitedBlock(content, index, open, close)
+	}
+	return ""
+}
+
+func matchDelimitedBlock(content string, start int, open byte, close byte) string {
+	depth := 0
+	inString := byte(0)
+	escaped := false
+	for index := start; index < len(content); index++ {
+		current := content[index]
+		if inString != 0 {
+			if escaped {
+				escaped = false
+				continue
+			}
+			if current == '\\' {
+				escaped = true
+				continue
+			}
+			if current == inString {
+				inString = 0
+			}
+			continue
+		}
+
+		switch current {
+		case '"', '\'', '`':
+			inString = current
+		case open:
+			depth++
+		case close:
+			depth--
+			if depth == 0 {
+				return content[start : index+1]
+			}
+		}
+	}
+	return ""
+}
+
+func extractObjectStringKeys(block string) []string {
+	re := regexp.MustCompile(stringLiteralPattern() + `\s*:`)
+	matches := re.FindAllStringSubmatch(block, -1)
+	values := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) >= 2 {
+			values = append(values, strings.TrimSpace(match[1]))
+		}
+	}
+	return uniqueStrings(values)
+}
+
+func extractStringLiterals(block string) []string {
+	re := regexp.MustCompile(stringLiteralPattern())
+	matches := re.FindAllStringSubmatch(block, -1)
+	values := make([]string, 0, len(matches))
+	for _, match := range matches {
+		if len(match) >= 2 {
+			values = append(values, strings.TrimSpace(match[1]))
+		}
+	}
+	return uniqueStrings(values)
+}
+
+func isSpace(value byte) bool {
+	return value == ' ' || value == '\n' || value == '\r' || value == '\t'
+}
+
+func stringLiteralPattern() string {
+	return "[\"'`]([^\"'`]+)[\"'`]"
 }
 
 func discoverDistPluginNames() []string {
@@ -197,12 +377,60 @@ func discoverPluginNamesWithFile(relativeFile string) []string {
 	return result
 }
 
-func uniqueRuntimePluginURLs(items []string) []string {
+func uniqueRuntimePluginDescriptors(items []runtimePluginDescriptor) []runtimePluginDescriptor {
 	if len(items) == 0 {
-		return []string{}
+		return []runtimePluginDescriptor{}
 	}
+
+	indexes := map[string]int{}
+	result := make([]runtimePluginDescriptor, 0, len(items))
+	for _, item := range items {
+		item.Name = strings.TrimSpace(item.Name)
+		item.Manifest = strings.TrimSpace(item.Manifest)
+		item.Entry = strings.TrimSpace(item.Entry)
+		item.Nodes = uniqueStrings(item.Nodes)
+		item.Depends = uniqueStrings(item.Depends)
+		if item.Name == "" && item.Manifest == "" && item.Entry == "" {
+			continue
+		}
+
+		key := runtimePluginDescriptorKey(item)
+		if index, ok := indexes[key]; ok {
+			if shouldReplaceRuntimePluginDescriptor(result[index], item) {
+				result[index] = item
+			}
+			continue
+		}
+
+		indexes[key] = len(result)
+		result = append(result, item)
+	}
+	return result
+}
+
+func runtimePluginDescriptorKey(item runtimePluginDescriptor) string {
+	if item.Name != "" {
+		return "name:" + item.Name
+	}
+	if item.Manifest != "" {
+		return "manifest:" + item.Manifest
+	}
+	return "entry:" + item.Entry
+}
+
+func shouldReplaceRuntimePluginDescriptor(current runtimePluginDescriptor, next runtimePluginDescriptor) bool {
+	if len(current.Nodes) == 0 && len(next.Nodes) > 0 {
+		return true
+	}
+	if current.Entry == "" && next.Entry != "" {
+		return true
+	}
+	return false
+}
+
+func uniqueStrings(items []string) []string {
 	seen := map[string]struct{}{}
-	urls := make([]string, 0, len(items))
+	result := make([]string, 0, len(items))
 	for _, item := range items {
 		item = strings.TrimSpace(item)
 		if item == "" {
@@ -212,9 +440,9 @@ func uniqueRuntimePluginURLs(items []string) []string {
 			continue
 		}
 		seen[item] = struct{}{}
-		urls = append(urls, item)
+		result = append(result, item)
 	}
-	return urls
+	return result
 }
 
 func pluginMountPath(site siteconfig.Site) string {
@@ -231,6 +459,30 @@ func pluginManifestURL(site siteconfig.Site, pluginName string) string {
 
 func pluginSourceManifestURL(site siteconfig.Site, pluginName string) string {
 	return cleanRequestPath(path.Join(site.Path, pluginSourceMountDir, pluginName, pluginManifest))
+}
+
+func pluginSourceRuntimeURL(site siteconfig.Site, pluginName string) string {
+	return cleanRequestPath(path.Join(site.Path, pluginSourceMountDir, pluginName, pluginDevRuntime))
+}
+
+func runtimePluginNameFromURL(value string) string {
+	cleaned := strings.TrimSpace(strings.Split(strings.Split(value, "?")[0], "#")[0])
+	if cleaned == "" {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(cleaned, "/"), "/")
+	for index, part := range parts {
+		if part == pluginManifest && index > 0 {
+			return cleanPluginName(parts[index-1])
+		}
+		if part == pluginDevRuntime && index > 0 {
+			return cleanPluginName(parts[index-1])
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return cleanPluginName(parts[len(parts)-1])
 }
 
 func pluginDiskRoots(pluginName string) []string {
