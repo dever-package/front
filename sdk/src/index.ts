@@ -105,6 +105,7 @@ export const resolvePostLoginTarget = getCompatModule(
   "@/lib/auth-redirect",
 ).resolvePostLoginTarget;
 export const joinFrontApi = getCompatModule("@/lib/request").joinFrontApi;
+export const joinSiteApi = getCompatModule("@/lib/request").joinSiteApi;
 export const loadMainInfo = getCompatModule("@/lib/request").loadMainInfo;
 export const request = getCompatModule("@/lib/request").request;
 export const resetFrontRuntimeCache =

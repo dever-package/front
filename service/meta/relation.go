@@ -3,7 +3,9 @@ package meta
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 
 	frontoption "my/package/front/service/option"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/siteconfig"
 )
 
 type OptionModel interface {
@@ -751,7 +754,9 @@ func buildUploadRelationPayload(ctx context.Context, row map[string]any) map[str
 	fileID := util.ToUint64(row["id"])
 	openURL := ""
 	if fileID != 0 {
-		openURL = fmt.Sprintf("/front/upload/open?id=%d", fileID)
+		query := url.Values{}
+		query.Set("id", strconv.FormatUint(fileID, 10))
+		openURL = siteconfig.FrontRuntimeAPIURL("upload/open", query)
 	}
 
 	publicURL := resolveUploadRelationPublicURL(ctx, row)

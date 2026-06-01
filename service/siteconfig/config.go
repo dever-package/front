@@ -3,6 +3,7 @@ package siteconfig
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -218,14 +219,6 @@ func (cfg Config) FindByAPIPrefix(apiPrefix string) (Site, bool) {
 	})
 }
 
-func (cfg Config) FindByRequestPath(requestPath string) (Site, bool) {
-	requestPath = cleanAbsPath(requestPath)
-	if site, ok := cfg.FindByAPIRequestPath(requestPath); ok {
-		return site, true
-	}
-	return cfg.FindBySitePath(requestPath)
-}
-
 func (cfg Config) FindByAPIRequestPath(requestPath string) (Site, bool) {
 	requestPath = cleanAbsPath(requestPath)
 	site, ok := cfg.FindByAPIPrefix(requestPath)
@@ -239,6 +232,37 @@ func (cfg Config) FindByAPIRequestPath(requestPath string) (Site, bool) {
 		return site, true
 	}
 	return Site{}, false
+}
+
+func IsFrontRuntimeAPIPath(requestPath string) bool {
+	requestPath = cleanAbsPath(requestPath)
+	root := requestRootAfterPrefix(requestPath, cleanAbsPath(DefaultAPI))
+	if root == "" {
+		return false
+	}
+	for _, item := range defaultSiteAPIRoots {
+		if root == item {
+			return true
+		}
+	}
+	return false
+}
+
+func FrontRuntimeAPIPath(parts ...string) string {
+	values := append([]string{DefaultAPI}, parts...)
+	return cleanAbsPath(path.Join(values...))
+}
+
+func FrontRuntimeAPIURL(endpoint string, query url.Values) string {
+	apiPath := FrontRuntimeAPIPath(endpoint)
+	if len(query) == 0 {
+		return apiPath
+	}
+	return apiPath + "?" + query.Encode()
+}
+
+func IsFrontRuntimeAPIEndpoint(requestPath, endpoint string) bool {
+	return cleanAbsPath(requestPath) == FrontRuntimeAPIPath(endpoint)
 }
 
 func (cfg Config) FindByStaticSitePath(requestPath string) (Site, bool) {

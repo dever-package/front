@@ -7,6 +7,7 @@ import (
 
 	"github.com/shemic/dever/util"
 	frontmeta "my/package/front/service/meta"
+	"my/package/front/service/siteconfig"
 )
 
 func applyNodeLabels(rawNodes json.RawMessage, pathValue string, content []byte) (json.RawMessage, error) {
@@ -162,7 +163,10 @@ func applyItemOption(item map[string]any, modelName string) bool {
 		if modelName == "" {
 			return false
 		}
-		item["option"] = "/front/route/option?type=model&use=" + url.QueryEscape(modelName)
+		query := url.Values{}
+		query.Set("type", "model")
+		query.Set("use", modelName)
+		item["option"] = siteconfig.FrontRuntimeAPIURL("route/option", query)
 		return true
 	}
 

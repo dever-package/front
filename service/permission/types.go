@@ -2,6 +2,7 @@ package permission
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"my/package/front/service/siteconfig"
 )
@@ -61,6 +62,6 @@ type accessSnapshot struct {
 var (
 	bootstrapState struct {
 		mu   sync.Mutex
-		done bool
+		done atomic.Bool
 	}
 )

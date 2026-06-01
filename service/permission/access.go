@@ -23,6 +23,10 @@ type AccessScope struct {
 
 var errNoPermission = errors.New("暂无权限")
 
+func IsPermissionDenied(err error) bool {
+	return errors.Is(err, errNoPermission)
+}
+
 const (
 	inheritInputKey          = "_inherit"
 	inheritParentPathKey     = "_parentPath"
@@ -153,6 +157,12 @@ func authRowQuery(row map[string]any) authQuery {
 }
 
 func loadAccessSnapshot(ctx context.Context) (*accessSnapshot, error) {
+	return accessSnapshotCache.GetOrSet(permissionUserKey(ctx), func() (*accessSnapshot, error) {
+		return loadAccessSnapshotUncached(ctx)
+	})
+}
+
+func loadAccessSnapshotUncached(ctx context.Context) (*accessSnapshot, error) {
 	graph, err := loadAuthGraph(ctx)
 	if err != nil {
 		return nil, err
@@ -173,6 +183,12 @@ func loadAccessSnapshot(ctx context.Context) (*accessSnapshot, error) {
 }
 
 func loadAuthGraph(ctx context.Context) (authGraph, error) {
+	return authGraphCache.GetOrSet(permissionSitePageKey(ctx), func() (authGraph, error) {
+		return loadAuthGraphUncached(ctx)
+	})
+}
+
+func loadAuthGraphUncached(ctx context.Context) (authGraph, error) {
 	authModel := frontrecord.Resolve("front.NewAuthModel")
 	if authModel == nil {
 		return authGraph{}, nil
@@ -183,6 +199,7 @@ func loadAuthGraph(ctx context.Context) (authGraph, error) {
 		"order": "main.sort asc, main.id asc",
 	})
 	rows = filterAuthRowsForCurrentSite(ctx, rows)
+	rows = prepareAuthRows(rows)
 
 	graph := authGraph{
 		rows:       rows,

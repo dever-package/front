@@ -15,7 +15,6 @@ import (
 	"github.com/shemic/dever/server"
 
 	frontroot "my/package/front"
-	frontapi "my/package/front/api"
 	"my/package/front/service/siteconfig"
 )
 
@@ -49,16 +48,6 @@ func Register(s server.Server) {
 	register(s, settingsFromConfig(cfg.FrontSite), frontConfig)
 }
 
-func Allows(requestPath string) bool {
-	frontConfig, err := siteconfig.Load(nil)
-	if err != nil {
-		return false
-	}
-	requestPath = cleanRequestPath(requestPath)
-	_, ok := frontConfig.FindByStaticSitePath(requestPath)
-	return ok
-}
-
 func register(s server.Server, siteSettings settings, frontConfig siteconfig.Config) {
 	if !siteSettings.enabled || s == nil {
 		return
@@ -69,56 +58,18 @@ func register(s server.Server, siteSettings settings, frontConfig siteconfig.Con
 	for _, site := range frontConfig.Sites {
 		currentSite := site
 		registerPluginAssets(s, currentSite, siteSettings)
-		registerRuntimeAPI(s, currentSite)
 		open := func(c *server.Context) error {
 			c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
 			return openFile(c, siteSettings, currentSite)
 		}
 		runtime := func(c *server.Context) error {
 			c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
-			return writeRuntime(c, currentSite, false, siteSettings.pluginDev)
+			return writeRuntime(c, currentSite, siteSettings.pluginDev)
 		}
 		s.Get(currentSite.Path, open)
 		s.Get(currentSite.Path+"/runtime.js", runtime)
 		s.Get(currentSite.Path+"/*", open)
 	}
-}
-
-func registerRuntimeAPI(s server.Server, site siteconfig.Site) {
-	if site.API == siteconfig.DefaultAPI {
-		return
-	}
-	prefix := site.APIPrefix()
-	mainAPI := frontapi.Main{}
-	routeAPI := frontapi.Route{}
-	uploadAPI := frontapi.Upload{}
-	resourceAPI := frontapi.Resource{}
-	importAPI := frontapi.Import{}
-	exportAPI := frontapi.Export{}
-
-	s.Get(prefix+"/main/info", mainAPI.GetInfo)
-	s.Post(prefix+"/main/sync", mainAPI.PostSync)
-	s.Get(prefix+"/route/info", routeAPI.GetInfo)
-	s.Get(prefix+"/route/option", routeAPI.GetOption)
-	s.Post(prefix+"/route/action", routeAPI.PostAction)
-	s.Post(prefix+"/upload/init", uploadAPI.PostInit)
-	s.Post(prefix+"/upload/part", uploadAPI.PostPart)
-	s.Post(prefix+"/upload/complete", uploadAPI.PostComplete)
-	s.Get(prefix+"/upload/open", uploadAPI.GetOpen)
-	s.Get(prefix+"/upload/rule", uploadAPI.GetRule)
-	s.Post(prefix+"/upload/import_url", uploadAPI.PostImportUrl)
-	s.Post(prefix+"/upload/import_url_stream", uploadAPI.PostImportUrlStream)
-	s.Get(prefix+"/upload/stream", uploadAPI.GetStream)
-	s.Get(prefix+"/resource/list", resourceAPI.GetList)
-	s.Get(prefix+"/resource/category", resourceAPI.GetCategory)
-	s.Get(prefix+"/resource/source", resourceAPI.GetSource)
-	s.Post(prefix+"/resource/assign_category", resourceAPI.PostAssignCategory)
-	s.Post(prefix+"/import/analyze", importAPI.PostAnalyze)
-	s.Post(prefix+"/import/task_create", importAPI.PostTaskCreate)
-	s.Get(prefix+"/import/task_info", importAPI.GetTaskInfo)
-	s.Post(prefix+"/export/task_create", exportAPI.PostTaskCreate)
-	s.Get(prefix+"/export/task_info", exportAPI.GetTaskInfo)
-	s.Get(prefix+"/export/download", exportAPI.GetDownload)
 }
 
 func settingsFromConfig(cfg config.FrontSite) settings {
@@ -157,7 +108,7 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 			if err != nil {
 				return c.Error(err, http.StatusNotFound)
 			}
-			content, err = injectRuntime(content, currentSite, false, raw.Hostname(), site.pluginDev)
+			content, err = injectRuntime(content, currentSite, site.pluginDev)
 			if err != nil {
 				return c.Error(err, http.StatusInternalServerError)
 			}
@@ -177,7 +128,7 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 	raw.Set("Cache-Control", cache)
 	setContentType(raw, servedRel)
 	if servedRel == indexFile {
-		content, err = injectRuntime(content, currentSite, false, raw.Hostname(), site.pluginDev)
+		content, err = injectRuntime(content, currentSite, site.pluginDev)
 		if err != nil {
 			return c.Error(err, http.StatusInternalServerError)
 		}

@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	devercache "github.com/shemic/dever/cache"
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
 	frontmeta "my/package/front/service/meta"
+	"my/package/front/service/runtimecache"
 	"my/package/front/service/siteconfig"
 )
 
@@ -26,7 +29,14 @@ type schemaCacheEntry struct {
 	schema    Schema
 }
 
-var schemaCache util.ConcurrentMap[string, schemaCacheEntry]
+var parsedSchemaCache = devercache.New[string, schemaCacheEntry](
+	devercache.WithTTL(5*time.Minute),
+	devercache.WithMaxEntries(2048),
+)
+
+func init() {
+	runtimecache.Register("front.page", parsedSchemaCache.Invalidate, parsedSchemaCache.Clear)
+}
 
 func GetInfo(c *server.Context, pathValue string) error {
 	currentSchema, err := BuildInfo(c, pathValue)
@@ -66,11 +76,8 @@ func BuildInfo(c *server.Context, pathValue string) (Schema, error) {
 func parseSchema(pageName, pathValue string, content []byte) (Schema, error) {
 	signature := Signature(content)
 	cacheKey := pageName + ":" + pathValue
-	if cached, ok := schemaCache.Load(cacheKey); ok {
-		entry := cached
-		if entry.signature == signature {
-			return entry.schema, nil
-		}
+	if cached, ok := parsedSchemaCache.Load(cacheKey); ok && cached.signature == signature {
+		return cloneSchema(cached.schema), nil
 	}
 
 	var current Schema
@@ -88,11 +95,32 @@ func parseSchema(pageName, pathValue string, content []byte) (Schema, error) {
 		current.Nodes = normalizedNodes
 	}
 
-	schemaCache.Store(cacheKey, schemaCacheEntry{
+	entry := schemaCacheEntry{
 		signature: signature,
-		schema:    current,
-	})
-	return current, nil
+		schema:    cloneSchema(current),
+	}
+	parsedSchemaCache.Store(cacheKey, entry)
+	return cloneSchema(current), nil
+}
+
+func cloneSchema(schema Schema) Schema {
+	return Schema{
+		Page:   cloneRawMessage(schema.Page),
+		Layout: cloneRawMessage(schema.Layout),
+		Nodes:  cloneRawMessage(schema.Nodes),
+		Data:   cloneRawMessage(schema.Data),
+		State:  cloneRawMessage(schema.State),
+		Action: cloneRawMessage(schema.Action),
+	}
+}
+
+func cloneRawMessage(raw json.RawMessage) json.RawMessage {
+	if raw == nil {
+		return nil
+	}
+	cloned := make([]byte, len(raw))
+	copy(cloned, raw)
+	return json.RawMessage(cloned)
 }
 
 func applyPageMetaDefaults(rawPage json.RawMessage, pathValue string) (json.RawMessage, error) {

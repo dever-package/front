@@ -17,6 +17,7 @@ import (
 	frontpage "my/package/front/service/page"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/runtimecache"
 	"my/package/front/service/siteconfig"
 )
 
@@ -32,18 +33,22 @@ func EnsureBootstrapForSite(ctx context.Context, site siteconfig.Site) error {
 	if !shouldBootstrapSite(site) {
 		return nil
 	}
+	if bootstrapState.done.Load() {
+		return nil
+	}
 
 	bootstrapState.mu.Lock()
 	defer bootstrapState.mu.Unlock()
 
-	if bootstrapState.done {
+	if bootstrapState.done.Load() {
 		return nil
 	}
 
 	if err := runBootstrap(ctx); err != nil {
 		return err
 	}
-	bootstrapState.done = true
+	bootstrapState.done.Store(true)
+	runtimecache.Invalidate()
 	return nil
 }
 
@@ -63,11 +68,50 @@ func ForceBootstrapForSite(ctx context.Context, site siteconfig.Site) error {
 	bootstrapState.mu.Lock()
 	defer bootstrapState.mu.Unlock()
 
-	embedpageservice.ClearCache()
 	if err := runBootstrap(ctx); err != nil {
 		return err
 	}
-	bootstrapState.done = true
+	bootstrapState.done.Store(true)
+	runtimecache.Invalidate()
+	return nil
+}
+
+func WarmupSites(ctx context.Context, sites []siteconfig.Site) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for _, site := range sites {
+		if err := WarmupSite(ctx, site); err != nil {
+			return fmt.Errorf("预热 front 站点 %s 失败: %w", site.Key, err)
+		}
+	}
+	return nil
+}
+
+func WarmupSite(ctx context.Context, site siteconfig.Site) error {
+	if strings.TrimSpace(site.Key) == "" {
+		return nil
+	}
+
+	siteCtx := siteconfig.WithSite(ctx, site)
+	if err := EnsureBootstrapForSite(siteCtx, site); err != nil {
+		return err
+	}
+
+	if _, err := loadConfigMetaForSite(site.Key); err != nil {
+		return err
+	}
+	if _, err := collectAuthRecords(siteCtx); err != nil {
+		return err
+	}
+	if site.UsesRBAC() {
+		if _, err := loadAuthGraph(siteCtx); err != nil {
+			return err
+		}
+		if _, err := loadAccessSnapshot(siteCtx); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -163,6 +207,16 @@ func syncAuthRecords(ctx context.Context) error {
 }
 
 func collectAuthRecords(ctx context.Context) ([]authRecord, error) {
+	records, err := authRecordsCache.GetOrSet(permissionSitePageKey(ctx), func() ([]authRecord, error) {
+		return collectAuthRecordsUncached(ctx)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return cloneAuthRecords(records), nil
+}
+
+func collectAuthRecordsUncached(ctx context.Context) ([]authRecord, error) {
 	configAuths, err := loadConfigAuthRecords(ctx)
 	if err != nil {
 		return nil, err
@@ -900,19 +954,21 @@ func SyncModelPrimarySequence(ctx context.Context, modelName string) error {
 }
 
 func loadConfigMetaForSite(siteKey string) (configMeta, error) {
-	cfg, err := siteconfig.Load(context.Background())
-	if err != nil {
-		return configMeta{}, err
-	}
-	site, ok := cfg.FindBySiteKey(siteKey)
-	if !ok {
-		site, _ = cfg.FindBySiteKey(siteconfig.DefaultSiteKey)
-	}
-	if site.Key == "" {
-		return configMeta{}, nil
-	}
-	return configMeta{
-		Auth:  site.Auth,
-		Entry: site.Entry,
-	}, nil
+	return configMetaCache.GetOrSet(siteKey, func() (configMeta, error) {
+		cfg, err := siteconfig.Load(context.Background())
+		if err != nil {
+			return configMeta{}, err
+		}
+		site, ok := cfg.FindBySiteKey(siteKey)
+		if !ok {
+			site, _ = cfg.FindBySiteKey(siteconfig.DefaultSiteKey)
+		}
+		if site.Key == "" {
+			return configMeta{}, nil
+		}
+		return configMeta{
+			Auth:  site.Auth,
+			Entry: site.Entry,
+		}, nil
+	})
 }

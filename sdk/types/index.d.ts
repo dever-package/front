@@ -40,6 +40,7 @@ export const SiteLogo: any;
 export const getSiteConfig: any;
 export const resolvePostLoginTarget: any;
 export const joinFrontApi: any;
+export const joinSiteApi: any;
 export const loadMainInfo: any;
 export const request: any;
 export const resetFrontRuntimeCache: any;

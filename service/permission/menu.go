@@ -23,21 +23,32 @@ type menuNode struct {
 }
 
 func GetMainInfo(c *server.Context) error {
+	includePermissions := shouldIncludePermissionContext(c.Input("include"), c.Input("permissions"))
+	payload, err := mainInfoCache.GetOrSet(mainInfoCacheKey(c.Context(), includePermissions), func() (map[string]any, error) {
+		return buildMainInfoPayload(c, includePermissions)
+	})
+	if err != nil {
+		return c.Error(err)
+	}
+	return c.JSON(cloneMainInfoPayload(payload))
+}
+
+func buildMainInfoPayload(c *server.Context, includePermissions bool) (map[string]any, error) {
 	if site, ok := siteconfig.FromContext(c.Context()); ok && shouldBypassRBAC(site) {
 		menu, entry := buildLoginSiteMenu(c.Context())
 		payload := map[string]any{
 			"menu":  menu,
 			"entry": entry,
 		}
-		if shouldIncludePermissionContext(c.Input("include"), c.Input("permissions")) {
+		if includePermissions {
 			payload["permissions"] = []map[string]any{}
 		}
-		return c.JSON(payload)
+		return payload, nil
 	}
 
 	snapshot, err := loadAccessSnapshot(c.Context())
 	if err != nil {
-		return c.Error(err)
+		return nil, err
 	}
 
 	menu := buildMenu(snapshot)
@@ -48,11 +59,11 @@ func GetMainInfo(c *server.Context) error {
 		"menu":  menu,
 		"entry": entry,
 	}
-	if shouldIncludePermissionContext(c.Input("include"), c.Input("permissions")) {
+	if includePermissions {
 		payload["permissions"] = buildPermissionContext(snapshot)
 	}
 
-	return c.JSON(payload)
+	return payload, nil
 }
 
 func SyncMainInfo(c *server.Context) error {

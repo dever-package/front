@@ -1,14 +1,16 @@
 package repository
 
 import (
-	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
+	"my/package/front/service/siteconfig"
 	uploadprovider "my/package/front/service/upload/provider"
 )
 
 func BuildUploadFilePayload(file UploadFile) map[string]any {
-	openURL := fmt.Sprintf("/front/upload/open?id=%d", file.ID)
+	openURL := buildUploadOpenURL(file.ID)
 	publicURL := resolveUploadFilePublicURL(file)
 	if strings.TrimSpace(publicURL) == "" {
 		publicURL = openURL
@@ -34,6 +36,12 @@ func BuildUploadFilePayload(file UploadFile) map[string]any {
 		"thumbnail":   publicURL,
 		"open_url":    openURL,
 	}
+}
+
+func buildUploadOpenURL(fileID uint64) string {
+	query := url.Values{}
+	query.Set("id", strconv.FormatUint(fileID, 10))
+	return siteconfig.FrontRuntimeAPIURL("upload/open", query)
 }
 
 func resolveUploadFilePublicURL(file UploadFile) string {

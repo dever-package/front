@@ -23,24 +23,6 @@ var pluginDevProxyRoutes = []string{
 	"/src/*",
 }
 
-var pluginDevProxyPrefixes = []string{
-	"/@fs/",
-	"/@id/",
-	"/@vite/",
-	"/.vite/",
-	"/vite/",
-	"/node_modules/.vite/",
-	"/package/",
-	"/module/",
-	"/backend/package/",
-	"/backend/module/",
-	"/src/",
-}
-
-var pluginDevProxyExact = map[string]struct{}{
-	"/@react-refresh": {},
-}
-
 var pluginDevViteDepPrefixes = []string{
 	"/.vite/deps/",
 	"/vite/deps/",
@@ -66,15 +48,24 @@ func IsPluginDevProxyPath(requestPath string) bool {
 	if requestPath == "" {
 		return false
 	}
-	if _, ok := pluginDevProxyExact[requestPath]; ok {
-		return true
-	}
-	for _, prefix := range pluginDevProxyPrefixes {
-		if strings.HasPrefix(requestPath, prefix) {
+	for _, route := range pluginDevProxyRoutes {
+		if matchPluginDevRoute(route, requestPath) {
 			return true
 		}
 	}
 	return false
+}
+
+func matchPluginDevRoute(route string, requestPath string) bool {
+	route = cleanAbsPath(route)
+	if route == "" || requestPath == "" {
+		return false
+	}
+	if strings.HasSuffix(route, "/*") {
+		prefix := strings.TrimSuffix(route, "/*")
+		return requestPath == prefix || strings.HasPrefix(requestPath, prefix+"/")
+	}
+	return requestPath == route
 }
 
 func pluginDevEnvBool(name string) (bool, bool) {

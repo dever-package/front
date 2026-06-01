@@ -574,7 +574,7 @@ func resolveRemoteDefaultCategoryOptions(c *server.Context, source string) ([]ma
 	if err != nil {
 		return nil, fmt.Errorf("分类选项地址无效")
 	}
-	if !strings.HasSuffix(parsed.Path, "/front/route/option") {
+	if !siteconfig.IsFrontRuntimeAPIEndpoint(parsed.Path, "route/option") {
 		return nil, nil
 	}
 

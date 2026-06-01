@@ -11,6 +11,7 @@ import (
 	frontpage "my/package/front/service/page"
 	permissionservice "my/package/front/service/permission"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/runtimecache"
 )
 
 func PostAction(c *server.Context) error {
@@ -78,6 +79,7 @@ func PostAction(c *server.Context) error {
 		if resultMap, ok := result.(map[string]any); ok {
 			operationlog.RecordAction(c, requestPath, pathValue, modelName, config.Type, primaryKey, payload, resultMap)
 		}
+		runtimecache.Invalidate()
 		return c.JSON(result)
 	case "delete":
 		result, err := runDelete(c, pathValue, config, request.Payload)
@@ -90,6 +92,7 @@ func PostAction(c *server.Context) error {
 		if resultMap, ok := result.(map[string]any); ok {
 			operationlog.RecordAction(c, requestPath, pathValue, modelName, config.Type, primaryKey, request.Payload, resultMap)
 		}
+		runtimecache.Invalidate()
 		return c.JSON(result)
 	default:
 		return c.Error(fmt.Sprintf("action.type 不支持: %s", config.Type))

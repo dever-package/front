@@ -14,14 +14,15 @@ import (
 const runtimeHTMLPlaceholder = "<!-- dever:runtime -->"
 
 type runtimePayload struct {
-	SiteKey    string                       `json:"siteKey"`
-	BasePath   string                       `json:"basePath"`
-	APIPrefix  string                       `json:"apiPrefix"`
-	APIHost    string                       `json:"apiHost"`
-	Site       runtimeSitePayload           `json:"site"`
-	Appearance siteconfig.AppearanceSetting `json:"appearance,omitempty"`
-	Runtime    runtimeSettingPayload        `json:"runtime,omitempty"`
-	Access     siteconfig.Access            `json:"access"`
+	SiteKey     string                       `json:"siteKey"`
+	BasePath    string                       `json:"basePath"`
+	APIPrefix   string                       `json:"apiPrefix"`
+	APIHost     string                       `json:"apiHost"`
+	SiteAPIHost string                       `json:"siteApiHost,omitempty"`
+	Site        runtimeSitePayload           `json:"site"`
+	Appearance  siteconfig.AppearanceSetting `json:"appearance,omitempty"`
+	Runtime     runtimeSettingPayload        `json:"runtime,omitempty"`
+	Access      siteconfig.Access            `json:"access"`
 }
 
 type runtimeSitePayload struct {
@@ -39,13 +40,13 @@ type runtimeSettingPayload struct {
 	Plugins    []runtimePluginDescriptor `json:"plugins,omitempty"`
 }
 
-func writeRuntime(c *server.Context, site siteconfig.Site, dev bool, pluginDev bool) error {
+func writeRuntime(c *server.Context, site siteconfig.Site, pluginDev bool) error {
 	raw, ok := c.Raw.(*fiber.Ctx)
 	if !ok {
 		return c.Error("当前环境不支持 runtime 输出")
 	}
 
-	content, err := runtimeContent(site, dev, raw.Hostname(), pluginDev)
+	content, err := runtimeContent(site, pluginDev)
 	if err != nil {
 		return c.Error(err)
 	}
@@ -55,7 +56,7 @@ func writeRuntime(c *server.Context, site siteconfig.Site, dev bool, pluginDev b
 	return raw.Send(content)
 }
 
-func runtimeContent(site siteconfig.Site, dev bool, hostname string, pluginDev bool) ([]byte, error) {
+func runtimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 	runtimeSetting := runtimeSettingPayload{
 		Skin:       site.Setting.Runtime.Skin,
 		RouterMode: site.Setting.Runtime.RouterMode,
@@ -63,10 +64,11 @@ func runtimeContent(site siteconfig.Site, dev bool, hostname string, pluginDev b
 	}
 
 	payload := runtimePayload{
-		SiteKey:   site.Key,
-		BasePath:  site.Path,
-		APIPrefix: strings.Trim(site.APIPrefix(), "/"),
-		APIHost:   runtimeAPIHost(site, dev, hostname),
+		SiteKey:     site.Key,
+		BasePath:    site.Path,
+		APIPrefix:   strings.Trim(site.APIPrefix(), "/"),
+		APIHost:     runtimeAPIHost(siteconfig.DefaultAPI),
+		SiteAPIHost: runtimeAPIHost(strings.Trim(site.APIPrefix(), "/")),
 		Site: runtimeSitePayload{
 			Name:        site.Name,
 			Subtitle:    site.Subtitle,
@@ -87,8 +89,8 @@ func runtimeContent(site siteconfig.Site, dev bool, hostname string, pluginDev b
 	return []byte("window.appRuntime = " + string(content) + ";\n"), nil
 }
 
-func injectRuntime(content []byte, site siteconfig.Site, dev bool, hostname string, pluginDev bool) ([]byte, error) {
-	runtime, err := runtimeContent(site, dev, hostname, pluginDev)
+func injectRuntime(content []byte, site siteconfig.Site, pluginDev bool) ([]byte, error) {
+	runtime, err := runtimeContent(site, pluginDev)
 	if err != nil {
 		return nil, err
 	}
@@ -107,14 +109,7 @@ func injectRuntime(content []byte, site siteconfig.Site, dev bool, hostname stri
 	return append(script, content...), nil
 }
 
-func runtimeAPIHost(site siteconfig.Site, dev bool, hostname string) string {
-	prefix := strings.Trim(site.APIPrefix(), "/")
-	if dev {
-		host := strings.TrimSpace(hostname)
-		if host == "" {
-			host = "localhost"
-		}
-		return "http://" + host + ":8085/" + prefix + "/"
-	}
+func runtimeAPIHost(prefix string) string {
+	prefix = strings.Trim(prefix, "/")
 	return "/" + prefix + "/"
 }

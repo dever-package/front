@@ -7,44 +7,70 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	devercache "github.com/shemic/dever/cache"
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
+	authctx "my/package/front/service/internal/authctx"
 	frontcall "my/package/front/service/internal/call"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
+	"my/package/front/service/runtimecache"
 	"my/package/front/service/siteconfig"
 )
 
+const optionCacheTTL = 5 * time.Second
+
+var optionCache = devercache.New[string, []map[string]any](
+	devercache.WithTTL(optionCacheTTL),
+	devercache.WithMaxEntries(2048),
+)
+
+func init() {
+	runtimecache.Register("front.option", optionCache.Invalidate, optionCache.Clear)
+}
+
 func Get(c *server.Context) error {
-	optionType := strings.ToLower(strings.TrimSpace(c.Input("type")))
+	cacheKey := optionRequestCacheKey(c)
+	if cacheKey != "" {
+		if cached, ok := optionCache.Load(cacheKey); ok {
+			return c.JSON(cloneOptionRows(cached))
+		}
+	}
+
+	items, err := GetByInput(c, func(key string) string {
+		return c.Input(key)
+	})
+	if err != nil {
+		return c.Error(err)
+	}
+	if cacheKey != "" {
+		optionCache.Store(cacheKey, cloneOptionRows(items))
+	}
+	return c.JSON(items)
+}
+
+func GetByInput(c *server.Context, getInput func(string) string) ([]map[string]any, error) {
+	if getInput == nil {
+		getInput = func(key string) string {
+			return c.Input(key)
+		}
+	}
+	optionType := strings.ToLower(strings.TrimSpace(getInput("type")))
 	if optionType == "" {
 		optionType = "model"
 	}
 
 	switch optionType {
 	case "model":
-		items, err := getModelOptions(c)
-		if err != nil {
-			return c.Error(err)
-		}
-		return c.JSON(items)
+		return GetModelOptionsByInput(c.Context(), getInput)
 	case "service":
-		items, err := getServiceOptions(c)
-		if err != nil {
-			return c.Error(err)
-		}
-		return c.JSON(items)
+		return GetServiceOptionsByInput(c, getInput)
 	default:
-		return c.Error(fmt.Errorf("option.type 不支持: %s", optionType))
+		return nil, fmt.Errorf("option.type 不支持: %s", optionType)
 	}
-}
-
-func getModelOptions(c *server.Context) ([]map[string]any, error) {
-	return GetModelOptionsByInput(c.Context(), func(key string) string {
-		return c.Input(key)
-	})
 }
 
 func GetModelOptionsByInput(ctx context.Context, getInput func(string) string) ([]map[string]any, error) {
@@ -332,10 +358,31 @@ func resolveModelOptionSearchFields(
 	return fields
 }
 
-func getServiceOptions(c *server.Context) ([]map[string]any, error) {
-	return GetServiceOptionsByInput(c, func(key string) string {
-		return c.Input(key)
-	})
+func optionRequestCacheKey(c *server.Context) string {
+	if c == nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		"%s:%s:%d:%s",
+		siteconfig.SiteKeyFromContext(c.Context()),
+		siteconfig.PageFromContext(c.Context()),
+		authctx.OptionalUID(c.Context()),
+		optionOriginalURL(c),
+	)
+}
+
+func optionOriginalURL(c *server.Context) string {
+	if c == nil || c.Raw == nil {
+		return ""
+	}
+	if raw, ok := c.Raw.(interface{ OriginalURL() string }); ok {
+		return raw.OriginalURL()
+	}
+	return c.Path()
+}
+
+func cloneOptionRows(rows []map[string]any) []map[string]any {
+	return util.CloneMapSlice(rows)
 }
 
 func GetServiceOptionsByInput(c *server.Context, getInput func(string) string) ([]map[string]any, error) {

@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -15,53 +17,72 @@ import (
 	"my/package/front/service/siteconfig"
 )
 
+const siteHeader = "X-Dever-Site"
+
 var registerOnce sync.Once
+
+type middlewareSettings struct {
+	authConfig           config.Auth
+	frontConfig          siteconfig.Config
+	publicPaths          []string
+	allowPluginDevAssets bool
+}
 
 func Register() {
 	registerOnce.Do(func() {
-		coremiddleware.UseGlobalFunc(auth())
-		coremiddleware.UseGlobalFunc(apiScopeGuard())
-		coremiddleware.UseGlobalFunc(frontBootstrap())
+		settings := loadMiddlewareSettings()
+		if err := permissionservice.WarmupSites(context.Background(), settings.frontConfig.Sites); err != nil {
+			panic(err)
+		}
+		coremiddleware.UseGlobalFunc(auth(settings))
+		coremiddleware.UseGlobalFunc(apiScopeGuard(settings))
+		coremiddleware.UseGlobalFunc(frontBootstrap(settings))
 	})
 }
 
-func auth() coremiddleware.ContextFunc {
+func loadMiddlewareSettings() middlewareSettings {
 	cfg, err := config.Load("")
 	if err != nil {
 		panic(fmt.Errorf("读取配置失败: %w", err))
-	}
-	if err := deverjwt.Configure(cfg.Auth); err != nil {
-		panic(fmt.Errorf("初始化 JWT 认证失败: %w", err))
 	}
 	frontConfig, err := siteconfig.Load(nil)
 	if err != nil {
 		panic(fmt.Errorf("读取 front 站点配置失败: %w", err))
 	}
-	publicPaths := frontConfig.AllPublicPaths()
-	allowPluginDevAssets := siteconfig.PluginDevEnabled(cfg.FrontSite)
+
+	return middlewareSettings{
+		authConfig:           cfg.Auth,
+		frontConfig:          frontConfig,
+		publicPaths:          frontConfig.AllPublicPaths(),
+		allowPluginDevAssets: siteconfig.PluginDevEnabled(cfg.FrontSite),
+	}
+}
+
+func auth(settings middlewareSettings) coremiddleware.ContextFunc {
+	if err := deverjwt.Configure(settings.authConfig); err != nil {
+		panic(fmt.Errorf("初始化 JWT 认证失败: %w", err))
+	}
 
 	return deverjwt.UseConfigured(deverjwt.Options{
 		Allow: func(c *server.Context) bool {
 			path := strings.TrimSpace(c.Path())
-			_, isStaticSitePath := frontConfig.FindByStaticSitePath(path)
-			return isPluginDevAssetPath(allowPluginDevAssets, path) ||
-				siteconfig.MatchPublicPath(publicPaths, path) ||
+			_, isStaticSitePath := settings.frontConfig.FindByStaticSitePath(path)
+			return isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
+				siteconfig.MatchPublicPath(settings.publicPaths, path) ||
 				isStaticSitePath ||
-				isPublicRouteInfoRequest(frontConfig, c, path)
+				isPublicRouteSchemaRequest(settings.frontConfig, c, path)
 		},
 		AllowMissing: func(*server.Context) bool {
 			return false
 		},
-		PublicPaths: publicPaths,
+		PublicPaths: settings.publicPaths,
 		OnUnauthorized: func(c *server.Context, msg string) error {
 			return abortUnauthorized(c, msg)
 		},
 	})
 }
 
-func frontBootstrap() coremiddleware.ContextFunc {
-	frontConfig := siteconfig.MustLoad()
-
+func frontBootstrap(settings middlewareSettings) coremiddleware.ContextFunc {
 	return func(ctx any) error {
 		c, ok := ctx.(*server.Context)
 		if !ok || c == nil {
@@ -70,7 +91,7 @@ func frontBootstrap() coremiddleware.ContextFunc {
 		path := strings.TrimSpace(c.Path())
 		site, ok := siteconfig.FromContext(c.Context())
 		if !ok {
-			site, ok = frontConfig.FindByAPIRequestPath(path)
+			site, ok = requestSite(settings.frontConfig, c, path)
 		}
 		if !ok {
 			return nil
@@ -79,32 +100,26 @@ func frontBootstrap() coremiddleware.ContextFunc {
 	}
 }
 
-func apiScopeGuard() coremiddleware.ContextFunc {
-	cfg, err := config.Load("")
-	if err != nil {
-		panic(fmt.Errorf("读取配置失败: %w", err))
-	}
-	frontConfig := siteconfig.MustLoad()
-	publicPaths := frontConfig.AllPublicPaths()
-	allowPluginDevAssets := siteconfig.PluginDevEnabled(cfg.FrontSite)
-
+func apiScopeGuard(settings middlewareSettings) coremiddleware.ContextFunc {
 	return func(ctx any) error {
 		c, ok := ctx.(*server.Context)
 		if !ok || c == nil {
 			return nil
 		}
 		path := strings.TrimSpace(c.Path())
-		_, isStaticSitePath := frontConfig.FindByStaticSitePath(path)
-		if isPluginDevAssetPath(allowPluginDevAssets, path) || isStaticSitePath {
+		_, isStaticSitePath := settings.frontConfig.FindByStaticSitePath(path)
+		if isPluginDevAssetPath(settings.allowPluginDevAssets, path) || isStaticSitePath {
 			return nil
 		}
-		if siteconfig.MatchPublicPath(publicPaths, path) ||
-			isPublicRouteInfoRequest(frontConfig, c, path) {
-			attachRequestSite(c, frontConfig, path)
+		if siteconfig.MatchPublicPath(settings.publicPaths, path) ||
+			isPublicRouteSchemaRequest(settings.frontConfig, c, path) {
+			if site, ok := requestSite(settings.frontConfig, c, path); ok {
+				c.SetContext(siteconfig.WithSite(c.Context(), site))
+			}
 			return nil
 		}
 
-		site, ok := frontConfig.FindByAPIRequestPath(path)
+		site, ok := requestSite(settings.frontConfig, c, path)
 		if !ok {
 			return nil
 		}
@@ -116,10 +131,26 @@ func apiScopeGuard() coremiddleware.ContextFunc {
 	}
 }
 
-func attachRequestSite(c *server.Context, frontConfig siteconfig.Config, path string) {
-	if site, ok := frontConfig.FindByRequestPath(path); ok {
-		c.SetContext(siteconfig.WithSite(c.Context(), site))
+func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) (siteconfig.Site, bool) {
+	if c != nil {
+		if site, ok := siteconfig.FromContext(c.Context()); ok {
+			return site, true
+		}
+		if siteconfig.IsFrontRuntimeAPIPath(path) {
+			if siteKey := requestSiteKey(c); siteKey != "" {
+				return frontConfig.FindBySiteKey(siteKey)
+			}
+		}
 	}
+	return frontConfig.FindByAPIRequestPath(path)
+}
+
+func requestSiteKey(c *server.Context) string {
+	siteKey := strings.TrimSpace(c.Header(siteHeader))
+	if siteKey == "" {
+		siteKey = claimString(deverjwt.Claims(c.Context())["site"])
+	}
+	return siteKey
 }
 
 func tokenAllowsSite(c *server.Context, site siteconfig.Site) bool {
@@ -152,15 +183,61 @@ func isPluginDevAssetPath(enabled bool, path string) bool {
 	return enabled && siteconfig.IsPluginDevProxyPath(path)
 }
 
-func isPublicRouteInfoRequest(frontConfig siteconfig.Config, c *server.Context, requestPath string) bool {
-	site, ok := frontConfig.FindByAPIRequestPath(requestPath)
+func isPublicRouteSchemaRequest(frontConfig siteconfig.Config, c *server.Context, requestPath string) bool {
+	site, ok := requestSite(frontConfig, c, requestPath)
 	if !ok {
 		return false
 	}
-	if cleanRequestPath(requestPath) != cleanRequestPath(site.APIPrefix()+"/route/info") {
+	if isFrontRouteEndpoint(requestPath, site, "route/info") {
+		return normalizePublicPagePath(c.Query("path")) == site.SystemPagePath("login")
+	}
+	if isFrontRouteEndpoint(requestPath, site, "route/batch_info") {
+		return isPublicBatchInfoRequest(c, site)
+	}
+	return false
+}
+
+func isFrontRouteEndpoint(requestPath string, site siteconfig.Site, endpoint string) bool {
+	requestPath = cleanRequestPath(requestPath)
+	if siteconfig.IsFrontRuntimeAPIPath(requestPath) {
+		return requestPath == siteconfig.FrontRuntimeAPIPath(endpoint)
+	}
+	return requestPath == cleanRequestPath(site.APIPrefix()+"/"+endpoint)
+}
+
+func isPublicBatchInfoRequest(c *server.Context, site siteconfig.Site) bool {
+	body, ok := requestBody(c)
+	if !ok || len(body) == 0 {
 		return false
 	}
-	return normalizePublicPagePath(c.Query("path")) == site.SystemPagePath("login")
+
+	var request struct {
+		Paths []struct {
+			Path string `json:"path"`
+		} `json:"paths"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || len(request.Paths) == 0 {
+		return false
+	}
+
+	loginPath := site.SystemPagePath("login")
+	for _, item := range request.Paths {
+		if normalizePublicPagePath(item.Path) != loginPath {
+			return false
+		}
+	}
+	return true
+}
+
+func requestBody(c *server.Context) ([]byte, bool) {
+	if c == nil || c.Raw == nil {
+		return nil, false
+	}
+	raw, ok := c.Raw.(interface{ Body() []byte })
+	if !ok {
+		return nil, false
+	}
+	return raw.Body(), true
 }
 
 func normalizePublicPagePath(value string) string {

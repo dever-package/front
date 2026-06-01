@@ -171,6 +171,7 @@ const compatExports: Record<string, string[]> = {
     "REQUEST_ERROR_EVENT",
     "FRONT_RUNTIME_REFRESH_EVENT",
     "joinFrontApi",
+    "joinSiteApi",
     "resolveRequestUrl",
     "resolveAssetUrl",
     "buildRuntimeRequestHeaders",
