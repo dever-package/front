@@ -24,13 +24,21 @@ type menuNode struct {
 
 func GetMainInfo(c *server.Context) error {
 	includePermissions := shouldIncludePermissionContext(c.Input("include"), c.Input("permissions"))
+	payload, err := LoadMainInfo(c, includePermissions)
+	if err != nil {
+		return c.Error(err)
+	}
+	return c.JSON(payload)
+}
+
+func LoadMainInfo(c *server.Context, includePermissions bool) (map[string]any, error) {
 	payload, err := mainInfoCache.GetOrSet(mainInfoCacheKey(c.Context(), includePermissions), func() (map[string]any, error) {
 		return buildMainInfoPayload(c, includePermissions)
 	})
 	if err != nil {
-		return c.Error(err)
+		return nil, err
 	}
-	return c.JSON(cloneMainInfoPayload(payload))
+	return cloneMainInfoPayload(payload), nil
 }
 
 func buildMainInfoPayload(c *server.Context, includePermissions bool) (map[string]any, error) {

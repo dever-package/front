@@ -66,10 +66,9 @@ func auth(settings middlewareSettings) coremiddleware.ContextFunc {
 	return deverjwt.UseConfigured(deverjwt.Options{
 		Allow: func(c *server.Context) bool {
 			path := strings.TrimSpace(c.Path())
-			_, isStaticSitePath := settings.frontConfig.FindByStaticSitePath(path)
 			return isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
 				siteconfig.MatchPublicPath(settings.publicPaths, path) ||
-				isStaticSitePath ||
+				isStaticSiteRequest(settings.frontConfig, c, path) ||
 				isPublicRouteSchemaRequest(settings.frontConfig, c, path)
 		},
 		AllowMissing: func(*server.Context) bool {
@@ -107,8 +106,8 @@ func apiScopeGuard(settings middlewareSettings) coremiddleware.ContextFunc {
 			return nil
 		}
 		path := strings.TrimSpace(c.Path())
-		_, isStaticSitePath := settings.frontConfig.FindByStaticSitePath(path)
-		if isPluginDevAssetPath(settings.allowPluginDevAssets, path) || isStaticSitePath {
+		if isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
+			isStaticSiteRequest(settings.frontConfig, c, path) {
 			return nil
 		}
 		if siteconfig.MatchPublicPath(settings.publicPaths, path) ||
@@ -136,13 +135,35 @@ func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) 
 		if site, ok := siteconfig.FromContext(c.Context()); ok {
 			return site, true
 		}
+		if site, ok := requestSiteFromHeader(frontConfig, c); ok {
+			if siteconfig.IsFrontRuntimeAPIPath(path) || requestPathHasPrefix(path, site.APIPrefix()) {
+				return site, true
+			}
+		}
 		if siteconfig.IsFrontRuntimeAPIPath(path) {
 			if siteKey := requestSiteKey(c); siteKey != "" {
 				return frontConfig.FindBySiteKey(siteKey)
 			}
 		}
 	}
-	return frontConfig.FindByAPIRequestPath(path)
+	if hasSiteContextHeader(c) {
+		return frontConfig.FindByAPIPrefix(path)
+	}
+	if site, ok := frontConfig.FindByAPIRequestPath(path); ok {
+		return site, true
+	}
+	return frontConfig.FindBySitePath(path)
+}
+
+func requestSiteFromHeader(frontConfig siteconfig.Config, c *server.Context) (siteconfig.Site, bool) {
+	if c == nil {
+		return siteconfig.Site{}, false
+	}
+	siteKey := strings.TrimSpace(c.Header(siteHeader))
+	if siteKey == "" {
+		return siteconfig.Site{}, false
+	}
+	return frontConfig.FindBySiteKey(siteKey)
 }
 
 func requestSiteKey(c *server.Context) string {
@@ -181,6 +202,24 @@ func claimString(value any) string {
 
 func isPluginDevAssetPath(enabled bool, path string) bool {
 	return enabled && siteconfig.IsPluginDevProxyPath(path)
+}
+
+func isStaticSiteRequest(frontConfig siteconfig.Config, c *server.Context, path string) bool {
+	if hasSiteContextHeader(c) {
+		return false
+	}
+	_, ok := frontConfig.FindBySitePath(path)
+	return ok
+}
+
+func hasSiteContextHeader(c *server.Context) bool {
+	return c != nil && strings.TrimSpace(c.Header(siteHeader)) != ""
+}
+
+func requestPathHasPrefix(requestPath, prefix string) bool {
+	requestPath = cleanRequestPath(requestPath)
+	prefix = cleanRequestPath(prefix)
+	return requestPath == prefix || strings.HasPrefix(requestPath, prefix+"/")
 }
 
 func isPublicRouteSchemaRequest(frontConfig siteconfig.Config, c *server.Context, requestPath string) bool {

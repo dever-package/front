@@ -1,16 +1,39 @@
 package api
 
 import (
+	"context"
+
 	"github.com/shemic/dever/server"
 
 	operationlog "my/package/front/service/operationlog"
+	pageservice "my/package/front/service/page"
 	permissionservice "my/package/front/service/permission"
+	"my/package/front/service/siteconfig"
 )
 
 type Main struct{}
 
 func (Main) GetInfo(c *server.Context) error {
 	return permissionservice.GetMainInfo(c)
+}
+
+func (Main) GetBootstrap(c *server.Context) error {
+	mainInfo, err := permissionservice.LoadMainInfo(c, false)
+	if err != nil {
+		return c.Error(err)
+	}
+
+	mainPath := mainSchemaPath(c.Context())
+	schema, err := pageservice.BuildInfo(c, mainPath)
+	if err != nil {
+		return c.Error(err)
+	}
+
+	return c.JSON(map[string]any{
+		"main":   mainInfo,
+		"path":   mainPath,
+		"schema": schema,
+	})
 }
 
 func (Main) PostSync(c *server.Context) error {
@@ -23,4 +46,11 @@ func (Main) PostSync(c *server.Context) error {
 		})
 	}
 	return err
+}
+
+func mainSchemaPath(ctx context.Context) string {
+	if site, ok := siteconfig.FromContext(ctx); ok {
+		return site.SystemPagePath("main")
+	}
+	return siteconfig.Site{API: siteconfig.DefaultAPI}.SystemPagePath("main")
 }

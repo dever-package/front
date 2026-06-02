@@ -3,6 +3,7 @@ package page
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"path/filepath"
@@ -15,6 +16,12 @@ import (
 )
 
 var embeddedContentCache util.ConcurrentMap[string, []byte]
+
+var (
+	errEmptyPagePath   = errors.New("页面路径不能为空")
+	errInvalidPagePath = errors.New("页面路径不合法")
+	errPagePathFormat  = errors.New("页面路径格式错误")
+)
 
 type ContentSignature struct {
 	checksum uint32
@@ -47,7 +54,7 @@ func ReadContentForSite(siteKey string, pathValue string) ([]byte, error) {
 }
 
 func ReadContentForPage(pageName string, pathValue string) ([]byte, error) {
-	moduleName, fileName, err := splitPagePath(pathValue)
+	moduleName, fileName, err := splitPagePathForPage(pageName, pathValue)
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +82,27 @@ func ReadContentForPage(pageName string, pathValue string) ([]byte, error) {
 	}
 
 	return nil, fmt.Errorf("页面配置不存在")
+}
+
+func splitPagePathForPage(pageName string, pathValue string) (string, string, error) {
+	moduleName, fileName, err := splitPagePath(pathValue)
+	if err == nil {
+		return moduleName, fileName, nil
+	}
+	if !errors.Is(err, errPagePathFormat) || !canUseSiteLocalPagePath(pageName) {
+		return "", "", err
+	}
+
+	fileName, cleanErr := cleanPagePath(pathValue)
+	if cleanErr != nil {
+		return "", "", cleanErr
+	}
+	return pageName, fileName, nil
+}
+
+func canUseSiteLocalPagePath(pageName string) bool {
+	pageName = strings.Trim(strings.TrimSpace(pageName), "/")
+	return pageName != "" && pageName != siteconfig.DefaultPage
 }
 
 func readDiskPageContent(root, moduleName, pageName, fileName string) ([]byte, bool, error) {
@@ -118,25 +146,34 @@ func shouldReadLegacyPageDir(pageName string) bool {
 }
 
 func splitPagePath(pathValue string) (string, string, error) {
+	cleanPath, err := cleanPagePath(pathValue)
+	if err != nil {
+		return "", "", err
+	}
+
+	parts := strings.Split(cleanPath, "/")
+	if len(parts) < 2 {
+		return "", "", errPagePathFormat
+	}
+
+	return parts[0], filepath.Join(parts[1:]...), nil
+}
+
+func cleanPagePath(pathValue string) (string, error) {
 	if pathValue == "" {
-		return "", "", fmt.Errorf("页面路径不能为空")
+		return "", errEmptyPagePath
 	}
 
 	cleanPath := filepath.ToSlash(filepath.Clean(pathValue))
 	cleanPath = strings.Trim(cleanPath, "/")
 	if cleanPath == "." || cleanPath == "" {
-		return "", "", fmt.Errorf("页面路径不能为空")
+		return "", errEmptyPagePath
 	}
 	if strings.HasPrefix(cleanPath, "../") || strings.Contains(cleanPath, "/../") {
-		return "", "", fmt.Errorf("页面路径不合法")
+		return "", errInvalidPagePath
 	}
 
-	parts := strings.Split(cleanPath, "/")
-	if len(parts) < 2 {
-		return "", "", fmt.Errorf("页面路径格式错误")
-	}
-
-	return parts[0], filepath.Join(parts[1:]...), nil
+	return cleanPath, nil
 }
 
 func buildEmbeddedJSONPaths(pageName, fileName string) []string {
