@@ -16,6 +16,7 @@ var pluginDevProxyRoutes = []string{
 	"/.vite/*",
 	"/vite/*",
 	"/node_modules/.vite/*",
+	"/tmp/dever/compiler/front/*",
 	"/package/*",
 	"/module/*",
 	"/backend/package/*",

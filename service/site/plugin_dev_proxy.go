@@ -54,7 +54,7 @@ func proxyPluginDevRequest(c *server.Context, baseURL string) error {
 
 	resp, err := pluginDevProxyClient.Do(req)
 	if err != nil {
-		return c.Error(err, http.StatusBadGateway)
+		return c.Error(fmt.Errorf("前端插件源码编译服务不可用，请重启 dever run: %w", err), http.StatusBadGateway)
 	}
 	defer resp.Body.Close()
 

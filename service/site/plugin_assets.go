@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -119,9 +120,9 @@ func openSourcePluginAsset(c *server.Context) error {
 		entry := filepath.Join(sourceRoot, pluginSourceEntry)
 		runtime := fmt.Sprintf(
 			"import plugin from %q;\nwindow.DeverFront?.registerPlugin(plugin);\n",
-			viteFSURL(entry),
+			versionedViteSourceURL(entry),
 		)
-		raw.Set("Cache-Control", "no-cache")
+		raw.Set("Cache-Control", "no-store")
 		raw.Set("Content-Type", "application/javascript; charset=utf-8")
 		return raw.SendString(runtime)
 	default:
@@ -142,7 +143,7 @@ func sendSourcePluginManifest(raw *fiber.Ctx, pluginName string, sourceRoot stri
 	if err != nil {
 		return err
 	}
-	raw.Set("Cache-Control", "no-cache")
+	raw.Set("Cache-Control", "no-store")
 	raw.Set("Content-Type", "application/json; charset=utf-8")
 	return raw.Send(content)
 }
@@ -602,6 +603,33 @@ func viteFSURL(file string) string {
 		absolute = file
 	}
 	return "/@fs/" + filepath.ToSlash(absolute)
+}
+
+func viteSourceURL(file string) string {
+	file = strings.TrimSpace(file)
+	if file == "" || filepath.IsAbs(file) {
+		return viteFSURL(file)
+	}
+
+	cleaned := filepath.ToSlash(filepath.Clean(file))
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return viteFSURL(file)
+	}
+	return "/" + cleaned
+}
+
+func versionedViteSourceURL(file string) string {
+	url := viteSourceURL(file)
+	info, err := os.Stat(file)
+	if err != nil || info.IsDir() {
+		return url
+	}
+
+	separator := "?"
+	if strings.Contains(url, "?") {
+		separator = "&"
+	}
+	return url + separator + "v=" + strconv.FormatInt(info.ModTime().UnixNano(), 36)
 }
 
 func uniquePaths(items []string) []string {
