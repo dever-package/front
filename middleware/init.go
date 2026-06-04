@@ -13,6 +13,7 @@ import (
 	coremiddleware "github.com/shemic/dever/middleware"
 	"github.com/shemic/dever/server"
 
+	cronservice "my/package/front/service/cron"
 	permissionservice "my/package/front/service/permission"
 	"my/package/front/service/siteconfig"
 )
@@ -34,6 +35,7 @@ func Register() {
 		if err := permissionservice.WarmupSites(context.Background(), settings.frontConfig.Sites); err != nil {
 			panic(err)
 		}
+		cronservice.Start()
 		coremiddleware.UseGlobalFunc(auth(settings))
 		coremiddleware.UseGlobalFunc(apiScopeGuard(settings))
 		coremiddleware.UseGlobalFunc(frontBootstrap(settings))

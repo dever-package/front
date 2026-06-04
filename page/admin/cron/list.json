@@ -1,0 +1,359 @@
+{
+  "page": {
+    "name": "计划任务",
+    "icon": "calendar-clock",
+    "parent": "system-settings",
+    "sort": 7
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "toolbar-row": {
+            "type": "row",
+            "className": "flex-wrap items-center gap-3"
+          },
+          "table-row": {
+            "type": "container",
+            "className": "overflow-hidden rounded-md border bg-background"
+          },
+          "feedback-shell": {
+            "type": "container"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "value": "page",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "运行记录",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/cron/run/list",
+          "withBack": true
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "新增任务",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "default",
+          "size": "sm"
+        },
+        "action": {
+          "click": {
+            "type": "modal",
+            "key": "dialog.create",
+            "value": true
+          }
+        }
+      }
+    ],
+    "toolbar-row": [
+      {
+        "type": "form-input",
+        "placeholder": "搜索名称、规则或内部业务...",
+        "value": "search.keyword",
+        "mode": "search"
+      },
+      {
+        "type": "form-select",
+        "placeholder": "状态",
+        "value": "search.status",
+        "mode": "search"
+      },
+      {
+        "type": "show-button",
+        "name": "搜索",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "searchSubmit": true,
+          "loadingText": "搜索中..."
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "重置",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/cron/list"
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "table.list",
+        "meta": {
+          "pagePath": "data.table.page",
+          "pageSizePath": "data.table.pageSize",
+          "totalPath": "data.table.total",
+          "remote": true,
+          "externalPagination": true,
+          "rowKey": "id",
+          "columns": [
+            {
+              "name": "ID",
+              "value": "id",
+              "type": "show-base"
+            },
+            {
+              "value": "name",
+              "type": "show-base"
+            },
+            {
+              "name": "触发规则",
+              "value": "schedule_label",
+              "type": "show-base"
+            },
+            {
+              "name": "内部业务",
+              "value": "use_label",
+              "type": "show-base"
+            },
+            {
+              "value": "status",
+              "type": "form-switch",
+              "action": {
+                "change": {
+                  "type": "save",
+                  "path": "front/cron/update",
+                  "params": {
+                    "_partial": true,
+                    "id": "$row.id",
+                    "status": "$value"
+                  }
+                }
+              },
+              "meta": {
+                "trueValue": 1,
+                "falseValue": 0
+              }
+            },
+            {
+              "value": "next_run_at",
+              "type": "show-date",
+              "meta": {
+                "format": "datetime-second"
+              }
+            },
+            {
+              "value": "last_run_at",
+              "type": "show-date",
+              "meta": {
+                "format": "datetime-second"
+              }
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "play",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "手动执行",
+                    "successMessage": "已触发手动执行，可在运行记录中查看结果",
+                    "errorMessage": "手动执行失败",
+                    "confirm": {
+                      "title": "确认手动执行",
+                      "description": "确认立即执行当前计划任务吗？执行结果会写入运行记录。",
+                      "confirmText": "确认执行",
+                      "cancelText": "取消"
+                    },
+                    "action": {
+                      "click": {
+                        "type": "save",
+                        "path": "front/cron/update",
+                        "params": {
+                          "_partial": true,
+                          "id": "$row.id",
+                          "updated_at": "$row.updated_at"
+                        },
+                        "after": {
+                          "type": "service",
+                          "use": "front.cron.CronAction.RunNow"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "icon": "list-checks",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "查看运行记录",
+                    "to": "/front/cron/run/list",
+                    "searchParam": "cron_id",
+                    "searchField": "id",
+                    "withBack": true
+                  },
+                  {
+                    "icon": "square-pen",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "编辑计划任务",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.editCronId",
+                          "value": "$row.id"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.open",
+                          "value": true
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "icon": "trash-2",
+                    "variant": "outline",
+                    "size": "xs",
+                    "description": "删除计划任务",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.deleteCron",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "confirm.delete",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-page"
+      }
+    ],
+    "feedback-shell": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.open",
+          "pageRoute": "/front/cron/update",
+          "title": "编辑计划任务",
+          "description": "计划任务只负责按时间触发已注册的内部业务。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "id": "data.actionTarget.editCronId"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.create",
+          "pageRoute": "/front/cron/update",
+          "title": "新增计划任务",
+          "description": "新增后会自动计算下一次运行时间。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-confirm",
+        "name": "删除计划任务",
+        "info": "确认删除当前计划任务吗？对应运行记录会一并删除。",
+        "meta": {
+          "stateKey": "confirm.delete"
+        },
+        "action": {
+          "confirm": {
+            "type": "delete",
+            "params": "actionTarget.deleteCron"
+          }
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "title": "计划任务",
+      "description": "通过简单触发规则定时运行受控内部业务，适合团队流程、角色运行和其他后台任务。"
+    },
+    "search": {
+      "keyword": "",
+      "status": ""
+    },
+    "table": {
+      "page": 1,
+      "pageSize": 10,
+      "total": 0,
+      "searchFields": [
+        "name",
+        "schedule_mode",
+        "spec",
+        "use"
+      ],
+      "filterFields": [
+        {
+          "field": "status",
+          "type": "exact"
+        }
+      ],
+      "order": "main.id desc"
+    },
+    "actionTarget": {
+      "editCronId": "",
+      "deleteCron": {}
+    }
+  },
+  "state": {
+    "dialog": {
+      "open": false,
+      "create": false
+    },
+    "confirm": {
+      "delete": false
+    }
+  },
+  "action": {}
+}

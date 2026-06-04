@@ -1,0 +1,251 @@
+{
+  "page": {
+    "name": "执行参数",
+    "parent": "front/cron/update",
+    "type": 2,
+    "sort": 9
+  },
+  "layout": {
+    "type": "container",
+    "className": "rounded-md border bg-background",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4 border-b px-4 py-3",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "table-row": {
+        "type": "container",
+        "className": "overflow-hidden"
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "value": "page",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "添加参数",
+        "meta": {
+          "variant": "outline",
+          "size": "sm"
+        },
+        "action": {
+          "click": [
+            {
+              "type": "state",
+              "key": "cronParamIndex",
+              "value": -1
+            },
+            {
+              "type": "state",
+              "key": "cronParamForm",
+              "value": {
+                "param_key": "",
+                "param_value": "",
+                "status": 1,
+                "sort": 100
+              }
+            },
+            {
+              "type": "modal",
+              "key": "dialog.cronParam",
+              "value": true
+            }
+          ]
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "parent.data.form.params",
+        "meta": {
+          "rowKey": "id",
+          "columns": [
+            {
+              "name": "参数名",
+              "value": "param_key",
+              "type": "show-base"
+            },
+            {
+              "name": "参数值",
+              "value": "param_value",
+              "type": "show-base"
+            },
+            {
+              "name": "启用",
+              "value": "status",
+              "type": "form-switch",
+              "action": {
+                "change": {
+                  "type": "array",
+                  "key": "parent.data.form.params",
+                  "op": "patch",
+                  "index": "$rowIndex",
+                  "value": {
+                    "status": "$value"
+                  }
+                }
+              },
+              "meta": {
+                "trueValue": 1,
+                "falseValue": 0
+              }
+            },
+            {
+              "name": "排序",
+              "value": "sort",
+              "type": "show-base",
+              "editor": "form-number",
+              "trigger": "doubleClick",
+              "action": {
+                "change": {
+                  "type": "array",
+                  "key": "parent.data.form.params",
+                  "op": "patch",
+                  "index": "$rowIndex",
+                  "value": {
+                    "sort": "$value"
+                  }
+                }
+              },
+              "meta": {
+                "controlClassName": "w-24"
+              }
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "square-pen",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "编辑参数",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "state",
+                          "key": "cronParamIndex",
+                          "value": "$rowIndex"
+                        },
+                        {
+                          "type": "state",
+                          "key": "cronParamForm",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.cronParam",
+                          "value": true
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "icon": "trash-2",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "删除参数",
+                    "className": "text-destructive hover:text-destructive",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "state",
+                          "key": "deleteParamIndex",
+                          "value": "$rowIndex"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.deleteParam",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.cronParam",
+          "pageRoute": "/front/cron/param/update",
+          "title": "执行参数",
+          "description": "配置当前计划任务传给内部业务的参数。",
+          "size": "lg",
+          "footer": {
+            "confirm": true,
+            "confirmText": "确定"
+          },
+          "pageDataPatches": {
+            "form": "state.cronParamForm"
+          }
+        },
+        "action": {
+          "submit": {
+            "type": "array",
+            "key": "parent.data.form.params",
+            "op": "upsert",
+            "index": "state.cronParamIndex",
+            "value": "$modalForm"
+          }
+        }
+      },
+      {
+        "type": "feedback-confirm",
+        "name": "删除参数",
+        "info": "确认删除这一条执行参数吗？删除后当前行内容将被移除。",
+        "meta": {
+          "stateKey": "dialog.deleteParam",
+          "successMessage": "执行参数已删除"
+        },
+        "action": {
+          "confirm": {
+            "type": "array",
+            "key": "parent.data.form.params",
+            "op": "remove",
+            "index": "state.deleteParamIndex"
+          }
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "description": "参数会在保存后生成执行快照。数字、true/false、JSON 对象或数组会自动转换。"
+    }
+  },
+  "state": {
+    "cronParamIndex": -1,
+    "deleteParamIndex": -1,
+    "cronParamForm": {
+      "param_key": "",
+      "param_value": "",
+      "status": 1,
+      "sort": 100
+    },
+    "dialog": {
+      "cronParam": false,
+      "deleteParam": false
+    }
+  },
+  "action": {}
+}

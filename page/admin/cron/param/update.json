@@ -1,0 +1,69 @@
+{
+  "page": {
+    "name": "计划任务参数",
+    "parent": "front/cron/update",
+    "type": 2,
+    "sort": 8
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "例如：team_id、flow_id、input",
+        "value": "form.param_key",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "参数名不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-textarea",
+        "placeholder": "例如：1 或 {\"topic\":\"示例\"}",
+        "value": "form.param_value",
+        "mode": "form",
+        "info": "数字、true/false、JSON 对象或数组会自动转换；其它内容按文本传入。",
+        "meta": {
+          "formLayout": "horizontal",
+          "rows": 4
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "id": 0,
+      "cron_id": 0,
+      "param_key": "",
+      "param_value": "",
+      "sort": 100
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form"
+    }
+  }
+}

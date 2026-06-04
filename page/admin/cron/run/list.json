@@ -1,0 +1,392 @@
+{
+  "page": {
+    "name": "计划任务运行记录",
+    "parent": "front/cron/list",
+    "type": 2,
+    "sort": 20
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "toolbar-row": {
+            "type": "row",
+            "className": "flex-wrap items-center gap-3"
+          },
+          "table-row": {
+            "type": "container",
+            "className": "overflow-hidden rounded-md border bg-background"
+          },
+          "feedback-shell": {
+            "type": "container"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "value": "page",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "返回上一页",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "back": true
+        }
+      }
+    ],
+    "toolbar-row": [
+      {
+        "type": "form-input",
+        "placeholder": "搜索 RequestID...",
+        "value": "search.keyword",
+        "mode": "search"
+      },
+      {
+        "type": "form-select",
+        "placeholder": "计划任务",
+        "value": "search.cron_id",
+        "mode": "search",
+        "option": "/front/route/option?type=model&use=front.NewCronModel&labelField=name&searchFields=name&pageSize=20"
+      },
+      {
+        "type": "form-select",
+        "placeholder": "状态",
+        "value": "search.status",
+        "mode": "search"
+      },
+      {
+        "type": "form-date",
+        "placeholder": "计划时间",
+        "value": "search.scheduled_at_start",
+        "mode": "search",
+        "meta": {
+          "searchWidth": "select",
+          "range": true,
+          "endValue": "search.scheduled_at_end",
+          "inputType": "datetime-local"
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "搜索",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "searchSubmit": true,
+          "loadingText": "搜索中..."
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "重置",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/cron/run/list"
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "table.list",
+        "meta": {
+          "pagePath": "data.table.page",
+          "pageSizePath": "data.table.pageSize",
+          "totalPath": "data.table.total",
+          "remote": true,
+          "externalPagination": true,
+          "rowKey": "id",
+          "columns": [
+            {
+              "name": "ID",
+              "value": "id",
+              "type": "show-base"
+            },
+            {
+              "value": "cron.name",
+              "name": "计划任务",
+              "type": "show-base"
+            },
+            {
+              "value": "request_id",
+              "type": "show-base"
+            },
+            {
+              "value": "status",
+              "type": "show-tag"
+            },
+            {
+              "value": "scheduled_at",
+              "type": "show-date",
+              "meta": {
+                "format": "datetime-second"
+              }
+            },
+            {
+              "value": "started_at",
+              "type": "show-date",
+              "meta": {
+                "format": "datetime-second"
+              }
+            },
+            {
+              "value": "finished_at",
+              "type": "show-date",
+              "meta": {
+                "format": "datetime-second"
+              }
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "eye",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "查看运行详情",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.viewRun",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.view",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-page"
+      }
+    ],
+    "feedback-shell": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.view",
+          "formSection": "detail-section",
+          "title": "运行详情",
+          "description": "查看本次计划任务运行的完整记录。",
+          "size": "xl",
+          "bodyClassName": "max-h-[70vh] overflow-y-auto px-6 py-2"
+        }
+      }
+    ],
+    "detail-section": [
+      {
+        "type": "show-base",
+        "name": "运行记录ID",
+        "value": "actionTarget.viewRun.id",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "计划任务",
+        "value": "actionTarget.viewRun.cron.name",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "请求ID",
+        "value": "actionTarget.viewRun.request_id",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "状态",
+        "value": "actionTarget.viewRun.status",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "计划运行时间",
+        "value": "actionTarget.viewRun.scheduled_at",
+        "mode": "form",
+        "meta": {
+          "format": "datetime-second",
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "开始时间",
+        "value": "actionTarget.viewRun.started_at",
+        "mode": "form",
+        "meta": {
+          "format": "datetime-second",
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "完成时间",
+        "value": "actionTarget.viewRun.finished_at",
+        "mode": "form",
+        "meta": {
+          "format": "datetime-second",
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-base",
+        "name": "创建时间",
+        "value": "actionTarget.viewRun.created_at",
+        "mode": "form",
+        "meta": {
+          "format": "datetime-second",
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "show-text",
+        "name": "错误信息",
+        "value": "actionTarget.viewRun.error_message",
+        "mode": "form",
+        "className": "max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 font-mono text-xs text-foreground",
+        "meta": {
+          "formLayout": "horizontal",
+          "hiddenWhen": [
+            {
+              "path": "actionTarget.viewRun.error_message",
+              "operator": "empty"
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-text",
+        "name": "执行参数",
+        "value": "actionTarget.viewRun.payload_json",
+        "mode": "form",
+        "className": "max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 font-mono text-xs text-foreground",
+        "meta": {
+          "formLayout": "horizontal",
+          "hiddenCondition": "any",
+          "hiddenWhen": [
+            {
+              "path": "actionTarget.viewRun.payload_json",
+              "operator": "empty"
+            },
+            {
+              "path": "actionTarget.viewRun.payload_json",
+              "operator": "equals",
+              "value": "{}"
+            },
+            {
+              "path": "actionTarget.viewRun.payload_json",
+              "operator": "equals",
+              "value": "[]"
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-text",
+        "name": "执行结果",
+        "value": "actionTarget.viewRun.result_json",
+        "mode": "form",
+        "className": "max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-md border bg-muted/30 p-3 font-mono text-xs text-foreground",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "title": "计划任务运行记录",
+      "description": "记录每一次计划任务触发、执行结果和错误信息。"
+    },
+    "search": {
+      "keyword": "",
+      "cron_id": "",
+      "status": "",
+      "scheduled_at_start": "",
+      "scheduled_at_end": ""
+    },
+    "table": {
+      "page": 1,
+      "pageSize": 10,
+      "total": 0,
+      "searchFields": [
+        "request_id"
+      ],
+      "filterFields": [
+        {
+          "field": "cron_id",
+          "type": "exact"
+        },
+        {
+          "field": "status",
+          "type": "exact"
+        },
+        {
+          "field": "scheduled_at",
+          "type": "date-range",
+          "startKey": "scheduled_at_start",
+          "endKey": "scheduled_at_end",
+          "valueType": "datetime"
+        }
+      ],
+      "order": "main.id desc"
+    },
+    "actionTarget": {
+      "viewRun": {}
+    }
+  },
+  "state": {
+    "dialog": {
+      "view": false
+    }
+  },
+  "action": {}
+}
