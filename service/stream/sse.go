@@ -78,6 +78,7 @@ func ServeSSE(c *server.Context, reader Reader, params ReadParams) error {
 	params = NormalizeReadParams(params.RequestID, params.LastID, params.Count, params.Block)
 	ctx := c.Context()
 
+	fiberCtx.Status(fiber.StatusOK)
 	fiberCtx.Set("Content-Type", "text/event-stream; charset=utf-8")
 	fiberCtx.Set("Cache-Control", "no-cache, no-transform")
 	fiberCtx.Set("Connection", "keep-alive")

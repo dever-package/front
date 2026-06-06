@@ -138,9 +138,7 @@ func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) 
 			return site, true
 		}
 		if site, ok := requestSiteFromHeader(frontConfig, c); ok {
-			if siteconfig.IsFrontRuntimeAPIPath(path) || requestPathHasPrefix(path, site.APIPrefix()) {
-				return site, true
-			}
+			return site, true
 		}
 		if siteconfig.IsFrontRuntimeAPIPath(path) {
 			if siteKey := requestSiteKey(c); siteKey != "" {
