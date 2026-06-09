@@ -235,7 +235,9 @@ func resolveModelFormContainer(
 		recordIDFromTemplate = hasRecordID
 	}
 	if !hasRecordID {
-		return mergeCreateFormDefaults(current, form), options, true, nil
+		record := mergeCreateFormDefaults(current, form)
+		record, err := applyFormRecordService(c, current, pathValue, record)
+		return record, options, true, err
 	}
 
 	record, found, err := queryModelRecord(c.Context(), modelName, recordID)
@@ -249,7 +251,38 @@ func resolveModelFormContainer(
 		return nil, options, true, fmt.Errorf("记录不存在")
 	}
 
-	return mergeFormRecord(current, form, record), options, true, nil
+	record = mergeFormRecord(current, form, record)
+	record, err = applyFormRecordService(c, current, pathValue, record)
+	return record, options, true, err
+}
+
+func applyFormRecordService(
+	c *server.Context,
+	current map[string]any,
+	pathValue string,
+	record map[string]any,
+) (map[string]any, error) {
+	serviceName := util.ToStringTrimmed(current["service"])
+	if serviceName == "" || len(record) == 0 {
+		return record, nil
+	}
+
+	result, err := frontcall.Service(c, serviceName, map[string]any{
+		"path":      pathValue,
+		"container": util.CloneMap(current),
+		"record":    record,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if mapped, ok := result.(map[string]any); ok {
+		if normalized, ok := mapped["record"].(map[string]any); ok {
+			return normalized, nil
+		}
+		return mapped, nil
+	}
+	return record, nil
 }
 
 func resolveFormModelName(
@@ -406,7 +439,7 @@ func cleanFormMetaFields(values map[string]any) map[string]any {
 
 func isFormMetaField(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "_model", "_use", "_default", "_defaults", "_fields":
+	case "_model", "_use", "_default", "_defaults", "_fields", "service":
 		return true
 	default:
 		return false

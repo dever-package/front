@@ -18,6 +18,10 @@ func hashPlainPassword(password string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+func HashPlainPassword(password string) string {
+	return hashPlainPassword(password)
+}
+
 func NormalizeModelPasswordFields(modelName string, data map[string]any, columnLookup map[string]string) {
 	for _, passwordColumn := range resolveModelPasswordColumns(modelName, columnLookup) {
 		normalizeModelPasswordColumn(data, passwordColumn)
