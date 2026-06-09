@@ -106,6 +106,8 @@ export const resolvePostLoginTarget = getCompatModule(
 ).resolvePostLoginTarget;
 export const joinFrontApi = getCompatModule("@/lib/request").joinFrontApi;
 export const joinSiteApi = getCompatModule("@/lib/request").joinSiteApi;
+export const buildRuntimeRequestHeaders =
+  getCompatModule("@/lib/request").buildRuntimeRequestHeaders;
 export const loadMainInfo = getCompatModule("@/lib/request").loadMainInfo;
 export const request = getCompatModule("@/lib/request").request;
 export const resetFrontRuntimeCache =
