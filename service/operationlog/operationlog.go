@@ -299,7 +299,7 @@ func sanitizePayload(value any) any {
 func isSensitiveKey(key string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(key))
 	normalized = strings.NewReplacer("_", "", "-", "", ".", "", " ", "").Replace(normalized)
-	for _, keyword := range []string{"password", "token", "secret", "authorization", "accesskey", "secretkey", "credential"} {
+	for _, keyword := range []string{"password", "token", "secret", "authorization", "accesskey", "secretkey", "apikey", "api_key", "credential"} {
 		if strings.Contains(normalized, keyword) {
 			return true
 		}

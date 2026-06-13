@@ -391,8 +391,8 @@ func ResourceName(modelName string) string {
 		return ""
 	}
 	parts := strings.Split(modelName, ".")
-	if len(parts) >= 2 {
-		modelFactory := strings.TrimSpace(parts[1])
+	if len(parts) > 0 {
+		modelFactory := strings.TrimSpace(parts[len(parts)-1])
 		modelFactory = strings.TrimPrefix(modelFactory, "New")
 		modelFactory = strings.TrimSuffix(modelFactory, "Model")
 		if modelFactory != "" {
