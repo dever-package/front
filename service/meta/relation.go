@@ -287,7 +287,7 @@ func SaveRelation(ctx context.Context, ownerID any, record map[string]any, confi
 		if len(columnLookup) == 0 {
 			record["created_at"] = time.Now()
 		}
-		if err := insertRelationRecord(ctx, modelName, relationValue, record); err != nil {
+		if _, err := insertRelationRecord(ctx, modelName, relationValue, record); err != nil {
 			return err
 		}
 	}
@@ -528,15 +528,18 @@ func insertChildrenRelationRows(
 		}
 
 		data := frontrecord.SanitizeRecord(child, columnLookup)
-		delete(data, ownerColumn)
-		delete(data, createdAtColumn)
+		removeChildPersistenceColumns(data, ownerColumn, createdAtColumn)
 		if isEmptyChildRecord(data) {
 			continue
 		}
 
 		data[config.OwnerField] = owner
 		frontrecord.ApplyCreatedAt(data, columnLookup)
-		if err := insertRelationRecord(ctx, modelName, relationValue, data); err != nil {
+		insertID, err := insertRelationRecord(ctx, modelName, relationValue, data)
+		if err != nil {
+			return err
+		}
+		if err := SaveModelRelations(ctx, modelName, insertID, child); err != nil {
 			return err
 		}
 	}
@@ -567,34 +570,49 @@ func upsertChildrenRelationRows(
 
 		data := frontrecord.SanitizeRecord(child, columnLookup)
 		childID := util.ToUint64(data[primaryColumn])
-
-		delete(data, primaryColumn)
-		delete(data, ownerColumn)
-		delete(data, createdAtColumn)
-		delete(data, updatedAtColumn)
-		if isEmptyChildRecord(data) {
-			continue
-		}
-
+		removeChildPersistenceColumns(data, primaryColumn, ownerColumn, createdAtColumn, updatedAtColumn)
 		if childID > 0 {
 			if _, exists := existingByID[childID]; exists {
-				updateRelationRecord(ctx, relationValue, map[string]any{
-					config.OwnerField: owner,
-					primaryColumn:     childID,
-				}, data)
 				keptIDs[childID] = struct{}{}
+				if !isEmptyChildRecord(data) {
+					updateRelationRecord(ctx, relationValue, map[string]any{
+						config.OwnerField: owner,
+						primaryColumn:     childID,
+					}, data)
+				}
+				if err := SaveModelRelations(ctx, modelName, childID, child); err != nil {
+					return err
+				}
 				continue
 			}
 		}
 
+		if isEmptyChildRecord(data) {
+			continue
+		}
+
 		data[config.OwnerField] = owner
 		frontrecord.ApplyCreatedAt(data, columnLookup)
-		if err := insertRelationRecord(ctx, modelName, relationValue, data); err != nil {
+		insertID, err := insertRelationRecord(ctx, modelName, relationValue, data)
+		if err != nil {
+			return err
+		}
+		if err := SaveModelRelations(ctx, modelName, insertID, child); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func removeChildPersistenceColumns(data map[string]any, columns ...string) {
+	for _, column := range columns {
+		column = strings.TrimSpace(column)
+		if column == "" {
+			continue
+		}
+		delete(data, column)
+	}
 }
 
 func updateRelationRecord(ctx context.Context, relationValue RelationModel, filters any, record map[string]any) int64 {
@@ -619,16 +637,16 @@ func insertRelationRecord(
 	modelName string,
 	relationValue RelationModel,
 	record map[string]any,
-) error {
-	err := tryInsertRelationRecord(ctx, relationValue, record)
+) (int64, error) {
+	id, err := tryInsertRelationRecord(ctx, relationValue, record)
 	if err == nil {
-		return nil
+		return id, nil
 	}
 	if !isPrimaryKeyDuplicateError(err) {
-		return err
+		return 0, err
 	}
 	if syncErr := frontrecord.SyncModelPrimarySequence(ctx, modelName); syncErr != nil {
-		return err
+		return 0, err
 	}
 	return tryInsertRelationRecord(ctx, relationValue, record)
 }
@@ -637,14 +655,13 @@ func tryInsertRelationRecord(
 	ctx context.Context,
 	relationValue RelationModel,
 	record map[string]any,
-) (err error) {
+) (result int64, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			err = fmt.Errorf("%v", recovered)
 		}
 	}()
-	relationValue.Insert(ctx, record)
-	return nil
+	return relationValue.Insert(ctx, record), nil
 }
 
 func isPrimaryKeyDuplicateError(err error) bool {

@@ -257,16 +257,6 @@ func extractModelColumnOrder(modelValue any) []string {
 }
 
 func loadModelColumnsFromSchema(modelName string) map[string]string {
-	resourceName := ResourceName(modelName)
-	if resourceName == "" {
-		return nil
-	}
-
-	entries, err := os.ReadDir(filepath.Join("data", "table"))
-	if err != nil {
-		return nil
-	}
-
 	type schemaColumn struct {
 		Name string `json:"name"`
 	}
@@ -274,24 +264,7 @@ func loadModelColumnsFromSchema(modelName string) map[string]string {
 		Columns []schemaColumn `json:"columns"`
 	}
 
-	bestFileName := ""
-	bestRank := -1
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		rank, ok := matchSchemaFileName(name, resourceName)
-		if !ok {
-			continue
-		}
-		if bestRank >= 0 && rank >= bestRank {
-			continue
-		}
-		bestFileName = name
-		bestRank = rank
-	}
-
+	bestFileName := schemaFileNameForModel(modelName)
 	if bestFileName == "" {
 		return nil
 	}
@@ -322,16 +295,6 @@ func loadModelColumnsFromSchema(modelName string) map[string]string {
 }
 
 func loadModelColumnOrderFromSchema(modelName string) []string {
-	resourceName := ResourceName(modelName)
-	if resourceName == "" {
-		return nil
-	}
-
-	entries, err := os.ReadDir(filepath.Join("data", "table"))
-	if err != nil {
-		return nil
-	}
-
 	type schemaColumn struct {
 		Name string `json:"name"`
 	}
@@ -339,24 +302,7 @@ func loadModelColumnOrderFromSchema(modelName string) []string {
 		Columns []schemaColumn `json:"columns"`
 	}
 
-	bestFileName := ""
-	bestRank := -1
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		rank, ok := matchSchemaFileName(name, resourceName)
-		if !ok {
-			continue
-		}
-		if bestRank >= 0 && rank >= bestRank {
-			continue
-		}
-		bestFileName = name
-		bestRank = rank
-	}
-
+	bestFileName := schemaFileNameForModel(modelName)
 	if bestFileName == "" {
 		return nil
 	}
@@ -407,6 +353,92 @@ func ResourceName(modelName string) string {
 		return ""
 	}
 	return util.ToSnake(moduleName)
+}
+
+func schemaFileNameForModel(modelName string) string {
+	resourceNames := schemaResourceNames(modelName)
+	if len(resourceNames) == 0 {
+		return ""
+	}
+
+	entries, err := os.ReadDir(filepath.Join("data", "table"))
+	if err != nil {
+		return ""
+	}
+
+	for _, resourceName := range resourceNames {
+		bestFileName := ""
+		bestRank := -1
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			rank, ok := matchSchemaFileName(name, resourceName)
+			if !ok {
+				continue
+			}
+			if bestRank >= 0 && rank >= bestRank {
+				continue
+			}
+			bestFileName = name
+			bestRank = rank
+		}
+		if bestFileName != "" {
+			return bestFileName
+		}
+	}
+
+	return ""
+}
+
+func schemaResourceNames(modelName string) []string {
+	result := make([]string, 0, 2)
+	if scoped := scopedModelResourceName(modelName); scoped != "" {
+		result = append(result, scoped)
+	}
+	if resource := ResourceName(modelName); resource != "" {
+		for _, existing := range result {
+			if existing == resource {
+				return result
+			}
+		}
+		result = append(result, resource)
+	}
+	return result
+}
+
+func scopedModelResourceName(modelName string) string {
+	modelName = strings.TrimSpace(modelName)
+	if modelName == "" {
+		return ""
+	}
+
+	parts := strings.Split(modelName, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	factory := strings.TrimSpace(parts[len(parts)-1])
+	factory = strings.TrimPrefix(factory, "New")
+	factory = strings.TrimSuffix(factory, "Model")
+	if factory == "" {
+		return ""
+	}
+
+	segments := make([]string, 0, len(parts))
+	for _, part := range parts[:len(parts)-1] {
+		part = util.ToSnake(strings.TrimSpace(part))
+		if part != "" {
+			segments = append(segments, part)
+		}
+	}
+	if len(segments) == 0 {
+		return ""
+	}
+
+	segments = append(segments, util.ToSnake(factory))
+	return strings.Join(segments, "_")
 }
 
 func normalizeColumnKey(name string) string {
