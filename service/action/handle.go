@@ -2,6 +2,8 @@ package action
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/shemic/dever/server"
 
@@ -54,6 +56,7 @@ func PostAction(c *server.Context) error {
 		if !ok {
 			return c.Error("保存参数格式错误")
 		}
+		payload = applyRoutePrimaryKey(c, config, payload)
 
 		failures, err := actionvalidate.Form(c, content, pathValue, payload)
 		if err != nil {
@@ -182,6 +185,45 @@ func normalizeFormPayload(payload any) (map[string]any, bool) {
 	}
 	values, ok := payload.(map[string]any)
 	return values, ok
+}
+
+func applyRoutePrimaryKey(c *server.Context, config frontpage.ActionConfig, payload map[string]any) map[string]any {
+	primaryKey := strings.TrimSpace(frontpage.ActionPrimaryKey(config))
+	if primaryKey == "" {
+		primaryKey = "id"
+	}
+	if value, ok := frontrecord.ReadValue(payload, primaryKey); ok && frontrecord.HasValue(value) {
+		return payload
+	}
+	value, ok := readRoutePrimaryKey(c, primaryKey)
+	if !ok {
+		return payload
+	}
+
+	next := make(map[string]any, len(payload)+1)
+	for key, current := range payload {
+		next[key] = current
+	}
+	next[primaryKey] = value
+	return next
+}
+
+func readRoutePrimaryKey(c *server.Context, primaryKey string) (int64, bool) {
+	keys := []string{primaryKey}
+	if primaryKey != "id" {
+		keys = append(keys, "id")
+	}
+	for _, key := range keys {
+		value := strings.TrimSpace(c.Input(key))
+		if value == "" {
+			continue
+		}
+		number, err := strconv.ParseInt(value, 10, 64)
+		if err == nil && number > 0 {
+			return number, true
+		}
+	}
+	return 0, false
 }
 
 func extractResultID(result map[string]any, primaryKey string) any {
