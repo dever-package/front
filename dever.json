@@ -1,0 +1,48 @@
+{
+  "name": "front",
+  "version": "0.1.0",
+  "description": "Dever front runtime, admin shell, RBAC, upload and system pages",
+  "public": [
+    "/upload/*",
+    "/front/upload/open"
+  ],
+  "sites": {
+    "admin": {
+      "public": [
+        "auth/login"
+      ],
+      "apiRoots": [
+        "main",
+        "route",
+        "upload",
+        "resource",
+        "import",
+        "export"
+      ],
+      "auth": [
+        {
+          "key": "tongyong",
+          "name": "通用",
+          "icon": "layout-dashboard",
+          "type": 1,
+          "sort": 1
+        },
+        {
+          "key": "config",
+          "name": "平台配置",
+          "icon": "settings",
+          "type": 1,
+          "sort": 100
+        },
+        {
+          "key": "system-settings",
+          "name": "系统设置",
+          "icon": "settings",
+          "parent": "config",
+          "type": 1,
+          "sort": 2
+        }
+      ]
+    }
+  }
+}

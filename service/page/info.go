@@ -35,7 +35,17 @@ var parsedSchemaCache = devercache.New[string, schemaCacheEntry](
 )
 
 func init() {
-	runtimecache.Register("front.page", parsedSchemaCache.Invalidate, parsedSchemaCache.Clear)
+	runtimecache.Register("front.page", invalidatePageRuntimeCache, clearPageRuntimeCache)
+}
+
+func invalidatePageRuntimeCache() {
+	parsedSchemaCache.Invalidate()
+	ClearContentCache()
+}
+
+func clearPageRuntimeCache() {
+	parsedSchemaCache.Clear()
+	ClearContentCache()
 }
 
 func GetInfo(c *server.Context, pathValue string) error {

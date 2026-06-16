@@ -193,22 +193,23 @@
         text-align: center;
       }
 
-      .front-boot-logo {
+      .front-boot-screen .front-boot-logo {
         display: flex;
         flex: 0 0 80px;
         width: 80px;
         height: 80px;
         align-items: center;
         justify-content: center;
-        border: 1px solid rgba(226, 232, 240, 0.8);
-        border-radius: 32px;
-        background: rgba(255, 255, 255, 0.92);
-        box-shadow: 0 28px 70px -24px rgba(15, 23, 42, 0.28);
-        animation: frontBootPulse 1.8s ease-in-out infinite;
-        backdrop-filter: blur(8px);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow:
+          0 18px 44px -30px rgba(37, 99, 235, 0.52),
+          inset 0 0 0 1px rgba(148, 163, 184, 0.18);
+        animation: deverInitialBootPulse 1.8s ease-in-out infinite;
+        backdrop-filter: blur(10px);
       }
 
-      .front-boot-logo img {
+      .front-boot-screen .front-boot-logo img {
         display: block;
         width: 40px;
         height: 40px;
@@ -248,27 +249,31 @@
         background: rgba(226, 232, 240, 0.8);
       }
 
-      .front-boot-progress-bar {
+      .front-boot-screen .front-boot-progress-bar {
         width: 96px;
         height: 100%;
         border-radius: 999px;
-        background: #0f172a;
-        animation: frontBootProgress 1.2s ease-in-out infinite;
+        background: #2563eb;
+        animation: deverInitialBootProgress 1.2s ease-in-out infinite;
       }
 
-      @keyframes frontBootPulse {
+      @keyframes deverInitialBootPulse {
         0%,
         100% {
           transform: scale(1);
-          box-shadow: 0 28px 70px -24px rgba(15, 23, 42, 0.28);
+          box-shadow:
+            0 18px 44px -30px rgba(37, 99, 235, 0.52),
+            inset 0 0 0 1px rgba(148, 163, 184, 0.18);
         }
         50% {
           transform: scale(1.04);
-          box-shadow: 0 30px 80px -22px rgba(15, 23, 42, 0.34);
+          box-shadow:
+            0 20px 52px -28px rgba(37, 99, 235, 0.58),
+            inset 0 0 0 1px rgba(96, 165, 250, 0.22);
         }
       }
 
-      @keyframes frontBootProgress {
+      @keyframes deverInitialBootProgress {
         0% {
           transform: translateX(-115%);
         }
@@ -277,8 +282,8 @@
         }
       }
     </style>
-    <script type="module" crossorigin src="/admin/assets/index-XSdDHOxO.js"></script>
-    <link rel="stylesheet" crossorigin href="/admin/assets/style-BROdvT7g.css">
+    <script type="module" crossorigin src="/admin/assets/index-C_hj180l.js"></script>
+    <link rel="stylesheet" crossorigin href="/admin/assets/style-BrXKrLFO.css">
   </head>
 
   <body>

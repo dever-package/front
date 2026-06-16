@@ -244,7 +244,7 @@ func visibleAuthRow(snapshot *accessSnapshot, row map[string]any) bool {
 	if snapshot == nil {
 		return false
 	}
-	if len(snapshot.allowed) == 0 {
+	if hasDefaultRole(snapshot.roleIDs) {
 		return true
 	}
 	_, ok := snapshot.allowed[authRowID(row)]

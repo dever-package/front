@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"net/url"
+	"strings"
 
 	"github.com/shemic/dever/server"
 
@@ -131,11 +133,10 @@ func isSiteSystemPagePath(site siteconfig.Site, pathValue string) bool {
 }
 
 func (Route) GetOption(c *server.Context) error {
-	pathValue := frontpagepath.NormalizePath(c.Input("path"))
+	pathValue, pathQuery := normalizeOptionPathInput(c.Input("path"))
 	if pathValue != "" {
-		if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, func(key string) string {
-			return c.Input(key)
-		}); err != nil {
+		lookup := requestInputLookup(pathQuery, c.Input)
+		if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
 			return permissionDeniedPayload(c, err)
 		}
 	}
@@ -154,9 +155,10 @@ func (Route) PostBatchOption(c *server.Context) error {
 
 	results := make([]batchResult, 0, len(request.Options))
 	for _, params := range request.Options {
-		pathValue := frontpagepath.NormalizePath(params["path"])
+		pathValue, optionParams := normalizeOptionParams(params)
+		lookup := mapStringLookup(optionParams)
 		if pathValue != "" {
-			if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, mapStringLookup(params)); err != nil {
+			if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
 				results = append(results, batchResult{
 					Code:    403,
 					Path:    pathValue,
@@ -166,7 +168,7 @@ func (Route) PostBatchOption(c *server.Context) error {
 			}
 		}
 
-		items, err := optionservice.GetByInput(c, mapStringLookup(params))
+		items, err := optionservice.GetByInput(c, lookup)
 		if err != nil {
 			results = append(results, batchResult{
 				Code:    routeInfoErrorCode(err),
@@ -234,4 +236,80 @@ func mapStringLookup(values map[string]string) permissionservice.InputLookup {
 	return func(key string) string {
 		return values[key]
 	}
+}
+
+func requestInputLookup(pathQuery map[string]string, fallback func(string, ...string) string) permissionservice.InputLookup {
+	return func(key string) string {
+		if fallback != nil {
+			if value := strings.TrimSpace(fallback(key)); value != "" {
+				return value
+			}
+		}
+		return pathQuery[key]
+	}
+}
+
+func normalizeOptionParams(params map[string]string) (string, map[string]string) {
+	pathValue, pathQuery := normalizeOptionPathInput(params["path"])
+	if len(pathQuery) == 0 && pathValue == strings.TrimSpace(params["path"]) {
+		return pathValue, params
+	}
+
+	result := make(map[string]string, len(params)+len(pathQuery))
+	for key, value := range params {
+		if key == "path" {
+			continue
+		}
+		result[key] = value
+	}
+	for key, value := range pathQuery {
+		if strings.TrimSpace(result[key]) == "" {
+			result[key] = value
+		}
+	}
+	if pathValue != "" {
+		result["path"] = pathValue
+	}
+	return pathValue, result
+}
+
+func normalizeOptionPathInput(rawPath string) (string, map[string]string) {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" {
+		return "", nil
+	}
+
+	pathValue := rawPath
+	rawQuery := ""
+	if index := strings.IndexAny(rawPath, "?#"); index >= 0 {
+		pathValue = rawPath[:index]
+		if rawPath[index] == '?' {
+			rawQuery = rawPath[index+1:]
+			if hashIndex := strings.Index(rawQuery, "#"); hashIndex >= 0 {
+				rawQuery = rawQuery[:hashIndex]
+			}
+		}
+	}
+
+	return frontpagepath.NormalizePath(pathValue), parseOptionPathQuery(rawQuery)
+}
+
+func parseOptionPathQuery(rawQuery string) map[string]string {
+	if strings.TrimSpace(rawQuery) == "" {
+		return nil
+	}
+
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil || len(values) == 0 {
+		return nil
+	}
+
+	result := make(map[string]string, len(values))
+	for key, items := range values {
+		if key == "" || len(items) == 0 {
+			continue
+		}
+		result[key] = items[0]
+	}
+	return result
 }

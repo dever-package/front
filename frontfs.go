@@ -2,6 +2,11 @@ package front
 
 import "embed"
 
+// ManifestFS 内嵌 front 组件声明。
+//
+//go:embed dever.json
+var ManifestFS embed.FS
+
 // PageFS 内嵌 front 模块自身的页面配置，避免运行时依赖 module/front 目录。
 //
 //go:embed page/*/*.json page/*/*/*.json page/*/*/*/*.json

@@ -32,14 +32,8 @@ func PostAction(c *server.Context) error {
 	}
 
 	if config.Type == "delete" {
-		protected, err := permissionservice.CheckActionAccess(c.Context(), requestPath, config.Key)
-		if err != nil {
+		if err := permissionservice.EnsureActionAccess(c.Context(), requestPath, config.Key); err != nil {
 			return respondPermissionDenied(c, err)
-		}
-		if !protected {
-			if err := ensurePageActionAccess(c, pathValue, request.Payload); err != nil {
-				return respondPermissionDenied(c, err)
-			}
 		}
 	} else {
 		if err := ensurePageActionAccess(c, pathValue, request.Payload); err != nil {

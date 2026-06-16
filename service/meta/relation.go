@@ -13,7 +13,7 @@ import (
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	frontoption "my/package/front/service/option"
+	optionseed "my/package/front/service/internal/optionseed"
 	frontrecord "my/package/front/service/record"
 	"my/package/front/service/siteconfig"
 )
@@ -727,7 +727,7 @@ func loadRelationTargets(ctx context.Context, config Relation, targetIDs []any) 
 
 	rows := modelValue.SelectMap(ctx, map[string]any{config.OptionValueField: targetIDs})
 	if len(rows) == 0 {
-		rows = frontoption.SeedRowsByField(config.Option, config.OptionValueField, targetIDs)
+		rows = optionseed.RowsByField(config.Option, config.OptionValueField, targetIDs)
 		if len(rows) == 0 {
 			return nil
 		}
@@ -743,7 +743,7 @@ func loadRelationTargets(ctx context.Context, config Relation, targetIDs []any) 
 	}
 
 	if len(result) < len(targetIDs) {
-		seedRows := frontoption.SeedRowsByField(config.Option, config.OptionValueField, targetIDs)
+		seedRows := optionseed.RowsByField(config.Option, config.OptionValueField, targetIDs)
 		for _, row := range seedRows {
 			id := util.ToUint64(row[config.OptionValueField])
 			if id == 0 {

@@ -170,7 +170,7 @@ func UploadPart(c *server.Context) error {
 	}
 	defer file.Close()
 
-	if err := saveUploadPart(sessionID, partNumber, file); err != nil {
+	if err := saveUploadPart(sessionID, partNumber, file, uploadPartMaxBytes(session, partNumber)); err != nil {
 		return c.Error(err)
 	}
 
@@ -232,6 +232,22 @@ func logUploadFile(c *server.Context, fileID uint64, payload any) {
 		Message:     "上传资源文件",
 		Payload:     payload,
 	})
+}
+
+func uploadPartMaxBytes(session resolvedUploadSession, partNumber int) int64 {
+	chunkSize := session.ChunkSize
+	if chunkSize <= 0 {
+		chunkSize = 2 * uploadSizeMBUnit
+	}
+	if session.Size <= 0 || partNumber < session.ChunkTotal {
+		return chunkSize
+	}
+	used := int64(partNumber-1) * chunkSize
+	remaining := session.Size - used
+	if remaining <= 0 || remaining > chunkSize {
+		return chunkSize
+	}
+	return remaining
 }
 
 func OpenUpload(c *server.Context) error {

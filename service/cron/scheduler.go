@@ -18,11 +18,53 @@ const (
 )
 
 var startOnce sync.Once
+var runtime cronRuntime
+
+type cronRuntime struct {
+	mu     sync.Mutex
+	cancel context.CancelFunc
+	done   chan struct{}
+}
 
 func Start() {
 	startOnce.Do(func() {
-		go loop(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		runtime.mu.Lock()
+		runtime.cancel = cancel
+		runtime.done = done
+		runtime.mu.Unlock()
+		go func() {
+			defer close(done)
+			loop(ctx)
+		}()
 	})
+}
+
+func Stop(ctx context.Context) error {
+	ctx = normalizeStopContext(ctx)
+	runtime.mu.Lock()
+	cancel := runtime.cancel
+	done := runtime.done
+	runtime.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func normalizeStopContext(ctx context.Context) context.Context {
+	if ctx != nil {
+		return ctx
+	}
+	return context.Background()
 }
 
 func loop(ctx context.Context) {

@@ -40,7 +40,7 @@ func (scope *AccessScope) FilterPageSchema(pathValue string, currentSchema *fron
 }
 
 func shouldSkipSchemaPermissionFilter(snapshot *accessSnapshot) bool {
-	return snapshot == nil || len(snapshot.auth.rows) == 0 || hasDefaultRole(snapshot.roleIDs)
+	return snapshot == nil || hasDefaultRole(snapshot.roleIDs)
 }
 
 func filterPageSchemaWithSnapshot(snapshot *accessSnapshot, pathValue string, currentSchema *frontpage.Schema) error {
@@ -496,7 +496,7 @@ func (filter pageSchemaPermissionFilter) canUseDeclaredAuth(auth any) bool {
 		allowed, ok := filter.authCache[key]
 		if !ok {
 			row, exists := filter.snapshot.auth.rowByKey[key]
-			allowed = !exists || canAccessAuthRow(filter.snapshot, row)
+			allowed = exists && canAccessAuthRow(filter.snapshot, row)
 			filter.authCache[key] = allowed
 		}
 		if allowed {
@@ -519,8 +519,8 @@ func (filter pageSchemaPermissionFilter) canUseRoute(route string, query map[str
 		return query[key]
 	})
 	if !protected {
-		filter.routeCache[cacheKey] = true
-		return true
+		filter.routeCache[cacheKey] = false
+		return false
 	}
 	allowed := canAccessAuthRow(filter.snapshot, row)
 	filter.routeCache[cacheKey] = allowed
@@ -534,8 +534,8 @@ func (filter pageSchemaPermissionFilter) canUseActionKey(actionKey string) bool 
 	}
 	row, ok := filter.snapshot.auth.rowByKey[fullKey]
 	if !ok || len(row) == 0 {
-		filter.actionCache[fullKey] = true
-		return true
+		filter.actionCache[fullKey] = false
+		return false
 	}
 	allowed := canAccessAuthRow(filter.snapshot, row)
 	filter.actionCache[fullKey] = allowed

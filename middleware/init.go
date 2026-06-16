@@ -19,6 +19,7 @@ import (
 )
 
 const siteHeader = "X-Dever-Site"
+const apiKeyHeader = "X-API-Key"
 
 var registerOnce sync.Once
 
@@ -36,6 +37,9 @@ func Register() {
 			panic(err)
 		}
 		cronservice.Start()
+		server.OnShutdown(func(ctx context.Context) error {
+			return cronservice.Stop(ctx)
+		})
 		coremiddleware.UseGlobalFunc(auth(settings))
 		coremiddleware.UseGlobalFunc(apiScopeGuard(settings))
 		coremiddleware.UseGlobalFunc(frontBootstrap(settings))
@@ -71,7 +75,8 @@ func auth(settings middlewareSettings) coremiddleware.ContextFunc {
 			return isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
 				siteconfig.MatchPublicPath(settings.publicPaths, path) ||
 				isStaticSiteRequest(settings.frontConfig, c, path) ||
-				isPublicRouteSchemaRequest(settings.frontConfig, c, path)
+				isPublicRouteSchemaRequest(settings.frontConfig, c, path) ||
+				allowAPIKeyRequest(settings.frontConfig, c, path)
 		},
 		AllowMissing: func(*server.Context) bool {
 			return false
@@ -125,11 +130,42 @@ func apiScopeGuard(settings middlewareSettings) coremiddleware.ContextFunc {
 			return nil
 		}
 		c.SetContext(siteconfig.WithSite(c.Context(), site))
+		if allowAPIKeyForSite(c, site) {
+			return nil
+		}
 		if tokenAllowsSite(c, site) {
 			return nil
 		}
 		return abortUnauthorized(c, "无权访问当前站点接口")
 	}
+}
+
+func allowAPIKeyRequest(frontConfig siteconfig.Config, c *server.Context, path string) bool {
+	if !hasAPIKeyCredential(c) {
+		return false
+	}
+	if site, ok := requestSite(frontConfig, c, path); ok {
+		return allowAPIKeyForSite(c, site)
+	}
+	return requestPathHasPrefix(path, "/user")
+}
+
+func allowAPIKeyForSite(c *server.Context, site siteconfig.Site) bool {
+	return hasAPIKeyCredential(c) && strings.TrimSpace(site.Access.AuthProvider) == "user"
+}
+
+func hasAPIKeyCredential(c *server.Context) bool {
+	if c == nil {
+		return false
+	}
+	if strings.TrimSpace(c.Header(apiKeyHeader)) != "" {
+		return true
+	}
+	auth := strings.TrimSpace(c.Header("Authorization"))
+	if strings.HasPrefix(strings.ToLower(auth), "bearer ") {
+		auth = strings.TrimSpace(auth[len("bearer "):])
+	}
+	return strings.HasPrefix(auth, "uapi_")
 }
 
 func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) (siteconfig.Site, bool) {
@@ -208,7 +244,7 @@ func isStaticSiteRequest(frontConfig siteconfig.Config, c *server.Context, path 
 	if hasSiteContextHeader(c) {
 		return false
 	}
-	_, ok := frontConfig.FindBySitePath(path)
+	_, ok := frontConfig.FindByStaticSitePath(path)
 	return ok
 }
 
@@ -296,7 +332,8 @@ func cleanRequestPath(value string) string {
 
 func abortUnauthorized(c *server.Context, msg string) error {
 	if c != nil {
-		return c.Error(msg, http.StatusUnauthorized)
+		_ = c.Error(msg, http.StatusUnauthorized)
+		panic(server.Abort{Err: fmt.Errorf("%s", msg)})
 	}
 	return fmt.Errorf("%s", msg)
 }

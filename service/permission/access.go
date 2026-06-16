@@ -93,9 +93,6 @@ func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot,
 	if protected && canAccessAuthRow(snapshot, authRow) {
 		return nil
 	}
-	if !protected {
-		return nil
-	}
 
 	return errNoPermission
 }
@@ -103,13 +100,17 @@ func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot,
 func PayloadInputLookup(payload any, fallback InputLookup) InputLookup {
 	return func(key string) string {
 		value := strings.TrimSpace(lookupPayloadInput(payload, key))
-		if value != "" {
+		if value != "" && !isEmptyAuthInput(key, value) {
 			return value
 		}
 		if fallback == nil {
-			return ""
+			return value
 		}
-		return fallback(key)
+		fallbackValue := strings.TrimSpace(fallback(key))
+		if fallbackValue != "" {
+			return fallbackValue
+		}
+		return value
 	}
 }
 
@@ -232,7 +233,7 @@ func filterAuthRowsForCurrentSite(ctx context.Context, rows []map[string]any) []
 
 	records, err := collectAuthRecords(ctx)
 	if err != nil || len(records) == 0 {
-		return rows
+		return nil
 	}
 
 	validKeys := make(map[string]struct{}, len(records))
@@ -263,13 +264,22 @@ func filterAuthRowsForCurrentSite(ctx context.Context, rows []map[string]any) []
 }
 
 func EnsureActionAccess(ctx context.Context, pathValue string, actionKey string) error {
-	_, err := CheckActionAccess(ctx, pathValue, actionKey)
-	return err
+	if site, ok := siteconfig.FromContext(ctx); ok && shouldBypassRBAC(site) {
+		return nil
+	}
+	protected, err := CheckActionAccess(ctx, pathValue, actionKey)
+	if err != nil {
+		return err
+	}
+	if !protected {
+		return errNoPermission
+	}
+	return nil
 }
 
 func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) (bool, error) {
 	pathValue = frontpagepath.NormalizePath(pathValue)
-	actionKey = strings.TrimSpace(actionKey)
+	actionKey = strings.Trim(strings.TrimSpace(actionKey), "/")
 	if pathValue == "" || actionKey == "" {
 		return false, nil
 	}
@@ -280,6 +290,8 @@ func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) 
 	fullKey := pathValue + "/" + actionKey
 	if strings.Contains(actionKey, "/") {
 		fullKey = frontpagepath.NormalizePath(actionKey)
+	} else {
+		fullKey = pathValue + "/" + normalizeActionPermissionKey(actionKey)
 	}
 	snapshot, err := loadAccessSnapshot(ctx)
 	if err != nil || snapshot == nil {

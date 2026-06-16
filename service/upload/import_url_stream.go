@@ -37,6 +37,10 @@ func ImportURLUploadStream(c *server.Context) error {
 	if requestID == "" {
 		requestID = uuid.NewString()
 	}
+	release, err := acquireImportURLSlot()
+	if err != nil {
+		return c.Error(err)
+	}
 
 	startPayload := frontstream.ResponsePayload(requestID, "stream", map[string]any{
 		"event": "start",
@@ -47,11 +51,12 @@ func ImportURLUploadStream(c *server.Context) error {
 	}, "", 1)
 	streamID, err := uploadStreams.WritePayload(c.Context(), requestID, startPayload)
 	if err != nil {
+		release()
 		return c.Error(err)
 	}
 	startPayload["stream_id"] = streamID
 
-	go runImportURLUploadStream(requestID, input.uploadImportURLInput)
+	go runImportURLUploadStream(requestID, input.uploadImportURLInput, release)
 	return c.JSONPayload(200, startPayload)
 }
 
@@ -68,7 +73,10 @@ func ReadUploadStream(c *server.Context) error {
 	return c.JSONPayload(200, frontstream.NextPayload(params.RequestID, params.LastID, entries))
 }
 
-func runImportURLUploadStream(requestID string, input uploadImportURLInput) {
+func runImportURLUploadStream(requestID string, input uploadImportURLInput, release func()) {
+	if release != nil {
+		defer release()
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), uploadImportStreamTimeout)
 	defer cancel()
 

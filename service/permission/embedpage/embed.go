@@ -1,14 +1,12 @@
 package embedpage
 
 import (
-	"io/fs"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/shemic/dever/util"
-	frontroot "my/package/front"
+
 	frontpagepath "my/package/front/internal/pagepath"
+	pagecontent "my/package/front/service/internal/pagecontent"
 	"my/package/front/service/siteconfig"
 )
 
@@ -122,66 +120,10 @@ func ParentsForPage(pageName string) map[string]map[string]struct{} {
 }
 
 func walkParents(result map[string]map[string]struct{}, pageName string) error {
-	pageNames := siteconfig.LoadPageNames()
-	for _, root := range []string{"module", "package"} {
-		if err := walkDiskParents(root, pageName, pageNames, result); err != nil {
-			return err
-		}
-	}
-
-	return fs.WalkDir(frontroot.PageFS, "page", func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry == nil || entry.IsDir() || !isPageFileName(entry.Name()) {
-			return nil
-		}
-
-		content, err := frontroot.PageFS.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		relativePath := strings.TrimPrefix(filepath.ToSlash(path), "page/")
-		relativeParts := frontpagepath.RelativePartsForPage(relativePath, pageName, pageNames)
-		if len(relativeParts) == 0 {
-			return nil
-		}
-		routePath := trimPageFileExt(filepath.ToSlash(filepath.Join(append([]string{"front"}, relativeParts...)...)))
-		collectParents(result, routePath, content)
+	return pagecontent.WalkComponentPages(pageName, func(page pagecontent.ComponentPage) error {
+		collectParents(result, page.Path, page.Content)
 		return nil
 	})
-}
-
-func walkDiskParents(root string, pageName string, pageNames map[string]struct{}, result map[string]map[string]struct{}) error {
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry == nil || entry.IsDir() || !isPageFileName(entry.Name()) {
-			return nil
-		}
-		if frontpagepath.DiskPageBelongsToOtherPage(root, path, pageName, pageNames) {
-			return nil
-		}
-
-		moduleName, routePath, ok := frontpagepath.DiskPageRouteForPage(root, path, pageName)
-		if !ok || moduleName == "front" {
-			return nil
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		collectParents(result, routePath, content)
-		return nil
-	})
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
 }
 
 func collectParents(result map[string]map[string]struct{}, parentPath string, content []byte) {
@@ -228,14 +170,6 @@ func embeddedRoute(item map[string]any) string {
 
 	meta, _ := item["meta"].(map[string]any)
 	return normalizePath(util.ToStringTrimmed(meta["pageRoute"]))
-}
-
-func isPageFileName(name string) bool {
-	return frontpagepath.IsPageFileName(name)
-}
-
-func trimPageFileExt(path string) string {
-	return frontpagepath.TrimPageFileExt(path)
 }
 
 func normalizePath(path string) string {

@@ -4,17 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/shemic/dever/component"
 	"github.com/shemic/dever/util"
-	frontroot "my/package/front"
 
 	frontpagepath "my/package/front/internal/pagepath"
-	frontpage "my/package/front/service/page"
+	pagecontent "my/package/front/service/internal/pagecontent"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
 	"my/package/front/service/runtimecache"
@@ -165,16 +162,16 @@ func BuildAuthTablePayload(ctx context.Context) map[string]any {
 }
 
 func syncAuthRecords(ctx context.Context) error {
-	records, err := collectAuthRecords(ctx)
+	records, err := collectBootstrapAuthRecords(ctx)
 	if err != nil {
 		return err
-	}
-	if len(records) == 0 {
-		return nil
 	}
 
 	authModel := frontrecord.Resolve("front.NewAuthModel")
 	if authModel == nil {
+		if len(records) == 0 {
+			return nil
+		}
 		return fmt.Errorf("权限模型未注册")
 	}
 
@@ -183,6 +180,12 @@ func syncAuthRecords(ctx context.Context) error {
 		if err := upsertAuthRecord(ctx, authModel, columnLookup, record); err != nil {
 			return err
 		}
+	}
+	if err := removeStaleManagedAuthRecords(ctx, authModel, columnLookup, records); err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return nil
 	}
 
 	keyToID := loadAuthKeyMap(ctx, authModel)
@@ -206,6 +209,105 @@ func syncAuthRecords(ctx context.Context) error {
 	return nil
 }
 
+func collectBootstrapAuthRecords(ctx context.Context) ([]authRecord, error) {
+	sites, err := bootstrapSites(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(sites) == 0 {
+		return nil, nil
+	}
+
+	merged := make(map[string]authRecord)
+	for _, site := range sites {
+		siteCtx := siteconfig.WithSite(ctx, site)
+		records, err := collectAuthRecords(siteCtx)
+		if err != nil {
+			return nil, err
+		}
+		for _, record := range records {
+			key := strings.TrimSpace(record.Key)
+			if key == "" {
+				continue
+			}
+			merged[key] = record
+		}
+	}
+
+	records := make([]authRecord, 0, len(merged))
+	for _, record := range merged {
+		records = append(records, record)
+	}
+	sort.SliceStable(records, func(i, j int) bool {
+		if records[i].Type != records[j].Type {
+			return records[i].Type < records[j].Type
+		}
+		if records[i].Sort != records[j].Sort {
+			return records[i].Sort < records[j].Sort
+		}
+		return records[i].Key < records[j].Key
+	})
+	return records, nil
+}
+
+func bootstrapSites(ctx context.Context) ([]siteconfig.Site, error) {
+	cfg, err := siteconfig.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sites := make([]siteconfig.Site, 0, len(cfg.Sites))
+	for _, site := range cfg.Sites {
+		if shouldBootstrapSite(site) {
+			sites = append(sites, site)
+		}
+	}
+	return sites, nil
+}
+
+func removeStaleManagedAuthRecords(ctx context.Context, authModel frontrecord.Model, columnLookup map[string]string, records []authRecord) error {
+	if _, ok := columnLookup["managed"]; !ok {
+		return nil
+	}
+	if _, ok := columnLookup["source_type"]; !ok {
+		return nil
+	}
+	if _, ok := columnLookup["source_name"]; !ok {
+		return nil
+	}
+
+	activeKeys := make(map[string]struct{}, len(records))
+	for _, record := range records {
+		if key := strings.TrimSpace(record.Key); key != "" {
+			activeKeys[key] = struct{}{}
+		}
+	}
+
+	rows := authModel.SelectMap(ctx, map[string]any{"managed": 1}, map[string]any{
+		"field": "main.id, main.key",
+	})
+	if len(rows) == 0 {
+		return nil
+	}
+
+	roleAuthModel := frontrecord.Resolve("front.NewRoleAuthModel")
+	for _, row := range rows {
+		key := util.ToStringTrimmed(row["key"])
+		if _, ok := activeKeys[key]; ok {
+			continue
+		}
+		authID := util.ToUint64(row["id"])
+		if authID == 0 {
+			continue
+		}
+		if roleAuthModel != nil && authID > 0 {
+			roleAuthModel.Delete(ctx, map[string]any{"auth_id": authID})
+		}
+		authModel.Delete(ctx, map[string]any{"id": authID})
+	}
+	return nil
+}
+
 func collectAuthRecords(ctx context.Context) ([]authRecord, error) {
 	records, err := authRecordsCache.GetOrSet(permissionSitePageKey(ctx), func() ([]authRecord, error) {
 		return collectAuthRecordsUncached(ctx)
@@ -217,7 +319,7 @@ func collectAuthRecords(ctx context.Context) ([]authRecord, error) {
 }
 
 func collectAuthRecordsUncached(ctx context.Context) ([]authRecord, error) {
-	configAuths, err := loadConfigAuthRecords(ctx)
+	componentAuths, err := loadComponentAuthRecords(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +329,7 @@ func collectAuthRecordsUncached(ctx context.Context) ([]authRecord, error) {
 	}
 
 	merged := make(map[string]authRecord)
-	for _, record := range append(configAuths, pageAuths...) {
+	for _, record := range append(componentAuths, pageAuths...) {
 		key := strings.TrimSpace(record.Key)
 		if key == "" {
 			continue
@@ -251,88 +353,78 @@ func collectAuthRecordsUncached(ctx context.Context) ([]authRecord, error) {
 	return records, nil
 }
 
-func loadConfigAuthRecords(ctx context.Context) ([]authRecord, error) {
-	payload, err := loadConfigMetaForSite(siteconfig.SiteKeyFromContext(ctx))
+func loadComponentAuthRecords(ctx context.Context) ([]authRecord, error) {
+	cfg, err := siteconfig.Load(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("读取 config/front.json 失败: %w", err)
+		return nil, err
+	}
+	siteKey := siteconfig.SiteKeyFromContext(ctx)
+	if _, ok := cfg.FindBySiteKey(siteKey); !ok {
+		siteKey = siteconfig.DefaultSiteKey
 	}
 
 	records := make([]authRecord, 0)
-	var walk func(parent string, items []authSeed)
-	walk = func(parent string, items []authSeed) {
-		for _, item := range items {
-			keyValue := strings.TrimSpace(util.FirstNonEmpty(item.Key, item.ID))
-			if keyValue == "" {
-				continue
-			}
-			pathValue := strings.TrimSpace(item.Path)
-			record := authRecord{
-				Key:       keyValue,
-				Name:      util.FirstNonEmpty(item.Name, keyValue, pathValue),
-				Icon:      strings.TrimSpace(item.Icon),
-				Path:      pathValue,
-				ParentKey: strings.TrimSpace(parent),
-				Type:      normalizeAuthType(item.Type, keyValue, pathValue),
-				Sort:      item.Sort,
-				Query:     normalizeAuthQuery(item.Query),
-			}
-			records = append(records, record)
-			walk(keyValue, item.Children)
+	for _, current := range component.Active() {
+		site, ok := current.Manifest.Sites[siteKey]
+		if !ok {
+			continue
 		}
+		source := recordSource{Type: current.Source, Name: current.Name}
+		var walk func(parent string, items []component.AuthSeed)
+		walk = func(parent string, items []component.AuthSeed) {
+			for _, item := range items {
+				keyValue := strings.TrimSpace(util.FirstNonEmpty(item.Key, item.ID))
+				if keyValue == "" {
+					continue
+				}
+				pathValue := strings.TrimSpace(item.Path)
+				record := authRecord{
+					Key:       keyValue,
+					Name:      util.FirstNonEmpty(item.Name, keyValue, pathValue),
+					Icon:      strings.TrimSpace(item.Icon),
+					Path:      pathValue,
+					ParentKey: componentAuthParentKey(parent, item.Parent),
+					Type:      normalizeAuthType(item.Type, keyValue, pathValue),
+					Sort:      item.Sort,
+					Query:     normalizeAuthQuery(item.Query),
+					Source:    source,
+				}
+				records = append(records, record)
+				walk(keyValue, item.Children)
+			}
+		}
+		walk("", site.Auth)
 	}
-
-	walk("", payload.Auth)
 	return records, nil
+}
+
+func componentAuthParentKey(parent string, explicitParent string) string {
+	if current := strings.TrimSpace(explicitParent); current != "" {
+		return current
+	}
+	return strings.TrimSpace(parent)
 }
 
 func loadPageAuthRecords(ctx context.Context) ([]authRecord, error) {
 	recordMap := make(map[string]authRecord)
 	recordPriorityMap := make(map[string]int)
 	pageName := siteconfig.PageFromContext(ctx)
-	pageNames := siteconfig.LoadPageNames()
 	embeddedPaths := embedpageservice.PathsForPage(pageName)
 
-	for _, root := range []string{"module", "package"} {
-		if err := walkDiskPageAuthRecords(root, pageName, pageNames, embeddedPaths, recordMap, recordPriorityMap); err != nil {
-			return nil, fmt.Errorf("扫描页面权限失败")
-		}
-	}
-
-	err := fs.WalkDir(frontroot.PageFS, "page", func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry == nil || entry.IsDir() || !frontpagepath.IsPageFileName(entry.Name()) {
-			return nil
-		}
-
-		content, err := frontroot.PageFS.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		meta, err := parsePageMeta(content)
+	if err := pagecontent.WalkComponentPages(pageName, func(page pagecontent.ComponentPage) error {
+		meta, err := parsePageMeta(page.Content)
 		if err != nil {
 			return nil
 		}
-
-		relativePath := strings.TrimPrefix(filepath.ToSlash(path), "page/")
-		relativeParts := frontpagepath.RelativePartsForPage(relativePath, pageName, pageNames)
-		if len(relativeParts) == 0 {
+		if _, embedded := embeddedPaths[page.Path]; embedded {
 			return nil
 		}
-		routePath := frontpagepath.TrimPageFileExt(filepath.ToSlash(filepath.Join(append([]string{"front"}, relativeParts...)...)))
-		routePath = frontpagepath.NormalizePath(routePath)
-		if routePath == "" {
-			return nil
-		}
-		if _, embedded := embeddedPaths[routePath]; embedded {
-			return nil
-		}
-
-		savePageAuthRecords(recordMap, recordPriorityMap, content, meta, routePath, entry.Name())
+		savePageAuthRecords(recordMap, recordPriorityMap, page.Content, meta, page.Path, page.FileName, recordSource{
+			Type: page.Component.Source,
+			Name: page.Component.Name,
+		})
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return nil, fmt.Errorf("扫描页面权限失败")
 	}
 
@@ -341,52 +433,6 @@ func loadPageAuthRecords(ctx context.Context) ([]authRecord, error) {
 		records = append(records, record)
 	}
 	return records, nil
-}
-
-func walkDiskPageAuthRecords(
-	root string,
-	pageName string,
-	pageNames map[string]struct{},
-	embeddedPaths map[string]struct{},
-	recordMap map[string]authRecord,
-	recordPriorityMap map[string]int,
-) error {
-	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		if entry == nil || entry.IsDir() || !frontpagepath.IsPageFileName(entry.Name()) {
-			return nil
-		}
-		if frontpagepath.DiskPageBelongsToOtherPage(root, path, pageName, pageNames) {
-			return nil
-		}
-
-		moduleName, routePath, ok := frontpagepath.DiskPageRouteForPage(root, path, pageName)
-		if !ok || moduleName == "front" {
-			return nil
-		}
-
-		content, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		meta, err := parsePageMeta(content)
-		if err != nil {
-			return nil
-		}
-
-		if _, embedded := embeddedPaths[routePath]; embedded {
-			return nil
-		}
-
-		savePageAuthRecords(recordMap, recordPriorityMap, content, meta, routePath, entry.Name())
-		return nil
-	})
-	if os.IsNotExist(err) {
-		return nil
-	}
-	return err
 }
 
 func FilterAssignableAuthRows(rows []map[string]any) []map[string]any {
@@ -436,7 +482,7 @@ func buildPageAuthRecords(meta pageMeta, routePath string) []authRecord {
 	return []authRecord{
 		{
 			Key:       routePath,
-			Name:      util.FirstNonEmpty(strings.TrimSpace(meta.Name), strings.TrimSpace(meta.Title), frontpage.DefaultPageTitle(routePath), routePath),
+			Name:      util.FirstNonEmpty(strings.TrimSpace(meta.Name), strings.TrimSpace(meta.Title), routePath),
 			Icon:      strings.TrimSpace(meta.Icon),
 			Path:      routePath,
 			ParentKey: strings.TrimSpace(meta.Parent),
@@ -453,11 +499,13 @@ func savePageAuthRecords(
 	meta pageMeta,
 	routePath string,
 	fileName string,
+	source recordSource,
 ) {
 	for _, record := range append(
 		buildPageAuthRecords(meta, routePath),
 		buildPageActionAuthRecords(content, routePath)...,
 	) {
+		record.Source = source
 		savePageAuthRecord(recordMap, recordPriorityMap, record, fileName)
 	}
 }
@@ -758,6 +806,15 @@ func upsertAuthRecord(
 	if _, ok := columnLookup["query"]; ok {
 		data["query"] = encodeAuthQuery(record.Query)
 	}
+	if _, ok := columnLookup["source_type"]; ok {
+		data["source_type"] = strings.TrimSpace(record.Source.Type)
+	}
+	if _, ok := columnLookup["source_name"]; ok {
+		data["source_name"] = strings.TrimSpace(record.Source.Name)
+	}
+	if _, ok := columnLookup["managed"]; ok {
+		data["managed"] = managedAuthRecord(record)
+	}
 
 	if len(current) == 0 {
 		frontrecord.ApplyCreatedAt(data, columnLookup)
@@ -767,6 +824,13 @@ func upsertAuthRecord(
 
 	authModel.Update(ctx, map[string]any{"id": current["id"]}, data)
 	return nil
+}
+
+func managedAuthRecord(record authRecord) int {
+	if strings.TrimSpace(record.Source.Type) == "" || strings.TrimSpace(record.Source.Name) == "" {
+		return 0
+	}
+	return 1
 }
 
 func loadAuthKeyMap(ctx context.Context, authModel frontrecord.Model) map[string]uint64 {
@@ -967,7 +1031,6 @@ func loadConfigMetaForSite(siteKey string) (configMeta, error) {
 			return configMeta{}, nil
 		}
 		return configMeta{
-			Auth:  site.Auth,
 			Entry: site.Entry,
 		}, nil
 	})

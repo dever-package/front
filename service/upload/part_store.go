@@ -37,7 +37,10 @@ func saveUploadSessionMarker(sessionID uint64) error {
 	return os.MkdirAll(uploadSessionPartDir(sessionID), 0o755)
 }
 
-func saveUploadPart(sessionID uint64, partNumber int, src io.Reader) error {
+func saveUploadPart(sessionID uint64, partNumber int, src io.Reader, maxBytes int64) error {
+	if maxBytes <= 0 {
+		return fmt.Errorf("分片大小限制无效")
+	}
 	partPath := uploadSessionPartPath(sessionID, partNumber)
 	if err := os.MkdirAll(filepath.Dir(partPath), 0o755); err != nil {
 		return fmt.Errorf("创建分片目录失败: %w", err)
@@ -47,12 +50,17 @@ func saveUploadPart(sessionID uint64, partNumber int, src io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("写入分片失败: %w", err)
 	}
-	if _, err = io.Copy(dst, src); err != nil {
+	written, copyErr := io.Copy(dst, io.LimitReader(src, maxBytes+1))
+	if copyErr != nil {
 		dst.Close()
-		return fmt.Errorf("保存分片失败: %w", err)
+		return fmt.Errorf("保存分片失败: %w", copyErr)
 	}
 	if err = dst.Close(); err != nil {
 		return fmt.Errorf("保存分片失败: %w", err)
+	}
+	if written > maxBytes {
+		_ = os.Remove(partPath)
+		return fmt.Errorf("分片大小超出限制")
 	}
 	return nil
 }

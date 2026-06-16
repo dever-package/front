@@ -3,11 +3,15 @@ package site
 import (
 	"bytes"
 	"encoding/json"
+	"hash/crc32"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/shemic/dever/server"
+	"github.com/shemic/dever/util"
 
+	"my/package/front/service/runtimecache"
 	"my/package/front/service/siteconfig"
 )
 
@@ -40,6 +44,20 @@ type runtimeSettingPayload struct {
 	Plugins    []runtimePluginDescriptor `json:"plugins,omitempty"`
 }
 
+var (
+	runtimeContentCache util.ConcurrentMap[string, []byte]
+	runtimeHTMLCache    util.ConcurrentMap[string, []byte]
+)
+
+func init() {
+	runtimecache.Register("front.site-runtime", clearRuntimeCaches, clearRuntimeCaches)
+}
+
+func clearRuntimeCaches() {
+	runtimeContentCache.Clear()
+	runtimeHTMLCache.Clear()
+}
+
 func writeRuntime(c *server.Context, site siteconfig.Site, pluginDev bool) error {
 	raw, ok := c.Raw.(*fiber.Ctx)
 	if !ok {
@@ -57,6 +75,24 @@ func writeRuntime(c *server.Context, site siteconfig.Site, pluginDev bool) error
 }
 
 func runtimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
+	if pluginDev {
+		return buildRuntimeContent(site, pluginDev)
+	}
+
+	cacheKey := runtimeContentCacheKey(site, pluginDev)
+	if cached, ok := runtimeContentCache.Load(cacheKey); ok {
+		return cloneBytes(cached), nil
+	}
+
+	content, err := buildRuntimeContent(site, pluginDev)
+	if err != nil {
+		return nil, err
+	}
+	runtimeContentCache.Store(cacheKey, cloneBytes(content))
+	return content, nil
+}
+
+func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 	runtimeSetting := runtimeSettingPayload{
 		Skin:       site.Setting.Runtime.Skin,
 		RouterMode: site.Setting.Runtime.RouterMode,
@@ -90,6 +126,24 @@ func runtimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 }
 
 func injectRuntime(content []byte, site siteconfig.Site, pluginDev bool) ([]byte, error) {
+	if pluginDev {
+		return injectRuntimeUncached(content, site, pluginDev)
+	}
+
+	cacheKey := runtimeHTMLCacheKey(content, site, pluginDev)
+	if cached, ok := runtimeHTMLCache.Load(cacheKey); ok {
+		return cloneBytes(cached), nil
+	}
+
+	result, err := injectRuntimeUncached(content, site, pluginDev)
+	if err != nil {
+		return nil, err
+	}
+	runtimeHTMLCache.Store(cacheKey, cloneBytes(result))
+	return result, nil
+}
+
+func injectRuntimeUncached(content []byte, site siteconfig.Site, pluginDev bool) ([]byte, error) {
 	runtime, err := runtimeContent(site, pluginDev)
 	if err != nil {
 		return nil, err
@@ -107,6 +161,24 @@ func injectRuntime(content []byte, site siteconfig.Site, pluginDev bool) ([]byte
 	}
 
 	return append(script, content...), nil
+}
+
+func runtimeContentCacheKey(site siteconfig.Site, pluginDev bool) string {
+	return site.Key + ":" + strconv.FormatBool(pluginDev)
+}
+
+func runtimeHTMLCacheKey(content []byte, site siteconfig.Site, pluginDev bool) string {
+	return site.Key + ":" +
+		strconv.FormatBool(pluginDev) + ":" +
+		strconv.Itoa(len(content)) + ":" +
+		strconv.FormatUint(uint64(crc32.ChecksumIEEE(content)), 16)
+}
+
+func cloneBytes(content []byte) []byte {
+	if len(content) == 0 {
+		return nil
+	}
+	return append([]byte(nil), content...)
 }
 
 func runtimeAPIHost(prefix string) string {

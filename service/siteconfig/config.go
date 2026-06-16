@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/shemic/dever/component"
 	"github.com/shemic/dever/util"
 )
 
@@ -26,9 +27,6 @@ const (
 
 var (
 	defaultGlobalPublic = []string{
-		"/upload/*",
-		"/bot/energon/request",
-		"/bot/energon/demo",
 		"/site/info",
 		"/qiniu/callback",
 	}
@@ -90,25 +88,13 @@ type Access struct {
 	AuthProvider string `json:"authProvider"`
 }
 
-type AuthSeed struct {
-	Key      string            `json:"key"`
-	ID       string            `json:"id"`
-	Path     string            `json:"path"`
-	Name     string            `json:"name"`
-	Icon     string            `json:"icon"`
-	Parent   string            `json:"parent"`
-	Type     int               `json:"type"`
-	Sort     int               `json:"sort"`
-	Query    map[string]string `json:"query"`
-	Children []AuthSeed        `json:"children"`
-}
+type AuthSeed = component.AuthSeed
 
 type contextKey struct{}
 
 type rawConfig struct {
 	Public []string           `json:"public"`
 	Sites  map[string]rawSite `json:"sites"`
-	Auth   []AuthSeed         `json:"auth"`
 	Entry  string             `json:"entry"`
 }
 
@@ -124,7 +110,6 @@ type rawSite struct {
 	Assets      SiteAssets  `json:"assets"`
 	Setting     SiteSetting `json:"setting"`
 	Access      Access      `json:"access"`
-	Auth        []AuthSeed  `json:"auth"`
 	Entry       string      `json:"entry"`
 }
 
@@ -142,7 +127,7 @@ func load() (Config, error) {
 	)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return defaultConfig(), nil
+			return normalizeConfig(defaultRawConfig())
 		}
 		return Config{}, err
 	}
@@ -151,7 +136,7 @@ func load() (Config, error) {
 	if err := util.UnmarshalNormalizedJSON(content, &payload); err != nil {
 		return Config{}, err
 	}
-	return normalizeConfig(payload), nil
+	return normalizeConfig(payload)
 }
 
 func MustLoad() Config {
@@ -440,8 +425,8 @@ func (site Site) UsesLogin() bool {
 	return strings.EqualFold(site.Access.Mode, AccessModeLogin)
 }
 
-func defaultConfig() Config {
-	return normalizeConfig(rawConfig{
+func defaultRawConfig() rawConfig {
+	return rawConfig{
 		Public: append([]string(nil), defaultGlobalPublic...),
 		Sites: map[string]rawSite{
 			DefaultSiteKey: {
@@ -454,10 +439,10 @@ func defaultConfig() Config {
 				},
 			},
 		},
-	})
+	}
 }
 
-func normalizeConfig(payload rawConfig) Config {
+func normalizeConfig(payload rawConfig) (Config, error) {
 	publicPaths := normalizeGlobalPublic(payload.Public)
 	if len(publicPaths) == 0 {
 		publicPaths = append([]string(nil), defaultGlobalPublic...)
@@ -465,28 +450,11 @@ func normalizeConfig(payload rawConfig) Config {
 
 	rawSites := payload.Sites
 	if len(rawSites) == 0 {
-		rawSites = map[string]rawSite{
-			DefaultSiteKey: {
-				Name:   "管理后台",
-				API:    DefaultAPI,
-				Public: append([]string(nil), defaultSitePublic...),
-				Access: Access{
-					Mode:         DefaultAccessMode,
-					AuthProvider: DefaultAuthProvider,
-				},
-				Auth:  payload.Auth,
-				Entry: payload.Entry,
-			},
+		rawSites = defaultRawConfig().Sites
+		if defaultSite, ok := rawSites[DefaultSiteKey]; ok {
+			defaultSite.Entry = payload.Entry
+			rawSites[DefaultSiteKey] = defaultSite
 		}
-	} else if len(payload.Auth) > 0 {
-		admin := rawSites[DefaultSiteKey]
-		if len(admin.Auth) == 0 {
-			admin.Auth = payload.Auth
-		}
-		if strings.TrimSpace(admin.Entry) == "" {
-			admin.Entry = payload.Entry
-		}
-		rawSites[DefaultSiteKey] = admin
 	}
 
 	keys := make([]string, 0, len(rawSites))
@@ -505,13 +473,114 @@ func normalizeConfig(payload rawConfig) Config {
 		sites = append(sites, site)
 	}
 	if len(sites) == 0 {
-		sites = defaultConfig().Sites
+		for siteKey, rawSite := range defaultRawConfig().Sites {
+			sites = append(sites, normalizeSite(siteKey, rawSite))
+		}
 	}
+	sites, componentPublic, err := mergeComponentSites(sites)
+	if err != nil {
+		return Config{}, err
+	}
+	publicPaths = normalizeGlobalPublic(append(publicPaths, componentPublic...))
 
 	return Config{
 		Public: publicPaths,
 		Sites:  sites,
+	}, nil
+}
+
+func mergeComponentSites(sites []Site) ([]Site, []string, error) {
+	if len(sites) == 0 {
+		return sites, nil, nil
 	}
+	components := component.Active()
+	if len(components) == 0 {
+		return nil, nil, fmt.Errorf("front siteconfig: no active components registered; run `dever component` or `dever init --skip-tidy`")
+	}
+	globalPublic := make([]string, 0)
+
+	siteIndex := make(map[string]int, len(sites))
+	for index, site := range sites {
+		siteIndex[site.Key] = index
+	}
+
+	for _, current := range components {
+		globalPublic = append(globalPublic, current.Manifest.Public...)
+		for siteKey, contribution := range current.Manifest.Sites {
+			index, ok := siteIndex[normalizeSiteKey(siteKey)]
+			if !ok {
+				continue
+			}
+			site := sites[index]
+			sitePublic, absolutePublic := splitComponentSitePublic(contribution.Public)
+			site.Auth = mergeAuthSeeds(site.Auth, contribution.Auth)
+			site.Public = mergeSitePublic(site.Public, sitePublic)
+			site.APIRoots = mergeSiteAPIRoots(site.APIRoots, contribution.APIRoots)
+			globalPublic = append(globalPublic, absolutePublic...)
+			if site.Entry == "" && strings.TrimSpace(contribution.Entry) != "" {
+				site.Entry = strings.Trim(strings.TrimSpace(contribution.Entry), "/")
+			}
+			sites[index] = site
+		}
+	}
+	return sites, normalizeGlobalPublic(globalPublic), nil
+}
+
+func mergeAuthSeeds(base []AuthSeed, additions []AuthSeed) []AuthSeed {
+	if len(additions) == 0 {
+		return base
+	}
+	result := make([]AuthSeed, 0, len(base)+len(additions))
+	indexes := map[string]int{}
+	for _, item := range append(base, additions...) {
+		key := strings.TrimSpace(util.FirstNonEmpty(item.Key, item.ID))
+		if key == "" {
+			continue
+		}
+		if index, ok := indexes[key]; ok {
+			result[index] = item
+			continue
+		}
+		indexes[key] = len(result)
+		result = append(result, item)
+	}
+	return result
+}
+
+func mergeSitePublic(base []string, additions []string) []string {
+	if len(additions) == 0 {
+		return base
+	}
+	items := append(append([]string(nil), base...), additions...)
+	return normalizeSitePublic(items)
+}
+
+func mergeSiteAPIRoots(base []string, additions []string) []string {
+	if len(additions) == 0 {
+		return base
+	}
+	items := append(append([]string(nil), base...), additions...)
+	return normalizeAPIRoots(items)
+}
+
+func splitComponentSitePublic(items []string) ([]string, []string) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+	sitePublic := make([]string, 0, len(items))
+	globalPublic := make([]string, 0)
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if strings.HasPrefix(item, "/") {
+			globalPublic = append(globalPublic, item)
+			continue
+		}
+		sitePublic = append(sitePublic, item)
+	}
+	return sitePublic, globalPublic
 }
 
 func normalizeSite(siteKey string, raw rawSite) Site {
@@ -541,7 +610,6 @@ func normalizeSite(siteKey string, raw rawSite) Site {
 		Assets:      normalizeAssets(raw.Assets),
 		Setting:     normalizeSetting(raw.Setting),
 		Access:      normalizeAccess(raw.Access),
-		Auth:        raw.Auth,
 		Entry:       strings.TrimSpace(raw.Entry),
 	}
 }

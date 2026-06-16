@@ -25,6 +25,11 @@ func ImportURLUpload(c *server.Context) error {
 	if err := c.BindJSON(&input); err != nil {
 		return c.Error("请求体格式错误")
 	}
+	release, err := acquireImportURLSlot()
+	if err != nil {
+		return c.Error(err)
+	}
+	defer release()
 
 	fileRecord, err := importURLUploadWithProgress(c.Context(), input, nil)
 	if err != nil {
@@ -45,8 +50,11 @@ func downloadImportURLFile(
 		return "", "", "", nil, fmt.Errorf("资源地址不能为空")
 	}
 	parsed, err := url.Parse(rawURL)
-	if err != nil || parsed == nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+	if err != nil || parsed == nil {
 		return "", "", "", nil, fmt.Errorf("资源地址无效")
+	}
+	if err := validateImportURL(parsed); err != nil {
+		return "", "", "", nil, err
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, importURLTimeout)
@@ -55,7 +63,7 @@ func downloadImportURLFile(
 	if err != nil {
 		return "", "", "", nil, fmt.Errorf("创建资源下载请求失败: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := importURLHTTPClient.Do(req)
 	if err != nil {
 		return "", "", "", nil, fmt.Errorf("下载资源失败: %w", err)
 	}

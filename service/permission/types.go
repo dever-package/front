@@ -26,8 +26,7 @@ type pageMeta struct {
 }
 
 type configMeta struct {
-	Auth  []authSeed `json:"auth"`
-	Entry string     `json:"entry"`
+	Entry string `json:"entry"`
 }
 
 type authSeed = siteconfig.AuthSeed
@@ -43,6 +42,12 @@ type authRecord struct {
 	Type      int
 	Sort      int
 	Query     authQuery
+	Source    recordSource
+}
+
+type recordSource struct {
+	Type string
+	Name string
 }
 
 type authGraph struct {

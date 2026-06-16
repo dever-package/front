@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,10 +12,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	devercache "github.com/shemic/dever/cache"
+	"github.com/shemic/dever/component"
 	"github.com/shemic/dever/server"
+	"github.com/shemic/dever/util"
 
+	"my/package/front/service/runtimecache"
 	"my/package/front/service/siteconfig"
 )
 
@@ -49,6 +55,29 @@ type pluginSourceMetadata struct {
 	Name    string   `json:"name"`
 	Nodes   []string `json:"nodes,omitempty"`
 	Depends []string `json:"depends,omitempty"`
+}
+
+type pluginSourceMetadataCacheEntry struct {
+	size     int64
+	modTime  int64
+	metadata pluginSourceMetadata
+}
+
+var (
+	pluginNameCache = devercache.New[string, []string](
+		devercache.WithTTL(5*time.Minute),
+		devercache.WithMaxEntries(16),
+	)
+	pluginSourceMetadataCache util.ConcurrentMap[string, pluginSourceMetadataCacheEntry]
+)
+
+func init() {
+	runtimecache.Register("front.plugins", clearPluginRuntimeCache, clearPluginRuntimeCache)
+}
+
+func clearPluginRuntimeCache() {
+	pluginNameCache.Clear()
+	pluginSourceMetadataCache.Clear()
 }
 
 func registerPluginAssets(s server.Server, site siteconfig.Site, siteSettings settings) {
@@ -92,6 +121,13 @@ func openPluginAsset(c *server.Context) error {
 		if !errors.Is(err, os.ErrNotExist) {
 			return c.Error(err, 404)
 		}
+	}
+	if content, ok, err := readEmbeddedPluginAsset(pluginName, rel); err != nil {
+		return c.Error(err, 404)
+	} else if ok {
+		raw.Set("Cache-Control", "public, max-age=31536000, immutable")
+		setContentType(raw, rel)
+		return raw.Send(content)
 	}
 
 	return c.Error("前端插件不存在", 404)
@@ -222,11 +258,31 @@ func distRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtim
 }
 
 func readPluginSourceMetadata(defaultName string, entryFile string) pluginSourceMetadata {
-	content, err := os.ReadFile(entryFile)
-	if err != nil {
+	info, err := os.Stat(entryFile)
+	if err != nil || info.IsDir() {
+		pluginSourceMetadataCache.Delete(filepath.ToSlash(entryFile))
 		return pluginSourceMetadata{Name: defaultName}
 	}
-	return extractPluginSourceMetadata(defaultName, string(content))
+
+	cacheKey := filepath.ToSlash(entryFile)
+	size := info.Size()
+	modTime := info.ModTime().UnixNano()
+	if cached, ok := pluginSourceMetadataCache.Load(cacheKey); ok && cached.size == size && cached.modTime == modTime {
+		return cached.metadata
+	}
+
+	content, err := os.ReadFile(entryFile)
+	if err != nil {
+		pluginSourceMetadataCache.Delete(cacheKey)
+		return pluginSourceMetadata{Name: defaultName}
+	}
+	metadata := extractPluginSourceMetadata(defaultName, string(content))
+	pluginSourceMetadataCache.Store(cacheKey, pluginSourceMetadataCacheEntry{
+		size:     size,
+		modTime:  modTime,
+		metadata: metadata,
+	})
+	return metadata
 }
 
 func extractPluginSourceMetadata(defaultName string, content string) pluginSourceMetadata {
@@ -349,24 +405,30 @@ func discoverSourcePluginNames() []string {
 }
 
 func discoverPluginNamesWithFile(relativeFile string) []string {
+	cacheKey := filepath.ToSlash(relativeFile)
+	result, err := pluginNameCache.GetOrSet(cacheKey, func() ([]string, error) {
+		return scanPluginNamesWithFile(relativeFile), nil
+	})
+	if err != nil {
+		return []string{}
+	}
+	return cloneStringSlice(result)
+}
+
+func scanPluginNamesWithFile(relativeFile string) []string {
 	names := map[string]struct{}{}
-	for _, root := range pluginParentRoots() {
-		entries, err := os.ReadDir(root)
-		if err != nil {
+	for _, current := range component.Active() {
+		name := cleanPluginName(current.Name)
+		if name == "" {
 			continue
 		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			name := cleanPluginName(entry.Name())
-			if name == "" {
-				continue
-			}
-			filePath := filepath.Join(root, name, relativeFile)
-			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-				names[name] = struct{}{}
-			}
+		filePath := filepath.Join(current.DiskDir, relativeFile)
+		if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+			names[name] = struct{}{}
+			continue
+		}
+		if relativeFile == filepath.Join(pluginDistDir, pluginManifest) && hasEmbeddedPluginAsset(current, pluginManifest) {
+			names[name] = struct{}{}
 		}
 	}
 
@@ -446,6 +508,13 @@ func uniqueStrings(items []string) []string {
 	return result
 }
 
+func cloneStringSlice(items []string) []string {
+	if len(items) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), items...)
+}
+
 func pluginMountPath(site siteconfig.Site) string {
 	return cleanRequestPath(path.Join(site.Path, pluginMountDir))
 }
@@ -495,21 +564,26 @@ func pluginSourceRoots(pluginName string) []string {
 }
 
 func pluginFrontRoots(pluginName string, subDir string) []string {
-	roots := pluginParentRoots()
-	result := make([]string, 0, len(roots))
-	for _, root := range roots {
-		result = append(result, filepath.Join(root, pluginName, subDir))
+	components := matchingPluginComponents(pluginName)
+	result := make([]string, 0, len(components))
+	for _, current := range components {
+		if current.DiskDir == "" {
+			continue
+		}
+		result = append(result, filepath.Join(current.DiskDir, subDir))
 	}
 	return result
 }
 
-func pluginParentRoots() []string {
-	return uniquePaths([]string{
-		"module",
-		filepath.Join("backend", "module"),
-		"package",
-		filepath.Join("backend", "package"),
-	})
+func matchingPluginComponents(pluginName string) []component.Component {
+	pluginName = cleanPluginName(pluginName)
+	if pluginName == "" {
+		return nil
+	}
+	if current, ok := component.Find(pluginName); ok {
+		return []component.Component{current}
+	}
+	return nil
 }
 
 func splitPluginAssetPath(value string) (string, string, bool) {
@@ -597,6 +671,31 @@ func resolvePluginSourceRoot(pluginName string) (string, error) {
 	return "", os.ErrNotExist
 }
 
+func readEmbeddedPluginAsset(pluginName string, rel string) ([]byte, bool, error) {
+	current, ok := component.Find(pluginName)
+	if !ok || current.FrontFS == nil {
+		return nil, false, nil
+	}
+	assetPath := filepath.ToSlash(filepath.Join(current.FrontPrefix, rel))
+	content, err := fs.ReadFile(current.FrontFS, assetPath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return content, true, nil
+}
+
+func hasEmbeddedPluginAsset(current component.Component, rel string) bool {
+	if current.FrontFS == nil {
+		return false
+	}
+	assetPath := filepath.ToSlash(filepath.Join(current.FrontPrefix, rel))
+	info, err := fs.Stat(current.FrontFS, assetPath)
+	return err == nil && !info.IsDir()
+}
+
 func viteFSURL(file string) string {
 	absolute, err := filepath.Abs(file)
 	if err != nil {
@@ -630,21 +729,4 @@ func versionedViteSourceURL(file string) string {
 		separator = "&"
 	}
 	return url + separator + "v=" + strconv.FormatInt(info.ModTime().UnixNano(), 36)
-}
-
-func uniquePaths(items []string) []string {
-	seen := map[string]struct{}{}
-	result := make([]string, 0, len(items))
-	for _, item := range items {
-		item = filepath.Clean(strings.TrimSpace(item))
-		if item == "" || item == "." {
-			continue
-		}
-		if _, ok := seen[item]; ok {
-			continue
-		}
-		seen[item] = struct{}{}
-		result = append(result, item)
-	}
-	return result
 }

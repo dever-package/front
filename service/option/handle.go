@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +13,7 @@ import (
 
 	authctx "my/package/front/service/internal/authctx"
 	frontcall "my/package/front/service/internal/call"
+	optionseed "my/package/front/service/internal/optionseed"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
 	"my/package/front/service/runtimecache"
@@ -558,77 +557,11 @@ func normalizeOptionFilterValue(value string) any {
 }
 
 func SeedRows(modelName, parentField string, parentValue any) []map[string]any {
-	return SeedRowsByField(modelName, parentField, []any{parentValue})
+	return optionseed.Rows(modelName, parentField, parentValue)
 }
 
 func SeedRowsByField(modelName, field string, values []any) []map[string]any {
-	resource := frontrecord.ResourceName(modelName)
-	if resource == "" {
-		return nil
-	}
-
-	for _, path := range optionSchemaCandidates(resource) {
-		content, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-
-		var payload struct {
-			Seeds []map[string]any `json:"seeds"`
-		}
-		if err := json.Unmarshal(content, &payload); err != nil || len(payload.Seeds) == 0 {
-			continue
-		}
-
-		rows := make([]map[string]any, 0)
-		for _, row := range payload.Seeds {
-			if len(values) > 0 && !optionSeedMatchAny(row[field], values) {
-				continue
-			}
-			rows = append(rows, row)
-		}
-		if len(rows) > 0 {
-			return rows
-		}
-	}
-
-	return nil
-}
-
-func optionSchemaCandidates(resource string) []string {
-	candidates := []string{
-		filepath.Join("data", "table", "shemic_"+resource+".json"),
-		filepath.Join("data", "table", resource+".json"),
-		filepath.Join("data", resource+".json"),
-	}
-	seen := make(map[string]struct{}, len(candidates))
-	result := make([]string, 0, len(candidates))
-	for _, candidate := range candidates {
-		cleaned := filepath.Clean(candidate)
-		if cleaned == "." || cleaned == "" {
-			continue
-		}
-		if _, exists := seen[cleaned]; exists {
-			continue
-		}
-		seen[cleaned] = struct{}{}
-		result = append(result, cleaned)
-	}
-	return result
-}
-
-func optionSeedMatch(left, right any) bool {
-	return util.ToKeyString(left) == util.ToKeyString(right)
-}
-
-func optionSeedMatchAny(left any, values []any) bool {
-	leftValue := util.ToKeyString(left)
-	for _, value := range values {
-		if leftValue == util.ToKeyString(value) {
-			return true
-		}
-	}
-	return false
+	return optionseed.RowsByField(modelName, field, values)
 }
 
 type optionModel interface {
