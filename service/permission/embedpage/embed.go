@@ -66,9 +66,28 @@ func IsChildForPage(pageName string, parentPath, childPath string) bool {
 		return false
 	}
 
-	parents := ParentsForPage(pageName)[childPath]
-	_, ok := parents[parentPath]
-	return ok
+	return hasParentPath(ParentsForPage(pageName), parentPath, childPath, map[string]struct{}{})
+}
+
+func hasParentPath(graph map[string]map[string]struct{}, parentPath, childPath string, visited map[string]struct{}) bool {
+	if _, seen := visited[childPath]; seen {
+		return false
+	}
+	visited[childPath] = struct{}{}
+
+	parents := graph[childPath]
+	if len(parents) == 0 {
+		return false
+	}
+	if _, ok := parents[parentPath]; ok {
+		return true
+	}
+	for currentParent := range parents {
+		if hasParentPath(graph, parentPath, currentParent, visited) {
+			return true
+		}
+	}
+	return false
 }
 
 func FilterRows(rows []map[string]any) []map[string]any {
@@ -133,12 +152,14 @@ func collectParents(result map[string]map[string]struct{}, parentPath string, co
 	}
 
 	var payload struct {
-		Nodes map[string][]map[string]any `json:"nodes"`
+		Layout map[string]any              `json:"layout"`
+		Nodes  map[string][]map[string]any `json:"nodes"`
 	}
 	if err := util.UnmarshalJSONC(content, &payload); err != nil {
 		return
 	}
 
+	collectLayout(result, parentPath, payload.Layout)
 	for _, items := range payload.Nodes {
 		for _, item := range items {
 			collectItem(result, parentPath, item)
@@ -146,12 +167,25 @@ func collectParents(result map[string]map[string]struct{}, parentPath string, co
 	}
 }
 
+func collectLayout(result map[string]map[string]struct{}, parentPath string, layout map[string]any) {
+	if len(layout) == 0 {
+		return
+	}
+
+	if childPath := normalizePath(util.ToStringTrimmed(layout["path"])); childPath != "" {
+		addParent(result, parentPath, childPath)
+	}
+
+	children, _ := layout["children"].(map[string]any)
+	for _, child := range children {
+		childLayout, _ := child.(map[string]any)
+		collectLayout(result, parentPath, childLayout)
+	}
+}
+
 func collectItem(result map[string]map[string]struct{}, parentPath string, item map[string]any) {
 	if childPath := embeddedRoute(item); childPath != "" {
-		if result[childPath] == nil {
-			result[childPath] = map[string]struct{}{}
-		}
-		result[childPath][parentPath] = struct{}{}
+		addParent(result, parentPath, childPath)
 	}
 
 	if children, ok := item["items"].([]any); ok {
@@ -163,13 +197,35 @@ func collectItem(result map[string]map[string]struct{}, parentPath string, item 
 	}
 }
 
+func addParent(result map[string]map[string]struct{}, parentPath, childPath string) {
+	parentPath = normalizePath(parentPath)
+	childPath = normalizePath(childPath)
+	if parentPath == "" || childPath == "" || parentPath == childPath {
+		return
+	}
+	if result[childPath] == nil {
+		result[childPath] = map[string]struct{}{}
+	}
+	result[childPath][parentPath] = struct{}{}
+}
+
 func embeddedRoute(item map[string]any) string {
-	if strings.TrimSpace(util.ToString(item["mode"])) != "form" {
+	meta, _ := item["meta"].(map[string]any)
+	route := normalizePath(util.ToStringTrimmed(meta["pageRoute"]))
+	if route == "" {
 		return ""
 	}
 
-	meta, _ := item["meta"].(map[string]any)
-	return normalizePath(util.ToStringTrimmed(meta["pageRoute"]))
+	if strings.TrimSpace(util.ToString(item["mode"])) == "form" {
+		return route
+	}
+
+	switch strings.TrimSpace(util.ToString(item["type"])) {
+	case "feedback-modal", "feedback-drawer":
+		return route
+	default:
+		return ""
+	}
 }
 
 func normalizePath(path string) string {

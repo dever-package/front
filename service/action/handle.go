@@ -23,18 +23,21 @@ func PostAction(c *server.Context) error {
 	if err := c.BindJSON(&request); err != nil {
 		return c.Error("请求体格式错误")
 	}
-	if request.Action == nil {
-		return c.Error("action 不能为空")
-	}
 
-	config := frontpage.NormalizeAction(*request.Action)
-	pathValue := frontpage.ActionPath(requestPath, config)
-	if pathValue == "" {
-		return c.Error("页面路径不能为空")
+	resolved, err := frontpage.ResolveAction(frontpage.ResolveActionInput{
+		Context: c.Context(),
+		Path:    requestPath,
+		Key:     request.Key,
+		Payload: request.Payload,
+	})
+	if err != nil {
+		return c.Error(err)
 	}
+	config := resolved.Config
+	pathValue := resolved.Path
 
 	if config.Type == "delete" {
-		if err := permissionservice.EnsureActionAccess(c.Context(), requestPath, config.Key); err != nil {
+		if err := permissionservice.EnsureActionAccess(c.Context(), requestPath, resolved.Key); err != nil {
 			return respondPermissionDenied(c, err)
 		}
 	} else {
@@ -43,12 +46,9 @@ func PostAction(c *server.Context) error {
 		}
 	}
 
-	content, err := frontpage.ReadContentForContext(c.Context(), pathValue)
-	if err != nil {
-		return c.Error(err)
-	}
-	modelName := frontpage.ActionModelName(pathValue, config)
-	primaryKey := frontpage.ActionPrimaryKey(config)
+	content := resolved.Content
+	modelName := resolved.Model
+	primaryKey := resolved.PrimaryKey
 
 	switch config.Type {
 	case "save":
@@ -126,7 +126,7 @@ func runSave(c *server.Context, pathValue string, config frontpage.ActionConfig,
 		return nil, fmt.Errorf("action.save before 必须返回对象")
 	}
 
-	resolvedPayload, err := resolveSavePayload(config, sourceMap)
+	resolvedPayload, err := resolveSavePayload(c.Context(), config, sourceMap)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func runDelete(c *server.Context, pathValue string, config frontpage.ActionConfi
 	if err != nil {
 		return nil, err
 	}
-	resolvedPayload := resolveDeletePayload(config, sourcePayload)
+	resolvedPayload := resolveDeletePayload(c.Context(), config, sourcePayload)
 
 	modelName := frontpage.ActionModelName(pathValue, config)
 	result, err := deleteModelRecord(c, modelName, resolvedPayload, frontpage.ActionPrimaryKey(config))

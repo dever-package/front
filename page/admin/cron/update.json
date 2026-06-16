@@ -327,7 +327,12 @@
         "placeholder": "请选择内部业务",
         "value": "form.use",
         "mode": "form",
-        "option": "/front/route/option?type=service&use=front.cron.CronOptionService.LoadCronProviders&valueField=id&labelField=value",
+        "option": {
+          "type": "service",
+          "service": "front.cron.CronOptionService.LoadCronProviders",
+          "valueField": "id",
+          "labelField": "value"
+        },
         "validate": [
           {
             "type": "required",

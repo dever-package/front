@@ -17,6 +17,11 @@ import (
 
 type Route struct{}
 
+const (
+	maxBatchInfoItems   = 50
+	maxBatchOptionItems = 100
+)
+
 type batchInfoRequest struct {
 	Paths []batchInfoItem `json:"paths"`
 }
@@ -39,10 +44,11 @@ type batchResult struct {
 
 func (Route) GetInfo(c *server.Context) error {
 	pathValue := frontpagepath.NormalizePath(c.Input("path", "required", "页面路径"))
+	query := collectRequestQuery(c)
 	var accessScope *permissionservice.AccessScope
 	currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, func(key string) string {
 		return c.Input(key)
-	})
+	}, query)
 	if err != nil {
 		if permissionservice.IsPermissionDenied(err) {
 			return permissionDeniedPayload(c, err)
@@ -70,6 +76,9 @@ func (Route) PostBatchInfo(c *server.Context) error {
 	if len(request.Paths) == 0 {
 		return c.JSON([]batchResult{})
 	}
+	if len(request.Paths) > maxBatchInfoItems {
+		return c.Error("批量页面配置数量超过限制")
+	}
 
 	results := make([]batchResult, 0, len(request.Paths))
 	var accessScope *permissionservice.AccessScope
@@ -88,7 +97,7 @@ func (Route) PostBatchInfo(c *server.Context) error {
 			continue
 		}
 
-		currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, nil)
+		currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, nil, nil)
 		if err != nil {
 			results = append(results, batchResult{
 				Code:    routeInfoErrorCode(err),
@@ -134,11 +143,15 @@ func isSiteSystemPagePath(site siteconfig.Site, pathValue string) bool {
 
 func (Route) GetOption(c *server.Context) error {
 	pathValue, pathQuery := normalizeOptionPathInput(c.Input("path"))
-	if pathValue != "" {
-		lookup := requestInputLookup(pathQuery, c.Input)
-		if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
-			return permissionDeniedPayload(c, err)
-		}
+	if pathValue == "" {
+		return c.Error("option.path 不能为空")
+	}
+	if strings.TrimSpace(c.Input("key")) == "" {
+		return c.Error("option.key 不能为空")
+	}
+	lookup := requestInputLookup(pathQuery, c.Input)
+	if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
+		return permissionDeniedPayload(c, err)
 	}
 
 	return optionservice.Get(c)
@@ -152,23 +165,28 @@ func (Route) PostBatchOption(c *server.Context) error {
 	if len(request.Options) == 0 {
 		return c.JSON([]batchResult{})
 	}
+	if len(request.Options) > maxBatchOptionItems {
+		return c.Error("批量选项数量超过限制")
+	}
 
 	results := make([]batchResult, 0, len(request.Options))
 	for _, params := range request.Options {
 		pathValue, optionParams := normalizeOptionParams(params)
 		lookup := mapStringLookup(optionParams)
-		if pathValue != "" {
-			if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
-				results = append(results, batchResult{
-					Code:    403,
-					Path:    pathValue,
-					Message: err.Error(),
-				})
-				continue
-			}
+		if pathValue == "" || strings.TrimSpace(optionParams["key"]) == "" {
+			results = append(results, batchResult{Code: 400, Path: pathValue, Message: "option.path 和 option.key 不能为空"})
+			continue
+		}
+		if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
+			results = append(results, batchResult{
+				Code:    403,
+				Path:    pathValue,
+				Message: err.Error(),
+			})
+			continue
 		}
 
-		items, err := optionservice.GetByInput(c, lookup)
+		items, err := optionservice.GetByInput(c, mapStringLookup(optionParams))
 		if err != nil {
 			results = append(results, batchResult{
 				Code:    routeInfoErrorCode(err),
@@ -196,6 +214,7 @@ func buildRouteInfo(
 	pathValue string,
 	accessScope **permissionservice.AccessScope,
 	lookup permissionservice.InputLookup,
+	query map[string]string,
 ) (pageservice.Schema, error) {
 	if isSystemPageInfoPath(c.Context(), pathValue) {
 		return pageservice.BuildInfo(c, pathValue)
@@ -216,10 +235,62 @@ func buildRouteInfo(
 	if err != nil {
 		return pageservice.Schema{}, err
 	}
-	if err := (*accessScope).FilterPageSchema(pathValue, &currentSchema); err != nil {
+	if err := (*accessScope).FilterPageSchema(c.Context(), pathValue, &currentSchema, lookup, query); err != nil {
 		return pageservice.Schema{}, err
 	}
 	return currentSchema, nil
+}
+
+func collectRequestQuery(c *server.Context) map[string]string {
+	if c == nil {
+		return nil
+	}
+	return parseQueryFromURL(routeOriginalURL(c))
+}
+
+func routeOriginalURL(c *server.Context) string {
+	if c == nil || c.Raw == nil {
+		return ""
+	}
+	if raw, ok := c.Raw.(interface{ OriginalURL() string }); ok {
+		return raw.OriginalURL()
+	}
+	return c.Path()
+}
+
+func parseQueryFromURL(rawURL string) map[string]string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil
+	}
+	rawQuery := ""
+	if parsed, err := url.Parse(rawURL); err == nil {
+		rawQuery = parsed.RawQuery
+	}
+	if rawQuery == "" {
+		_, rawQuery, _ = strings.Cut(rawURL, "?")
+	}
+	if rawQuery == "" {
+		return nil
+	}
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil || len(values) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(values))
+	for key, items := range values {
+		key = strings.TrimSpace(key)
+		if key == "" || len(items) == 0 {
+			continue
+		}
+		if value := strings.TrimSpace(items[0]); value != "" {
+			result[key] = value
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func routeInfoErrorCode(err error) int {
@@ -250,8 +321,9 @@ func requestInputLookup(pathQuery map[string]string, fallback func(string, ...st
 }
 
 func normalizeOptionParams(params map[string]string) (string, map[string]string) {
-	pathValue, pathQuery := normalizeOptionPathInput(params["path"])
-	if len(pathQuery) == 0 && pathValue == strings.TrimSpace(params["path"]) {
+	rawPath := strings.TrimSpace(params["path"])
+	pathValue, pathQuery := normalizeOptionPathInput(rawPath)
+	if len(pathQuery) == 0 && pathValue == rawPath {
 		return pathValue, params
 	}
 
@@ -267,7 +339,9 @@ func normalizeOptionParams(params map[string]string) (string, map[string]string)
 			result[key] = value
 		}
 	}
-	if pathValue != "" {
+	if rawPath != "" {
+		result["path"] = rawPath
+	} else if pathValue != "" {
 		result["path"] = pathValue
 	}
 	return pathValue, result

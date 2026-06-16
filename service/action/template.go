@@ -1,18 +1,23 @@
 package action
 
 import (
-	actionpayload "my/package/front/service/action/internal/payload"
+	"context"
+
 	frontpage "my/package/front/service/page"
 )
 
-func resolveSavePayload(config frontpage.ActionConfig, form map[string]any) (any, error) {
+func resolveSavePayload(ctx context.Context, config frontpage.ActionConfig, form map[string]any) (any, error) {
 	if config.Data == nil {
 		return form, nil
 	}
-	return actionpayload.ResolveTemplateValue(config.Data, form), nil
+	return frontpage.ResolveTemplateValue(config.Data, frontpage.TemplateContext{
+		Context: ctx,
+		Form:    form,
+		Payload: form,
+	}), nil
 }
 
-func resolveDeletePayload(config frontpage.ActionConfig, payload any) any {
+func resolveDeletePayload(ctx context.Context, config frontpage.ActionConfig, payload any) any {
 	if config.Filters == nil {
 		return payload
 	}
@@ -21,5 +26,9 @@ func resolveDeletePayload(config frontpage.ActionConfig, payload any) any {
 	if !ok {
 		return config.Filters
 	}
-	return actionpayload.ResolveTemplateValue(config.Filters, values)
+	return frontpage.ResolveTemplateValue(config.Filters, frontpage.TemplateContext{
+		Context: ctx,
+		Form:    values,
+		Payload: payload,
+	})
 }

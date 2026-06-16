@@ -26,8 +26,8 @@ type ActionConfig struct {
 }
 
 type ActionRequest struct {
-	Action  *ActionConfig `json:"action"`
-	Payload any           `json:"payload"`
+	Key     string `json:"key"`
+	Payload any    `json:"payload"`
 }
 
 type actionEnvelope struct {
@@ -46,6 +46,7 @@ func NormalizeAction(config ActionConfig) ActionConfig {
 	config.Path = normalizePath(config.Path)
 	config.Use = strings.TrimSpace(config.Use)
 	config.PK = strings.TrimSpace(config.PK)
+	config.Key = normalizeActionKey(config.Key)
 	return config
 }
 
@@ -80,7 +81,7 @@ func ActionPath(pathValue string, config ActionConfig) string {
 	return normalizePath(pathValue)
 }
 
-func parseNamedAction(content []byte, name string) (ActionConfig, bool, error) {
+func ParseNamedAction(content []byte, name string) (ActionConfig, bool, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return ActionConfig{}, false, nil
@@ -96,6 +97,14 @@ func parseNamedAction(content []byte, name string) (ActionConfig, bool, error) {
 		return ActionConfig{}, false, nil
 	}
 	return NormalizeAction(config), true, nil
+}
+
+func parseNamedAction(content []byte, name string) (ActionConfig, bool, error) {
+	return ParseNamedAction(content, name)
+}
+
+func normalizeActionKey(key string) string {
+	return strings.Trim(strings.TrimSpace(key), "/")
 }
 
 func parseActionEnvelope(content []byte) (actionEnvelope, error) {

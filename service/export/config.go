@@ -16,9 +16,10 @@ import (
 )
 
 type rawPageSchema struct {
-	Page  map[string]any              `json:"page"`
-	Nodes map[string][]map[string]any `json:"nodes"`
-	Data  map[string]any              `json:"data"`
+	Page   map[string]any              `json:"page"`
+	Nodes  map[string][]map[string]any `json:"nodes"`
+	Data   map[string]any              `json:"data"`
+	Action map[string]any              `json:"action"`
 }
 
 type pageExportCandidate struct {
@@ -93,7 +94,7 @@ func loadPageConfigForContext(ctx context.Context, pathValue, tableID, exportKey
 	targetTableID := strings.TrimSpace(tableID)
 	targetExportKey := strings.TrimSpace(exportKey)
 	items, tableMap, orderedTables := flattenPageItems(payload.Nodes)
-	candidates, err := collectPageExportCandidates(items, tableMap, orderedTables, targetTableID)
+	candidates, err := collectPageExportCandidates(items, tableMap, orderedTables, targetTableID, payload.Action)
 	if err != nil {
 		return pageConfigSnapshot{}, err
 	}
@@ -145,11 +146,12 @@ func collectPageExportCandidates(
 	tableMap map[string]map[string]any,
 	orderedTables []map[string]any,
 	targetTableID string,
+	namedActions map[string]any,
 ) ([]pageExportCandidate, error) {
 	candidates := make([]pageExportCandidate, 0)
 
 	for _, item := range items {
-		currentCandidates, err := collectItemExportCandidates(item, nil, tableMap, orderedTables, targetTableID)
+		currentCandidates, err := collectItemExportCandidates(item, nil, tableMap, orderedTables, targetTableID, namedActions)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +163,7 @@ func collectPageExportCandidates(
 				"id":   item["id"],
 				"meta": item["meta"],
 				"idx":  index,
-			}, tableMap, orderedTables, targetTableID)
+			}, tableMap, orderedTables, targetTableID, namedActions)
 			if err != nil {
 				return nil, err
 			}
@@ -178,9 +180,10 @@ func collectItemExportCandidates(
 	tableMap map[string]map[string]any,
 	orderedTables []map[string]any,
 	targetTableID string,
+	namedActions map[string]any,
 ) ([]pageExportCandidate, error) {
 	actionMap, _ := item["action"].(map[string]any)
-	clickConfig, ok, err := parseExportAction(actionMap["click"])
+	clickConfig, ok, err := parseExportAction(actionMap["click"], namedActions)
 	if err != nil {
 		return nil, err
 	}
@@ -286,17 +289,36 @@ func matchPageExportCandidate(
 	return pageExportCandidate{}, false
 }
 
-func parseExportAction(raw any) (exportActionSnapshot, bool, error) {
+func parseExportAction(raw any, namedActions map[string]any) (exportActionSnapshot, bool, error) {
+	return parseExportActionWithSeen(raw, namedActions, map[string]struct{}{})
+}
+
+func parseExportActionWithSeen(raw any, namedActions map[string]any, seen map[string]struct{}) (exportActionSnapshot, bool, error) {
 	if raw == nil {
 		return exportActionSnapshot{}, false, nil
 	}
 
 	switch current := raw.(type) {
 	case string:
-		return exportActionSnapshot{}, false, nil
+		actionName := strings.TrimSpace(current)
+		if actionName == "" {
+			return exportActionSnapshot{}, false, nil
+		}
+		if _, ok := seen[actionName]; ok {
+			return exportActionSnapshot{}, false, nil
+		}
+		seen[actionName] = struct{}{}
+		config, ok, err := parseExportActionWithSeen(namedActions[actionName], namedActions, seen)
+		if err != nil || !ok {
+			return config, ok, err
+		}
+		if strings.TrimSpace(config.ExportKey) == "" {
+			config.ExportKey = actionName
+		}
+		return config, true, nil
 	case []any:
 		for _, item := range current {
-			config, ok, err := parseExportAction(item)
+			config, ok, err := parseExportActionWithSeen(item, namedActions, seen)
 			if err != nil {
 				return exportActionSnapshot{}, false, err
 			}

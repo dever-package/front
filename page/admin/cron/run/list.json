@@ -69,7 +69,11 @@
         "placeholder": "计划任务",
         "value": "search.cron_id",
         "mode": "search",
-        "option": "/front/route/option?type=model&use=front.NewCronModel&labelField=name&searchFields=name&pageSize=20"
+        "option": {
+          "labelField": "name",
+          "searchFields": ["name"],
+          "pageSize": 20
+        }
       },
       {
         "type": "form-select",

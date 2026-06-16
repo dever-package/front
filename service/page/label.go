@@ -2,12 +2,10 @@ package page
 
 import (
 	"encoding/json"
-	"net/url"
 	"strings"
 
 	"github.com/shemic/dever/util"
 	frontmeta "my/package/front/service/meta"
-	"my/package/front/service/siteconfig"
 )
 
 func applyNodeLabels(rawNodes json.RawMessage, pathValue string, content []byte) (json.RawMessage, error) {
@@ -159,15 +157,11 @@ func applyItemOption(item map[string]any, modelName string) bool {
 	}
 
 	if strings.TrimSpace(toString(item["type"])) == "show-category-list" {
-		modelName = strings.TrimSpace(modelName)
-		if modelName == "" {
-			return false
+		if key := defaultCategoryOptionKey(item); key != "" {
+			item["option"] = "option." + key
+			return true
 		}
-		query := url.Values{}
-		query.Set("type", "model")
-		query.Set("use", modelName)
-		item["option"] = siteconfig.FrontRuntimeAPIURL("route/option", query)
-		return true
+		return false
 	}
 
 	if !canInferItemOption(item) {

@@ -13,7 +13,8 @@ import (
 )
 
 type rawPageSchema struct {
-	Nodes map[string][]map[string]any `json:"nodes"`
+	Nodes  map[string][]map[string]any `json:"nodes"`
+	Action map[string]any              `json:"action"`
 }
 
 func loadPageConfig(pathValue, importKey string) (importConfig, error) {
@@ -32,7 +33,7 @@ func loadPageConfigForContext(ctx context.Context, pathValue, importKey string) 
 	}
 
 	items := flattenPageItems(payload.Nodes)
-	candidates, err := collectPageImportCandidates(items)
+	candidates, err := collectPageImportCandidates(items, payload.Action)
 	if err != nil {
 		return importConfig{}, err
 	}
@@ -69,10 +70,10 @@ func normalizeNestedItems(raw any) []map[string]any {
 	return list
 }
 
-func collectPageImportCandidates(items []map[string]any) ([]importConfig, error) {
+func collectPageImportCandidates(items []map[string]any, namedActions map[string]any) ([]importConfig, error) {
 	candidates := make([]importConfig, 0)
 	for _, item := range items {
-		candidate, ok, err := collectItemImportCandidate(item)
+		candidate, ok, err := collectItemImportCandidate(item, namedActions)
 		if err != nil {
 			return nil, err
 		}
@@ -83,9 +84,9 @@ func collectPageImportCandidates(items []map[string]any) ([]importConfig, error)
 	return candidates, nil
 }
 
-func collectItemImportCandidate(item map[string]any) (importConfig, bool, error) {
+func collectItemImportCandidate(item map[string]any, namedActions map[string]any) (importConfig, bool, error) {
 	actionMap, _ := item["action"].(map[string]any)
-	clickConfig, ok, err := parseImportAction(actionMap["click"])
+	clickConfig, ok, err := parseImportAction(actionMap["click"], namedActions)
 	if err != nil {
 		return importConfig{}, false, err
 	}
@@ -134,17 +135,36 @@ func matchPageImportCandidate(
 	return importConfig{}, false
 }
 
-func parseImportAction(raw any) (importerActionSnapshot, bool, error) {
+func parseImportAction(raw any, namedActions map[string]any) (importerActionSnapshot, bool, error) {
+	return parseImportActionWithSeen(raw, namedActions, map[string]struct{}{})
+}
+
+func parseImportActionWithSeen(raw any, namedActions map[string]any, seen map[string]struct{}) (importerActionSnapshot, bool, error) {
 	if raw == nil {
 		return importerActionSnapshot{}, false, nil
 	}
 
 	switch current := raw.(type) {
 	case string:
-		return importerActionSnapshot{}, false, nil
+		actionName := strings.TrimSpace(current)
+		if actionName == "" {
+			return importerActionSnapshot{}, false, nil
+		}
+		if _, ok := seen[actionName]; ok {
+			return importerActionSnapshot{}, false, nil
+		}
+		seen[actionName] = struct{}{}
+		config, ok, err := parseImportActionWithSeen(namedActions[actionName], namedActions, seen)
+		if err != nil || !ok {
+			return config, ok, err
+		}
+		if strings.TrimSpace(config.ImportKey) == "" {
+			config.ImportKey = actionName
+		}
+		return config, true, nil
 	case []any:
 		for _, item := range current {
-			config, ok, err := parseImportAction(item)
+			config, ok, err := parseImportActionWithSeen(item, namedActions, seen)
 			if err != nil {
 				return importerActionSnapshot{}, false, err
 			}

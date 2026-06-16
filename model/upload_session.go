@@ -18,6 +18,7 @@ type UploadSession struct {
 	Mime             string    `dorm:"type:varchar(128);comment:MIME类型"`
 	Size             int64     `dorm:"type:bigint;not null;default:0;comment:文件大小"`
 	Hash             string    `dorm:"type:varchar(64);comment:文件哈希"`
+	Token            string    `dorm:"type:varchar(64);comment:会话令牌"`
 	ObjectKey        string    `dorm:"type:varchar(255);comment:对象键"`
 	ChunkSize        int64     `dorm:"type:bigint;not null;default:0;comment:分片大小"`
 	ChunkTotal       int       `dorm:"type:int;not null;default:1;comment:分片总数"`
@@ -30,6 +31,7 @@ type UploadSession struct {
 
 type UploadSessionIndex struct {
 	RuleStatus struct{} `index:"rule_id,status"`
+	Token      struct{} `index:"token"`
 }
 
 func NewUploadSessionModel() *orm.Model[UploadSession] {

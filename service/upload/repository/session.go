@@ -30,6 +30,7 @@ func FindUploadSession(ctx context.Context, sessionID uint64) (UploadSession, er
 		Mime:             util.ToStringTrimmed(row["mime"]),
 		Size:             util.ToInt64(row["size"]),
 		Hash:             NormalizeHash(row["hash"]),
+		Token:            util.ToStringTrimmed(row["token"]),
 		ObjectKey:        util.ToStringTrimmed(row["object_key"]),
 		ChunkSize:        util.ToInt64(row["chunk_size"]),
 		ChunkTotal:       int(util.ToInt64(row["chunk_total"])),

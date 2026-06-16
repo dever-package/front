@@ -3,13 +3,12 @@ package page
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontoption "my/package/front/service/option"
+	frontmeta "my/package/front/service/meta"
 	"my/package/front/service/siteconfig"
 )
 
@@ -24,11 +23,9 @@ func applyNodeDefaults(
 		rawData = json.RawMessage(`{}`)
 	}
 
-	var nodes map[string][]map[string]any
-	if len(rawNodes) > 0 {
-		if err := json.Unmarshal(rawNodes, &nodes); err != nil {
-			return nil, fmt.Errorf("页面 nodes 解析失败")
-		}
+	nodes, err := parseNodeMap(rawNodes)
+	if err != nil {
+		return nil, err
 	}
 
 	var payload any
@@ -48,9 +45,16 @@ func applyNodeDefaults(
 	if applyPageDataDefaults(root, nodes, pathValue) {
 		changed = true
 	}
+	applied, err := applyLocalNodeOptions(c, root, nodes, pathValue)
+	if err != nil {
+		return nil, err
+	}
+	if applied {
+		changed = true
+	}
 	for _, items := range nodes {
 		for _, item := range items {
-			applied, err := applyDefaultCategoryValue(c, root, item)
+			applied, err := applyDefaultCategoryValue(c, root, item, pathValue)
 			if err != nil {
 				return nil, err
 			}
@@ -60,7 +64,7 @@ func applyNodeDefaults(
 		}
 	}
 
-	applied, err := applyLinkedPageCategoryDefaults(c, rawLayout, root, pathValue)
+	applied, err = applyLinkedPageCategoryDefaults(c, rawLayout, root, pathValue)
 	if err != nil {
 		return nil, err
 	}
@@ -81,6 +85,152 @@ func applyNodeDefaults(
 		return nil, fmt.Errorf("页面 data 编码失败")
 	}
 	return json.RawMessage(content), nil
+}
+
+func parseNodeMap(rawNodes json.RawMessage) (map[string][]map[string]any, error) {
+	if len(rawNodes) == 0 {
+		return nil, nil
+	}
+
+	var nodes map[string][]map[string]any
+	if err := json.Unmarshal(rawNodes, &nodes); err != nil {
+		return nil, fmt.Errorf("页面 nodes 解析失败")
+	}
+	return nodes, nil
+}
+
+func applyLocalNodeOptions(
+	c *server.Context,
+	root map[string]any,
+	nodes map[string][]map[string]any,
+	pathValue string,
+) (bool, error) {
+	if len(nodes) == 0 {
+		return false, nil
+	}
+
+	options := map[string]any{}
+	for _, items := range nodes {
+		for _, item := range items {
+			if err := collectLocalNodeOptions(c, root, options, item, pathValue); err != nil {
+				return false, err
+			}
+		}
+	}
+	if len(options) == 0 {
+		return false, nil
+	}
+
+	existing, _ := root["option"].(map[string]any)
+	root["option"] = frontmeta.MergeOptionMap(existing, options)
+	return true, nil
+}
+
+func collectLocalNodeOptions(
+	c *server.Context,
+	root map[string]any,
+	options map[string]any,
+	item map[string]any,
+	pathValue string,
+) error {
+	if key, ok := categoryLocalOptionKey(item); ok {
+		if _, exists := options[key]; !exists && !hasMeaningfulLocalOption(root, key) {
+			rows, err := resolveNodeOptionRows(c, item, pathValue)
+			if err != nil {
+				return err
+			}
+			if rows == nil {
+				rows = []map[string]any{}
+			}
+			options[key] = rows
+		}
+	}
+
+	for _, child := range normalizeNodeItems(item["items"]) {
+		if err := collectLocalNodeOptions(c, root, options, child, pathValue); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func categoryLocalOptionKey(item map[string]any) (string, bool) {
+	if util.ToStringTrimmed(item["type"]) != "show-category-list" {
+		return "", false
+	}
+	key, ok := localOptionDataKey(util.ToStringTrimmed(item["option"]))
+	if !ok {
+		return "", false
+	}
+	return key, true
+}
+
+func localOptionDataKey(source string) (string, bool) {
+	source = strings.TrimSpace(source)
+	if source == "" || isRemoteOptionURL(source) {
+		return "", false
+	}
+
+	source = normalizeDataPath(source)
+	if !strings.HasPrefix(source, "option.") {
+		return "", false
+	}
+
+	key := strings.Trim(strings.TrimPrefix(source, "option."), ".")
+	if key == "" {
+		return "", false
+	}
+	return key, true
+}
+
+func defaultCategoryOptionKey(item map[string]any) string {
+	for _, candidate := range []string{
+		util.ToStringTrimmed(item["optionKey"]),
+		util.ToStringTrimmed(item["key"]),
+		util.ToStringTrimmed(item["id"]),
+		util.ToStringTrimmed(item["value"]),
+	} {
+		if key := normalizeLocalOptionKey(candidate); key != "" {
+			return key
+		}
+	}
+	return ""
+}
+
+func normalizeLocalOptionKey(value string) string {
+	value = normalizeOptionKey(value)
+	value = strings.TrimPrefix(value, "parent.data.")
+	value = strings.TrimPrefix(value, "parent.")
+	value = strings.TrimPrefix(value, "data.")
+	value = strings.TrimPrefix(value, "state.")
+	value = strings.TrimPrefix(value, "search.")
+	value = strings.TrimPrefix(value, "form.")
+	value = strings.Trim(value, ".")
+	value = strings.ReplaceAll(value, ".", "_")
+	value = strings.ReplaceAll(value, "-", "_")
+	return strings.TrimSpace(value)
+}
+
+func hasMeaningfulLocalOption(root map[string]any, key string) bool {
+	value, ok := lookupFrontDataPathValue(root, "option."+key)
+	return ok && hasMeaningfulFrontValue(value)
+}
+
+func resolveNodeOptionRows(c *server.Context, item map[string]any, pathValue string) ([]map[string]any, error) {
+	key := nodeOptionKey(item)
+	if key == "" || normalizePath(pathValue) == "" {
+		return nil, nil
+	}
+	return resolveOptionRows(c, func(name string) string {
+		switch name {
+		case "path":
+			return pathValue
+		case "key":
+			return key
+		default:
+			return ""
+		}
+	})
 }
 
 func applyFormFieldDefaults(root map[string]any, nodes map[string][]map[string]any) bool {
@@ -294,7 +444,16 @@ func applyLinkedPageNodeCategoryDefaults(
 	}
 
 	changed := false
-	if applied, err := applyParentCategoryDefaults(c, root, linkedSchema.Nodes); err != nil {
+	nodes, err := parseNodeMap(linkedSchema.Nodes)
+	if err != nil {
+		return false, err
+	}
+	if applied, err := applyLocalNodeOptions(c, root, nodes, pagePath); err != nil {
+		return false, err
+	} else if applied {
+		changed = true
+	}
+	if applied, err := applyParentCategoryDefaultsFromNodes(c, root, nodes, pagePath); err != nil {
 		return false, err
 	} else if applied {
 		changed = true
@@ -317,24 +476,16 @@ func applyLinkedPageNodeCategoryDefaults(
 	return changed, nil
 }
 
-func applyParentCategoryDefaults(
+func applyParentCategoryDefaultsFromNodes(
 	c *server.Context,
 	root map[string]any,
-	rawNodes json.RawMessage,
+	nodes map[string][]map[string]any,
+	pathValue string,
 ) (bool, error) {
-	if len(rawNodes) == 0 {
-		return false, nil
-	}
-
-	var nodes map[string][]map[string]any
-	if err := json.Unmarshal(rawNodes, &nodes); err != nil {
-		return false, fmt.Errorf("页面 nodes 解析失败")
-	}
-
 	changed := false
 	for _, items := range nodes {
 		for _, item := range items {
-			applied, err := applyParentDefaultCategoryValue(c, root, item)
+			applied, err := applyParentDefaultCategoryValue(c, root, item, pathValue)
 			if err != nil {
 				return false, err
 			}
@@ -346,7 +497,7 @@ func applyParentCategoryDefaults(
 	return changed, nil
 }
 
-func applyParentDefaultCategoryValue(c *server.Context, root map[string]any, item map[string]any) (bool, error) {
+func applyParentDefaultCategoryValue(c *server.Context, root map[string]any, item map[string]any, pathValue string) (bool, error) {
 	if util.ToStringTrimmed(item["type"]) != "show-category-list" {
 		return false, nil
 	}
@@ -369,7 +520,7 @@ func applyParentDefaultCategoryValue(c *server.Context, root map[string]any, ite
 		return false, nil
 	}
 
-	firstValue, ok, err := resolveDefaultCategoryOptionValue(c, root, item["option"])
+	firstValue, ok, err := resolveDefaultCategoryOptionValue(c, root, item, pathValue)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -455,7 +606,7 @@ func applySearchDefaults(root map[string]any) bool {
 	return changed
 }
 
-func applyDefaultCategoryValue(c *server.Context, root map[string]any, item map[string]any) (bool, error) {
+func applyDefaultCategoryValue(c *server.Context, root map[string]any, item map[string]any, pathValue string) (bool, error) {
 	if util.ToStringTrimmed(item["type"]) != "show-category-list" {
 		return false, nil
 	}
@@ -481,7 +632,7 @@ func applyDefaultCategoryValue(c *server.Context, root map[string]any, item map[
 		return false, nil
 	}
 
-	firstValue, ok, err := resolveDefaultCategoryOptionValue(c, root, item["option"])
+	firstValue, ok, err := resolveDefaultCategoryOptionValue(c, root, item, pathValue)
 	if err != nil || !ok {
 		return false, err
 	}
@@ -528,7 +679,8 @@ func hasMeaningfulFrontValue(value any) bool {
 	}
 }
 
-func resolveDefaultCategoryOptionValue(c *server.Context, root map[string]any, optionSource any) (any, bool, error) {
+func resolveDefaultCategoryOptionValue(c *server.Context, root map[string]any, item map[string]any, pathValue string) (any, bool, error) {
+	optionSource := item["option"]
 	switch current := optionSource.(type) {
 	case []any:
 		value, ok := extractFirstOptionValue(current)
@@ -558,7 +710,7 @@ func resolveDefaultCategoryOptionValue(c *server.Context, root map[string]any, o
 			}
 		}
 
-		items, err := resolveRemoteDefaultCategoryOptions(c, source)
+		items, err := resolveRemoteDefaultCategoryOptions(c, source, item, pathValue)
 		if err != nil {
 			return nil, false, err
 		}
@@ -569,32 +721,24 @@ func resolveDefaultCategoryOptionValue(c *server.Context, root map[string]any, o
 	}
 }
 
-func resolveRemoteDefaultCategoryOptions(c *server.Context, source string) ([]map[string]any, error) {
-	parsed, err := url.Parse(strings.TrimSpace(source))
-	if err != nil {
-		return nil, fmt.Errorf("分类选项地址无效")
-	}
-	if !siteconfig.IsFrontRuntimeAPIEndpoint(parsed.Path, "route/option") {
+func resolveRemoteDefaultCategoryOptions(c *server.Context, source string, item map[string]any, pathValue string) ([]map[string]any, error) {
+	if !strings.Contains(strings.TrimSpace(source), "route/option") {
 		return nil, nil
 	}
-
-	queryValues := parsed.Query()
-	optionType := strings.ToLower(strings.TrimSpace(queryValues.Get("type")))
-	if optionType == "" {
-		optionType = "model"
+	key := nodeOptionKey(item)
+	if pathValue == "" || key == "" {
+		return nil, fmt.Errorf("分类选项缺少 path 或 key")
 	}
-	switch optionType {
-	case "model":
-		return frontoption.GetModelOptionsByInput(c.Context(), func(key string) string {
-			return queryValues.Get(key)
-		})
-	case "service":
-		return frontoption.GetServiceOptionsByInput(c, func(key string) string {
-			return queryValues.Get(key)
-		})
-	default:
-		return nil, nil
-	}
+	return resolveOptionRows(c, func(name string) string {
+		switch name {
+		case "path":
+			return pathValue
+		case "key":
+			return key
+		default:
+			return ""
+		}
+	})
 }
 
 func extractFirstOptionValue(items []any) (any, bool) {

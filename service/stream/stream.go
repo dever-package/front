@@ -51,7 +51,7 @@ func New(namespace string) Service {
 
 func (s Service) WritePayload(ctx context.Context, requestID string, payload map[string]any) (string, error) {
 	requestID = strings.TrimSpace(requestID)
-	if requestID == "" {
+	if !validRequestID(requestID) {
 		return "", fmt.Errorf("request_id 不能为空")
 	}
 	if payload == nil {
@@ -91,7 +91,7 @@ func (s Service) WritePayload(ctx context.Context, requestID string, payload map
 
 func (s Service) Read(ctx context.Context, requestID string, lastID string, count int64, block time.Duration) ([]Entry, error) {
 	requestID = strings.TrimSpace(requestID)
-	if requestID == "" {
+	if !validRequestID(requestID) {
 		return nil, fmt.Errorf("request_id 不能为空")
 	}
 	lastID = strings.TrimSpace(lastID)

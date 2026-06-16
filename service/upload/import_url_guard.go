@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -30,6 +31,7 @@ var importURLDialer = &net.Dialer{
 func newImportURLHTTPTransport() *http.Transport {
 	if base, ok := http.DefaultTransport.(*http.Transport); ok {
 		transport := base.Clone()
+		transport.Proxy = importURLProxy
 		transport.DialContext = dialAllowedImportURLAddress
 		transport.TLSHandshakeTimeout = 10 * time.Second
 		transport.ResponseHeaderTimeout = 30 * time.Second
@@ -37,11 +39,27 @@ func newImportURLHTTPTransport() *http.Transport {
 		return transport
 	}
 	return &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
+		Proxy:                 importURLProxy,
 		DialContext:           dialAllowedImportURLAddress,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
+	}
+}
+
+func importURLProxy(req *http.Request) (*url.URL, error) {
+	if !allowImportURLEnvironmentProxy() {
+		return nil, nil
+	}
+	return http.ProxyFromEnvironment(req)
+}
+
+func allowImportURLEnvironmentProxy() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("FRONT_UPLOAD_IMPORT_URL_PROXY"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 

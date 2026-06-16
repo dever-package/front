@@ -1,6 +1,7 @@
 package permission
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
 	"sort"
@@ -10,10 +11,16 @@ import (
 
 	frontpagepath "my/package/front/internal/pagepath"
 	frontpage "my/package/front/service/page"
+	embedpageservice "my/package/front/service/permission/embedpage"
+	"my/package/front/service/siteconfig"
 )
 
 type pageSchemaPermissionFilter struct {
+	ctx      context.Context
 	snapshot *accessSnapshot
+	lookup   InputLookup
+	query    map[string]string
+	pageName string
 	pagePath string
 	nodes    map[string][]map[string]any
 	data     map[string]any
@@ -32,18 +39,18 @@ type pageSchemaPermissionContext struct {
 	itemKey string
 }
 
-func (scope *AccessScope) FilterPageSchema(pathValue string, currentSchema *frontpage.Schema) error {
+func (scope *AccessScope) FilterPageSchema(ctx context.Context, pathValue string, currentSchema *frontpage.Schema, lookup InputLookup, query map[string]string) error {
 	if scope == nil {
 		return nil
 	}
-	return filterPageSchemaWithSnapshot(scope.snapshot, pathValue, currentSchema)
+	return filterPageSchemaWithSnapshot(ctx, scope.snapshot, pathValue, currentSchema, lookup, query)
 }
 
 func shouldSkipSchemaPermissionFilter(snapshot *accessSnapshot) bool {
 	return snapshot == nil || hasDefaultRole(snapshot.roleIDs)
 }
 
-func filterPageSchemaWithSnapshot(snapshot *accessSnapshot, pathValue string, currentSchema *frontpage.Schema) error {
+func filterPageSchemaWithSnapshot(ctx context.Context, snapshot *accessSnapshot, pathValue string, currentSchema *frontpage.Schema, lookup InputLookup, query map[string]string) error {
 	if currentSchema == nil || len(currentSchema.Nodes) == 0 {
 		return nil
 	}
@@ -52,7 +59,11 @@ func filterPageSchemaWithSnapshot(snapshot *accessSnapshot, pathValue string, cu
 	}
 
 	filter := pageSchemaPermissionFilter{
+		ctx:          ctx,
 		snapshot:     snapshot,
+		lookup:       lookup,
+		query:        query,
+		pageName:     siteconfig.PageFromContext(ctx),
 		pagePath:     frontpagepath.NormalizePath(pathValue),
 		nodes:        decodeSchemaNodes(currentSchema.Nodes),
 		data:         decodeSchemaObject(currentSchema.Data),
@@ -171,7 +182,14 @@ func (filter pageSchemaPermissionFilter) filterCategoryListActions(item map[stri
 	if !ok || statusAction == nil {
 		return
 	}
-	if filter.canUseInlineAction(statusAction, nil, categoryListRowKey(item)) {
+
+	pathValue := filter.inlineActionPath(statusAction)
+	query := filter.inlineActionQuery(
+		pathValue,
+		categoryListRowKey(item),
+		"__permission_probe__",
+	)
+	if pathValue == "" || filter.canUseRoute(pathValue, query) {
 		return
 	}
 	delete(meta, "statusChangeAction")
@@ -300,7 +318,8 @@ func (filter pageSchemaPermissionFilter) canUseInlineAction(action any, rows []m
 	}
 
 	if len(rows) == 0 {
-		return filter.canUseRoute(pathValue, inlineEditQuery(rowKey, "__permission_probe__"))
+		query := filter.inlineActionQuery(pathValue, rowKey, "__permission_probe__")
+		return filter.canUseRoute(pathValue, query)
 	}
 
 	for _, row := range rows {
@@ -308,11 +327,22 @@ func (filter pageSchemaPermissionFilter) canUseInlineAction(action any, rows []m
 		if isEmptyInlineRowID(rowID) {
 			continue
 		}
-		if filter.canUseRoute(pathValue, inlineEditQuery(rowKey, rowID)) {
+		query := filter.inlineActionQuery(pathValue, rowKey, rowID)
+		if filter.canUseRoute(pathValue, query) {
 			return true
 		}
 	}
 	return false
+}
+
+func (filter pageSchemaPermissionFilter) inlineActionQuery(
+	pathValue string,
+	rowKey string,
+	rowID any,
+) map[string]string {
+	query := inlineEditQuery(rowKey, rowID)
+	query = mergeRouteQuery(query, filter.inheritedRouteQuery(pathValue))
+	return query
 }
 
 func (filter pageSchemaPermissionFilter) inlineActionPath(raw any) string {
@@ -421,6 +451,7 @@ func (filter pageSchemaPermissionFilter) canUseOverlay(stateKey string, context 
 	if route := filter.resolveOverlayRoute(meta, context); route != "" {
 		pathValue, query := parseRoute(route)
 		query = mergeRouteQuery(query, resolveRouteQuery(meta["pageRouteQuery"], filter.data, filter.state, context))
+		query = mergeRouteQuery(query, filter.inheritedRouteQuery(pathValue))
 		return filter.canUseRoute(pathValue, query)
 	}
 
@@ -429,6 +460,37 @@ func (filter pageSchemaPermissionFilter) canUseOverlay(stateKey string, context 
 		return filter.canUseAction(confirm, overlay, context)
 	}
 	return true
+}
+
+func (filter pageSchemaPermissionFilter) inheritedRouteQuery(childPath string) map[string]string {
+	parentPath := frontpagepath.NormalizePath(filter.pagePath)
+	childPath = frontpagepath.NormalizePath(childPath)
+	if parentPath == "" || childPath == "" || parentPath == childPath {
+		return nil
+	}
+	if !embedpageservice.IsChildForPage(filter.pageName, parentPath, childPath) {
+		return nil
+	}
+	query := map[string]string{
+		inheritInputKey:      "form",
+		inheritParentPathKey: parentPath,
+	}
+	for key, value := range filter.query {
+		appendInheritedQueryValue(query, key, value)
+	}
+	for key, value := range routeQueryStrings(filter.state) {
+		appendInheritedQueryValue(query, key, value)
+	}
+	return query
+}
+
+func appendInheritedQueryValue(query map[string]string, key string, value string) {
+	key = strings.TrimSpace(key)
+	value = strings.TrimSpace(value)
+	if query == nil || key == "" || value == "" {
+		return
+	}
+	query[inheritParentInputPrefix+key] = value
 }
 
 func (filter pageSchemaPermissionFilter) resolveOverlayRoute(meta map[string]any, context pageSchemaPermissionContext) string {
@@ -519,12 +581,48 @@ func (filter pageSchemaPermissionFilter) canUseRoute(route string, query map[str
 		return query[key]
 	})
 	if !protected {
-		filter.routeCache[cacheKey] = false
-		return false
+		allowed := filter.canUseInheritedRoute(pathValue, query)
+		filter.routeCache[cacheKey] = allowed
+		return allowed
 	}
 	allowed := canAccessAuthRow(filter.snapshot, row)
+	if !allowed && filter.canUseInheritedRoute(pathValue, query) {
+		allowed = true
+	}
 	filter.routeCache[cacheKey] = allowed
 	return allowed
+}
+
+func (filter pageSchemaPermissionFilter) canUseInheritedRoute(childPath string, query map[string]string) bool {
+	if filter.snapshot == nil || query == nil || !allowsInheritedAccess(query[inheritInputKey]) {
+		return false
+	}
+	parentPath := filter.pagePath
+	parentPath = frontpagepath.NormalizePath(util.FirstNonEmpty(query[inheritParentPathKey], parentPath))
+	childPath = frontpagepath.NormalizePath(childPath)
+	if parentPath == "" || childPath == "" || parentPath == childPath {
+		return false
+	}
+	if !embedpageservice.IsChildForPage(filter.pageName, parentPath, childPath) {
+		return false
+	}
+	return ensurePageAccessWithSnapshot(filter.ctx, filter.snapshot, parentPath, chainInheritedLookup(query, filter.lookup)) == nil
+}
+
+func chainInheritedLookup(query map[string]string, fallback InputLookup) InputLookup {
+	return func(key string) string {
+		value := ""
+		if query != nil {
+			value = strings.TrimSpace(query[inheritParentInputPrefix+strings.TrimSpace(key)])
+		}
+		if value != "" {
+			return value
+		}
+		if fallback != nil {
+			return fallback(key)
+		}
+		return ""
+	}
 }
 
 func (filter pageSchemaPermissionFilter) canUseActionKey(actionKey string) bool {
@@ -573,6 +671,28 @@ func resolveRouteQuery(raw any, data map[string]any, state map[string]any, conte
 		}
 	}
 	return query
+}
+
+func routeQueryStrings(state map[string]any) map[string]string {
+	route, _ := state["route"].(map[string]any)
+	if len(route) == 0 {
+		return nil
+	}
+	query, _ := route["query"].(map[string]any)
+	if len(query) == 0 {
+		return nil
+	}
+	result := make(map[string]string, len(query))
+	for key, value := range query {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if text := strings.TrimSpace(util.ToString(value)); text != "" {
+			result[key] = text
+		}
+	}
+	return result
 }
 
 func resolveSchemaValue(value any, data map[string]any, state map[string]any, context pageSchemaPermissionContext) any {

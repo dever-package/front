@@ -77,7 +77,11 @@
         "type": "form-tree",
         "value": "form.auth_ids",
         "mode": "form",
-        "option": "/front/route/option?type=model&use=front.NewAuthModel&tree=1&extraFields=type,path,key",
+        "option": {
+          "model": "front.NewAuthModel",
+          "tree": true,
+          "extraFields": ["type", "path", "key"]
+        },
         "info": "勾选子权限时会自动补齐上级菜单；单独勾选菜单时不会自动勾选其子权限。",
         "meta": {
           "formLayout": "horizontal",

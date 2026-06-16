@@ -38,6 +38,7 @@ type UploadSession struct {
 	Mime             string
 	Size             int64
 	Hash             string
+	Token            string
 	ObjectKey        string
 	ChunkSize        int64
 	ChunkTotal       int

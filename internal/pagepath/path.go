@@ -165,6 +165,9 @@ func PageFilePriority(name string) int {
 
 func NormalizePath(path string) string {
 	path = strings.TrimSpace(path)
+	if index := strings.IndexAny(path, "?#"); index >= 0 {
+		path = path[:index]
+	}
 	path = strings.Trim(path, "/")
 	path = strings.ReplaceAll(path, "\\", "/")
 	return path

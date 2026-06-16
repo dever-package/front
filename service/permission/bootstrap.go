@@ -677,16 +677,16 @@ func actionAuthKey(config map[string]any, item map[string]any, fallbackKey strin
 	case "export":
 		return util.FirstNonEmpty(
 			util.ToString(config["exportKey"]),
+			fallbackKey,
 			util.ToString(item["key"]),
 			util.ToString(item["id"]),
-			fallbackKey,
 		)
 	case "import":
 		return util.FirstNonEmpty(
 			util.ToString(config["importKey"]),
+			fallbackKey,
 			util.ToString(item["key"]),
 			util.ToString(item["id"]),
-			fallbackKey,
 		)
 	case "delete":
 		return util.FirstNonEmpty(

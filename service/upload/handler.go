@@ -1,6 +1,9 @@
 package upload
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -57,6 +60,10 @@ func InitUpload(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
+	sessionToken, err := newUploadSessionToken()
+	if err != nil {
+		return c.Error(err)
+	}
 
 	sessionID := util.ToUint64(sessionModel.Insert(c.Context(), map[string]any{
 		"rule_id":            rule.ID,
@@ -69,6 +76,7 @@ func InitUpload(c *server.Context) error {
 		"mime":               strings.TrimSpace(input.Mime),
 		"size":               input.Size,
 		"hash":               hash,
+		"token":              sessionToken,
 		"object_key":         objectKey,
 		"chunk_size":         chunkSize,
 		"chunk_total":        chunkTotal,
@@ -100,6 +108,7 @@ func InitUpload(c *server.Context) error {
 		Mime:       strings.TrimSpace(input.Mime),
 		Size:       input.Size,
 		Hash:       hash,
+		Token:      sessionToken,
 		ObjectKey:  objectKey,
 		ChunkSize:  chunkSize,
 		ChunkTotal: chunkTotal,
@@ -108,6 +117,7 @@ func InitUpload(c *server.Context) error {
 
 	result := map[string]any{
 		"session_id":  sessionID,
+		"token":       sessionToken,
 		"transport":   rule.Transport,
 		"chunk_size":  chunkSize,
 		"chunk_total": chunkTotal,
@@ -143,6 +153,9 @@ func UploadPart(c *server.Context) error {
 
 	session, err := uploadrepo.FindUploadSession(c.Context(), sessionID)
 	if err != nil {
+		return c.Error(err)
+	}
+	if err := ensureUploadSessionToken(session, c.Input("token")); err != nil {
 		return c.Error(err)
 	}
 	rule, err := uploadrepo.FindUploadRule(c.Context(), session.RuleID)
@@ -198,6 +211,9 @@ func CompleteUpload(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
+	if err := ensureUploadSessionToken(session, input.Token); err != nil {
+		return c.Error(err)
+	}
 	rule, err := uploadrepo.FindUploadRule(c.Context(), session.RuleID)
 	if err != nil {
 		return c.Error(err)
@@ -230,8 +246,22 @@ func logUploadFile(c *server.Context, fileID uint64, payload any) {
 		TargetModel: "front.NewUploadFileModel",
 		TargetID:    fmt.Sprint(fileID),
 		Message:     "上传资源文件",
-		Payload:     payload,
+		Payload:     uploadLogPayload(payload),
 	})
+}
+
+func uploadLogPayload(payload any) any {
+	switch input := payload.(type) {
+	case uploadCompleteInput:
+		return map[string]any{"session_id": input.SessionID}
+	case *uploadCompleteInput:
+		if input == nil {
+			return nil
+		}
+		return map[string]any{"session_id": input.SessionID}
+	default:
+		return payload
+	}
 }
 
 func uploadPartMaxBytes(session resolvedUploadSession, partNumber int) int64 {
@@ -248,6 +278,25 @@ func uploadPartMaxBytes(session resolvedUploadSession, partNumber int) int64 {
 		return chunkSize
 	}
 	return remaining
+}
+
+func newUploadSessionToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("生成上传会话令牌失败")
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func ensureUploadSessionToken(session resolvedUploadSession, token string) error {
+	expected := strings.TrimSpace(session.Token)
+	if expected == "" {
+		return fmt.Errorf("上传会话令牌无效")
+	}
+	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(token)), []byte(expected)) != 1 {
+		return fmt.Errorf("上传会话令牌无效")
+	}
+	return nil
 }
 
 func OpenUpload(c *server.Context) error {

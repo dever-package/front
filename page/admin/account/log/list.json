@@ -68,7 +68,11 @@
         "placeholder": "管理员",
         "value": "search.account_id",
         "mode": "search",
-        "option": "/front/route/option?type=model&use=front.NewAccountModel&labelField=name&searchFields=name,account&pageSize=20",
+        "option": {
+          "labelField": "name",
+          "searchFields": ["name", "account"],
+          "pageSize": 20
+        },
         "meta": {
           "remoteOptionSearch": true
         }

@@ -29,6 +29,7 @@ type ReadParams struct {
 }
 
 var sseEventNamePattern = regexp.MustCompile(`[^a-zA-Z0-9_.-]+`)
+var requestIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_.:-]{1,128}$`)
 
 func ReadParamsFromServerContext(c *server.Context) ReadParams {
 	return NormalizeReadParams(
@@ -41,6 +42,9 @@ func ReadParamsFromServerContext(c *server.Context) ReadParams {
 
 func NormalizeReadParams(requestID string, lastID string, count int64, block time.Duration) ReadParams {
 	requestID = strings.TrimSpace(requestID)
+	if !validRequestID(requestID) {
+		requestID = ""
+	}
 	lastID = strings.TrimSpace(lastID)
 	if lastID == "" {
 		lastID = "0-0"
@@ -57,6 +61,10 @@ func NormalizeReadParams(requestID string, lastID string, count int64, block tim
 		Count:     count,
 		Block:     block,
 	}
+}
+
+func validRequestID(requestID string) bool {
+	return requestIDPattern.MatchString(strings.TrimSpace(requestID))
 }
 
 func WantsSSE(c *server.Context) bool {

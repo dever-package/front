@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -11,9 +12,11 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
+	frontpagepath "my/package/front/internal/pagepath"
 	authctx "my/package/front/service/internal/authctx"
 	frontcall "my/package/front/service/internal/call"
 	optionseed "my/package/front/service/internal/optionseed"
+	frontpage "my/package/front/service/page"
 	embedpageservice "my/package/front/service/permission/embedpage"
 	frontrecord "my/package/front/service/record"
 	"my/package/front/service/runtimecache"
@@ -29,6 +32,7 @@ var optionCache = devercache.New[string, []map[string]any](
 
 func init() {
 	runtimecache.Register("front.option", optionCache.Invalidate, optionCache.Clear)
+	frontpage.RegisterOptionRowsResolver(GetResolvedOptions)
 }
 
 func Get(c *server.Context) error {
@@ -57,6 +61,9 @@ func GetByInput(c *server.Context, getInput func(string) string) ([]map[string]a
 			return c.Input(key)
 		}
 	}
+	if pathValue := strings.TrimSpace(getInput("path")); pathValue != "" || strings.TrimSpace(getInput("key")) != "" {
+		return GetResolvedOptions(c, getInput)
+	}
 	optionType := strings.ToLower(strings.TrimSpace(getInput("type")))
 	if optionType == "" {
 		optionType = "model"
@@ -69,6 +76,143 @@ func GetByInput(c *server.Context, getInput func(string) string) ([]map[string]a
 		return GetServiceOptionsByInput(c, getInput)
 	default:
 		return nil, fmt.Errorf("option.type 不支持: %s", optionType)
+	}
+}
+
+func GetResolvedOptions(c *server.Context, getInput func(string) string) ([]map[string]any, error) {
+	pathValue, pathQuery := splitOptionPathInput(getInput("path"))
+	resolved, err := frontpage.ResolveOption(frontpage.ResolveOptionInput{
+		Context:  c.Context(),
+		Path:     pathValue,
+		Key:      getInput("key"),
+		Keyword:  getInput("keyword"),
+		Selected: getInput("selected"),
+		ParentID: getInput("parentId"),
+		Query:    collectOptionQuery(getInput, pathValue, pathQuery),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return getResolvedOptions(c, resolved)
+}
+
+func collectOptionQuery(getInput func(string) string, pathValue string, pathQuery map[string]string) map[string]any {
+	result := map[string]any{}
+	if pathValue != "" {
+		result["path"] = pathValue
+	}
+	for key, value := range pathQuery {
+		if strings.TrimSpace(value) != "" {
+			result[key] = value
+		}
+	}
+	for _, key := range []string{"path", "key", "keyword", "selected", "parentId", "level"} {
+		if value := strings.TrimSpace(getInput(key)); value != "" {
+			if key == "path" && pathValue != "" {
+				continue
+			}
+			result[key] = value
+		}
+	}
+	return result
+}
+
+func splitOptionPathInput(rawPath string) (string, map[string]string) {
+	rawPath = strings.TrimSpace(rawPath)
+	if rawPath == "" {
+		return "", nil
+	}
+
+	pathValue := rawPath
+	rawQuery := ""
+	if index := strings.IndexAny(rawPath, "?#"); index >= 0 {
+		pathValue = rawPath[:index]
+		if rawPath[index] == '?' {
+			rawQuery = rawPath[index+1:]
+			if hashIndex := strings.Index(rawQuery, "#"); hashIndex >= 0 {
+				rawQuery = rawQuery[:hashIndex]
+			}
+		}
+	}
+
+	return frontpagepath.NormalizePath(pathValue), parseOptionPathQuery(rawQuery)
+}
+
+func parseOptionPathQuery(rawQuery string) map[string]string {
+	if strings.TrimSpace(rawQuery) == "" {
+		return nil
+	}
+
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil || len(values) == 0 {
+		return nil
+	}
+
+	result := make(map[string]string, len(values))
+	for key, items := range values {
+		if key == "" || len(items) == 0 {
+			continue
+		}
+		result[key] = items[0]
+	}
+	return result
+}
+
+func getResolvedOptions(c *server.Context, resolved frontpage.ResolvedOption) ([]map[string]any, error) {
+	switch strings.ToLower(strings.TrimSpace(resolved.Type)) {
+	case "service":
+		return GetServiceOptionsByInput(c, resolvedOptionInput(resolved))
+	case "model", "":
+		return GetModelOptionsByInput(c.Context(), resolvedOptionInput(resolved))
+	default:
+		return nil, fmt.Errorf("option.type 不支持: %s", resolved.Type)
+	}
+}
+
+func resolvedOptionInput(resolved frontpage.ResolvedOption) func(string) string {
+	values := url.Values{}
+	values.Set("type", util.FirstNonEmpty(resolved.Type, "model"))
+	if strings.EqualFold(resolved.Type, "service") {
+		values.Set("use", resolved.Service)
+	} else {
+		values.Set("use", resolved.Model)
+	}
+	values.Set("valueField", resolved.ValueField)
+	values.Set("labelField", resolved.LabelField)
+	values.Set("parentField", resolved.ParentField)
+	values.Set("leafField", resolved.LeafField)
+	values.Set("order", resolved.Order)
+	values.Set("keyword", resolved.Keyword)
+	values.Set("selected", resolved.Selected)
+	values.Set("rootValue", resolved.RootValue)
+	if resolved.Tree {
+		values.Set("tree", "1")
+	}
+	if resolved.PageSize > 0 {
+		values.Set("pageSize", fmt.Sprint(resolved.PageSize))
+	}
+	if resolved.Page > 0 {
+		values.Set("page", fmt.Sprint(resolved.Page))
+	}
+	if len(resolved.SearchFields) > 0 {
+		values.Set("searchFields", strings.Join(resolved.SearchFields, ","))
+	}
+	if len(resolved.ExtraFields) > 0 {
+		values.Set("extraFields", strings.Join(resolved.ExtraFields, ","))
+	}
+	for field, value := range resolved.Filters {
+		if strings.TrimSpace(field) == "" {
+			continue
+		}
+		values.Set("filterField", field)
+		values.Set("filterValue", fmt.Sprint(value))
+		break
+	}
+	if resolved.ParentID != "" {
+		values.Set("parentId", resolved.ParentID)
+	}
+	return func(key string) string {
+		return values.Get(key)
 	}
 }
 
@@ -361,12 +505,25 @@ func optionRequestCacheKey(c *server.Context) string {
 	if c == nil {
 		return ""
 	}
+	requestKey := optionOriginalURL(c)
+	if pathValue := strings.TrimSpace(c.Input("path")); pathValue != "" || strings.TrimSpace(c.Input("key")) != "" {
+		cleanPath, pathQuery := splitOptionPathInput(pathValue)
+		requestKey = strings.Join([]string{
+			cleanPath,
+			optionPathQueryCacheKey(pathQuery),
+			strings.TrimSpace(c.Input("key")),
+			strings.TrimSpace(c.Input("keyword")),
+			strings.TrimSpace(c.Input("selected")),
+			strings.TrimSpace(c.Input("parentId")),
+			strings.TrimSpace(c.Input("level")),
+		}, "|")
+	}
 	return fmt.Sprintf(
 		"%s:%s:%d:%s",
 		siteconfig.SiteKeyFromContext(c.Context()),
 		siteconfig.PageFromContext(c.Context()),
 		authctx.OptionalUID(c.Context()),
-		optionOriginalURL(c),
+		requestKey,
 	)
 }
 
@@ -395,6 +552,13 @@ func GetServiceOptionsByInput(c *server.Context, getInput func(string) string) (
 		"value_field":  util.FirstNonEmpty(getInput("valueField"), "id"),
 		"label_field":  util.FirstNonEmpty(getInput("labelField"), "name"),
 		"leaf_field":   strings.TrimSpace(getInput("leafField")),
+		"keyword":      strings.TrimSpace(getInput("keyword")),
+		"selected":     strings.TrimSpace(getInput("selected")),
+		"page_size":    util.ToIntDefault(getInput("pageSize"), 0),
+		"page":         util.ToIntDefault(getInput("page"), 0),
+	}
+	if tree := strings.TrimSpace(getInput("tree")); tree != "" {
+		payload["tree"] = util.ToBool(tree)
 	}
 
 	result, err := frontcall.Service(c, serviceName, payload)
@@ -426,6 +590,18 @@ func GetServiceOptionsByInput(c *server.Context, getInput func(string) string) (
 	default:
 		return nil, fmt.Errorf("service option 返回格式错误")
 	}
+}
+
+func optionPathQueryCacheKey(values map[string]string) string {
+	if len(values) == 0 {
+		return ""
+	}
+
+	query := url.Values{}
+	for key, value := range values {
+		query.Set(key, value)
+	}
+	return query.Encode()
 }
 
 func normalizeOptionRows(rows []map[string]any, valueField, labelField, leafField string) []map[string]any {

@@ -25,6 +25,7 @@ type uploadInitInput struct {
 
 type uploadCompleteInput struct {
 	SessionID uint64 `json:"session_id"`
+	Token     string `json:"token"`
 }
 
 type uploadImportURLInput struct {
