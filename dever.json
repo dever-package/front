@@ -11,14 +11,6 @@
       "public": [
         "auth/login"
       ],
-      "apiRoots": [
-        "main",
-        "route",
-        "upload",
-        "resource",
-        "import",
-        "export"
-      ],
       "auth": [
         {
           "key": "tongyong",

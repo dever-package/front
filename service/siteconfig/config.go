@@ -51,7 +51,6 @@ type Site struct {
 	Description string
 	URL         string
 	API         string
-	APIRoots    []string
 	Public      []string
 	Assets      SiteAssets
 	Setting     SiteSetting
@@ -105,7 +104,6 @@ type rawSite struct {
 	URL         string      `json:"url"`
 	Page        string      `json:"page"`
 	API         string      `json:"api"`
-	APIRoots    []string    `json:"apiRoots"`
 	Public      []string    `json:"public"`
 	Assets      SiteAssets  `json:"assets"`
 	Setting     SiteSetting `json:"setting"`
@@ -352,11 +350,6 @@ func isSiteReservedAPIRoot(site Site, requestPath string) bool {
 			return true
 		}
 	}
-	for _, item := range site.APIRoots {
-		if root == item {
-			return true
-		}
-	}
 	for _, item := range site.Public {
 		if root == firstPathSegment(item) {
 			return true
@@ -515,7 +508,6 @@ func mergeComponentSites(sites []Site) ([]Site, []string, error) {
 			sitePublic, absolutePublic := splitComponentSitePublic(contribution.Public)
 			site.Auth = mergeAuthSeeds(site.Auth, contribution.Auth)
 			site.Public = mergeSitePublic(site.Public, sitePublic)
-			site.APIRoots = mergeSiteAPIRoots(site.APIRoots, contribution.APIRoots)
 			globalPublic = append(globalPublic, absolutePublic...)
 			if site.Entry == "" && strings.TrimSpace(contribution.Entry) != "" {
 				site.Entry = strings.Trim(strings.TrimSpace(contribution.Entry), "/")
@@ -553,14 +545,6 @@ func mergeSitePublic(base []string, additions []string) []string {
 	}
 	items := append(append([]string(nil), base...), additions...)
 	return normalizeSitePublic(items)
-}
-
-func mergeSiteAPIRoots(base []string, additions []string) []string {
-	if len(additions) == 0 {
-		return base
-	}
-	items := append(append([]string(nil), base...), additions...)
-	return normalizeAPIRoots(items)
 }
 
 func splitComponentSitePublic(items []string) ([]string, []string) {
@@ -605,7 +589,6 @@ func normalizeSite(siteKey string, raw rawSite) Site {
 		Description: strings.TrimSpace(raw.Description),
 		URL:         strings.TrimSpace(raw.URL),
 		API:         api,
-		APIRoots:    normalizeAPIRoots(raw.APIRoots),
 		Public:      normalizeSitePublic(raw.Public),
 		Assets:      normalizeAssets(raw.Assets),
 		Setting:     normalizeSetting(raw.Setting),
@@ -677,18 +660,6 @@ func normalizeSitePublic(items []string) []string {
 		paths = append(paths, item)
 	}
 	return uniqueStrings(paths)
-}
-
-func normalizeAPIRoots(items []string) []string {
-	roots := make([]string, 0, len(items))
-	for _, item := range items {
-		root := firstPathSegment(item)
-		if root == "" {
-			continue
-		}
-		roots = append(roots, root)
-	}
-	return uniqueStrings(roots)
 }
 
 func normalizeSiteKey(value string) string {
