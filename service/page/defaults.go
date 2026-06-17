@@ -688,6 +688,13 @@ func resolveDefaultCategoryOptionValue(c *server.Context, root map[string]any, i
 	case []map[string]any:
 		value, ok := extractFirstMappedOptionValue(current)
 		return value, ok, nil
+	case map[string]any:
+		items, err := resolveNodeOptionRows(c, item, pathValue)
+		if err != nil {
+			return nil, false, err
+		}
+		value, ok := extractFirstMappedOptionValue(items)
+		return value, ok, nil
 	case string:
 		source := strings.TrimSpace(current)
 		if source == "" {

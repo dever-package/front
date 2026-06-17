@@ -474,12 +474,14 @@ func defaultCategoryOptionKeyForNode(item map[string]any) string {
 	if strings.TrimSpace(toString(item["type"])) != "show-category-list" {
 		return ""
 	}
-	rawOption := strings.TrimSpace(toString(item["option"]))
-	if key, ok := localOptionDataKey(rawOption); ok {
-		return normalizeOptionKey(key)
-	}
-	if rawOption != "" && !strings.Contains(rawOption, "route/option") {
-		return ""
+	if rawOption, ok := item["option"].(string); ok {
+		rawOption = strings.TrimSpace(rawOption)
+		if key, ok := localOptionDataKey(rawOption); ok {
+			return normalizeOptionKey(key)
+		}
+		if rawOption != "" && !strings.Contains(rawOption, "route/option") {
+			return ""
+		}
 	}
 	return normalizeOptionKey(defaultCategoryOptionKey(item))
 }

@@ -65,6 +65,7 @@ func ForceBootstrapForSite(ctx context.Context, site siteconfig.Site) error {
 	bootstrapState.mu.Lock()
 	defer bootstrapState.mu.Unlock()
 
+	runtimecache.Invalidate()
 	if err := runBootstrap(ctx); err != nil {
 		return err
 	}

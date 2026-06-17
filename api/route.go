@@ -59,6 +59,31 @@ func (Route) GetInfo(c *server.Context) error {
 	return c.JSON(currentSchema)
 }
 
+func (Route) GetData(c *server.Context) error {
+	pathValue := frontpagepath.NormalizePath(c.Input("__route", "required", "页面路径"))
+	dataKey := strings.TrimSpace(c.Input("__dataKey", "required", "数据键"))
+	query := collectRequestQuery(c)
+	delete(query, "__route")
+	delete(query, "__dataKey")
+
+	var accessScope *permissionservice.AccessScope
+	currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, func(key string) string {
+		return c.Input(key)
+	}, query)
+	if err != nil {
+		if permissionservice.IsPermissionDenied(err) {
+			return permissionDeniedPayload(c, err)
+		}
+		return c.Error(err)
+	}
+
+	payload, err := pageservice.ExtractDataContainer(currentSchema, dataKey)
+	if err != nil {
+		return c.Error(err)
+	}
+	return c.JSON(payload)
+}
+
 func permissionDeniedPayload(c *server.Context, err error) error {
 	return c.JSONPayload(403, map[string]any{
 		"code":   403,
