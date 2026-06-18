@@ -19,10 +19,6 @@ type UploadStorage struct {
 	CreatedAt  time.Time `dorm:"comment:创建时间"`
 }
 
-type UploadStorageIndex struct {
-	Name struct{} `index:"name,id"`
-}
-
 var (
 	uploadStorageSeed = []map[string]any{
 		{
@@ -57,7 +53,6 @@ var (
 
 func NewUploadStorageModel() *orm.Model[UploadStorage] {
 	return orm.LoadModel[UploadStorage]("存储方式", "upload_storage", orm.ModelConfig{
-		Index:    UploadStorageIndex{},
 		Seeds:    uploadStorageSeed,
 		Order:    "id asc",
 		Database: "default",

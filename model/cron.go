@@ -49,7 +49,6 @@ type Cron struct {
 }
 
 type CronIndex struct {
-	Name          struct{} `index:"name,id"`
 	StatusNextRun struct{} `index:"status,next_run_at"`
 }
 

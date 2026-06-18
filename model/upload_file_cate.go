@@ -14,11 +14,6 @@ type UploadFileCate struct {
 	CreatedAt time.Time `dorm:"comment:创建时间"`
 }
 
-type UploadFileCateIndex struct {
-	Name struct{} `index:"name,id"`
-	Sort struct{} `index:"sort,id"`
-}
-
 var uploadFileCateStatusOptions = []map[string]any{
 	{"id": 1, "value": "启用", "label": "启用", "color": "#0f766e"},
 	{"id": 0, "value": "停用", "label": "停用", "color": "#737373"},
@@ -26,7 +21,6 @@ var uploadFileCateStatusOptions = []map[string]any{
 
 func NewUploadFileCateModel() *orm.Model[UploadFileCate] {
 	return orm.LoadModel[UploadFileCate]("资源分类", "upload_file_cate", orm.ModelConfig{
-		Index:    UploadFileCateIndex{},
 		Order:    "sort asc,id asc",
 		Database: "default",
 		Options: map[string]any{

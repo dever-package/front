@@ -14,8 +14,7 @@ type UploadFileBiz struct {
 }
 
 type UploadFileBizIndex struct {
-	Key  struct{} `unique:"key"`
-	Name struct{} `index:"name,id"`
+	Key struct{} `unique:"key"`
 }
 
 func NewUploadFileBizModel() *orm.Model[UploadFileBiz] {

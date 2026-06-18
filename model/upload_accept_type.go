@@ -13,10 +13,6 @@ type UploadAcceptType struct {
 	CreatedAt time.Time `dorm:"comment:创建时间"`
 }
 
-type UploadAcceptTypeIndex struct {
-	Name struct{} `index:"name,id"`
-}
-
 var uploadAcceptTypeSeed = []map[string]any{
 	{"id": 1, "name": "图片", "accept": "image/*"},
 	{"id": 2, "name": "视频", "accept": "video/*"},
@@ -27,7 +23,6 @@ var uploadAcceptTypeSeed = []map[string]any{
 
 func NewUploadAcceptTypeModel() *orm.Model[UploadAcceptType] {
 	return orm.LoadModel[UploadAcceptType]("允许类型", "upload_accept_type", orm.ModelConfig{
-		Index:    UploadAcceptTypeIndex{},
 		Seeds:    uploadAcceptTypeSeed,
 		Order:    "id asc",
 		Database: "default",

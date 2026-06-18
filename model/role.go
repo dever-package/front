@@ -12,10 +12,6 @@ type Role struct {
 	CreatedAt time.Time `dorm:"not null;default:CURRENT_TIMESTAMP;comment:创建时间"`
 }
 
-type RoleIndex struct {
-	Name struct{} `index:"name,id"`
-}
-
 var roleAuthRelation = orm.Relation{
 	Field:      "auth_ids",
 	Through:    "front.NewRoleAuthModel",
@@ -25,7 +21,6 @@ var roleAuthRelation = orm.Relation{
 
 func NewRoleModel() *orm.Model[Role] {
 	return orm.LoadModel[Role]("角色", "role", orm.ModelConfig{
-		Index: RoleIndex{},
 		Seeds: []map[string]any{
 			{"id": 1, "name": "超级管理员"},
 		},

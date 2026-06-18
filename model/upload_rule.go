@@ -18,10 +18,6 @@ type UploadRule struct {
 	CreatedAt    time.Time `dorm:"comment:创建时间"`
 }
 
-type UploadRuleIndex struct {
-	Name struct{} `index:"name,id"`
-}
-
 var (
 	uploadRuleSeed = []map[string]any{
 		{
@@ -119,7 +115,6 @@ var uploadRuleAcceptTypesRelation = orm.Relation{
 
 func NewUploadRuleModel() *orm.Model[UploadRule] {
 	return orm.LoadModel[UploadRule]("上传规则", "upload_rule", orm.ModelConfig{
-		Index:    UploadRuleIndex{},
 		Seeds:    uploadRuleSeed,
 		Order:    "id asc",
 		Database: "default",
