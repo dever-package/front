@@ -43,16 +43,20 @@ func Login(c *server.Context) error {
 		return c.Error("账户或密码错误")
 	}
 
+	accountID := util.ToUint64(accountRow["id"])
+	if accountID == 0 {
+		return c.Error("账户信息异常")
+	}
 	roleNames := resolveAccountRoleNames(
 		c.Context(),
-		permissionservice.ResolveAccountRoleIDs(c.Context(), util.ToUint64(accountRow["id"])),
+		permissionservice.ResolveAccountRoleIDs(c.Context(), accountID),
 	)
 	site, ok := siteconfig.FromContext(c.Context())
 	if !ok {
 		site, _ = siteconfig.MustLoad().FindBySiteKey(siteconfig.DefaultSiteKey)
 	}
 	expiredAt := time.Now().Add(7 * 24 * time.Hour)
-	token, err := createLoginToken(util.ToUint64(accountRow["id"]), expiredAt, site)
+	token, err := createLoginToken(accountID, expiredAt, site)
 	if err != nil {
 		return c.Error(err)
 	}
@@ -66,7 +70,7 @@ func Login(c *server.Context) error {
 	return c.JSON(map[string]any{
 		"token": token,
 		"user": map[string]any{
-			"id":      util.ToUint64(accountRow["id"]),
+			"id":      accountID,
 			"name":    fmt.Sprint(accountRow["name"]),
 			"account": fmt.Sprint(accountRow["account"]),
 			"role":    roleNames,
@@ -81,19 +85,53 @@ func createLoginToken(uid uint64, expiredAt time.Time, site siteconfig.Site) (st
 		return "", fmt.Errorf("读取配置失败")
 	}
 
-	signer, err := deverjwt.ResolveSigner(cfg.Auth, "user", "default")
+	signer, err := deverjwt.ResolveSigner(cfg.Auth, loginTokenSignerPreferences(site)...)
 	if err != nil {
 		return "", fmt.Errorf("JWT密钥未配置")
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"uid":   fmt.Sprintf("%d", uid),
+	uidText := fmt.Sprintf("%d", uid)
+	claims := jwt.MapClaims{
+		"uid":   uidText,
+		"sub":   uidText,
 		"site":  site.Key,
 		"scope": site.Access.AuthProvider,
 		"exp":   expiredAt.Unix(),
 		"iat":   time.Now().Unix(),
-	})
+	}
+	applyActorClaims(claims, signer.ClaimKeys, uidText)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(signer.Secret))
+}
+
+func applyActorClaims(claims jwt.MapClaims, claimKeys []string, value string) {
+	for _, key := range claimKeys {
+		key = util.ToStringTrimmed(key)
+		if key == "" || isReservedLoginClaim(key) {
+			continue
+		}
+		claims[key] = value
+	}
+}
+
+func isReservedLoginClaim(key string) bool {
+	switch key {
+	case "exp", "iat", "nbf", "site", "scope":
+		return true
+	default:
+		return false
+	}
+}
+
+func loginTokenSignerPreferences(site siteconfig.Site) []string {
+	preferred := make([]string, 0, 4)
+	if provider := util.ToStringTrimmed(site.Access.AuthProvider); provider != "" {
+		preferred = append(preferred, provider)
+	}
+	if siteKey := util.ToStringTrimmed(site.Key); siteKey != "" {
+		preferred = append(preferred, siteKey)
+	}
+	return append(preferred, "front", "default")
 }
 
 func resolveAccountRoleNames(ctx context.Context, roleIDs []uint64) []string {

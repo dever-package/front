@@ -492,6 +492,9 @@ func resolveAllowedAuthSet(
 	roleIDs ...uint64,
 ) map[uint64]struct{} {
 	roleIDs = normalizeRoleIDs(roleIDs)
+	if len(roleIDs) == 0 {
+		return map[uint64]struct{}{}
+	}
 	if hasDefaultRole(roleIDs) {
 		return graph.allIDs
 	}
@@ -521,14 +524,14 @@ func resolveAllowedAuthSet(
 func resolveCurrentRoleIDs(ctx context.Context) []uint64 {
 	uid := authctx.OptionalUID(ctx)
 	if uid <= 0 {
-		return []uint64{defaultRoleID}
+		return nil
 	}
 	return ResolveAccountRoleIDs(ctx, uint64(uid))
 }
 
 func ResolveAccountRoleIDs(ctx context.Context, accountID uint64) []uint64 {
 	if accountID == 0 {
-		return []uint64{defaultRoleID}
+		return nil
 	}
 
 	accountRoleModel := frontrecord.Resolve("front.NewAccountRoleModel")
@@ -549,7 +552,7 @@ func ResolveAccountRoleIDs(ctx context.Context, accountID uint64) []uint64 {
 
 	accountModel := frontrecord.Resolve("front.NewAccountModel")
 	if accountModel == nil {
-		return []uint64{defaultRoleID}
+		return nil
 	}
 
 	row := accountModel.FindMap(ctx, map[string]any{"id": accountID})
@@ -558,10 +561,13 @@ func ResolveAccountRoleIDs(ctx context.Context, accountID uint64) []uint64 {
 
 func normalizeRoleIDs(roleIDs []uint64) []uint64 {
 	normalized := util.UniqueUint64s(roleIDs)
-	if len(normalized) == 0 {
-		return []uint64{defaultRoleID}
+	result := make([]uint64, 0, len(normalized))
+	for _, roleID := range normalized {
+		if roleID > 0 {
+			result = append(result, roleID)
+		}
 	}
-	return normalized
+	return result
 }
 
 func hasDefaultRole(roleIDs []uint64) bool {

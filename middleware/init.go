@@ -146,6 +146,9 @@ func apiScopeGuard(settings middlewareSettings) coremiddleware.ContextFunc {
 			return nil
 		}
 		if tokenAllowsSite(c, site) {
+			if site.RequiresAuth() && !tokenHasActor(c) {
+				return abortUnauthorized(c, "无效的登录信息")
+			}
 			return nil
 		}
 		return abortUnauthorized(c, "无权访问当前站点接口")
@@ -277,6 +280,14 @@ func tokenAllowsSite(c *server.Context, site siteconfig.Site) bool {
 		return true
 	}
 	return false
+}
+
+func tokenHasActor(c *server.Context) bool {
+	if c == nil {
+		return false
+	}
+	uid, ok := deverjwt.ActiveInt64(c.Context())
+	return ok && uid > 0
 }
 
 func claimString(value any) string {
