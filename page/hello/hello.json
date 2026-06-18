@@ -1,0 +1,32 @@
+{
+  "page": {
+    "name": "Hello World",
+    "type": 1
+  },
+  "layout": {
+    "type": "container",
+    "className": "min-h-svh bg-background px-6 py-16 text-foreground",
+    "children": {
+      "content": {
+        "type": "container",
+        "className": "mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center gap-4 text-center"
+      }
+    }
+  },
+  "nodes": {
+    "content": [
+      {
+        "type": "show-title",
+        "name": "Hello World",
+        "info": "This is a public Dever site."
+      },
+      {
+        "type": "show-rich",
+        "value": "No login or RBAC permission is required for this page."
+      }
+    ]
+  },
+  "data": {},
+  "state": {},
+  "action": {}
+}

@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"os"
 	"path"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -23,14 +21,10 @@ const (
 	DefaultAuthProvider = "front"
 	AccessModeRBAC      = "rbac"
 	AccessModeLogin     = "login"
+	AccessModePublic    = "public"
 )
 
 var (
-	defaultGlobalPublic = []string{
-		"/site/info",
-		"/qiniu/callback",
-	}
-	defaultSitePublic   = []string{"auth/login"}
 	defaultSiteAPIRoots = []string{"main", "route", "upload", "resource", "import", "export"}
 	loadOnce            sync.Once
 	loadedConfig        Config
@@ -91,26 +85,6 @@ type AuthSeed = component.AuthSeed
 
 type contextKey struct{}
 
-type rawConfig struct {
-	Public []string           `json:"public"`
-	Sites  map[string]rawSite `json:"sites"`
-	Entry  string             `json:"entry"`
-}
-
-type rawSite struct {
-	Name        string      `json:"name"`
-	Subtitle    string      `json:"subtitle"`
-	Description string      `json:"description"`
-	URL         string      `json:"url"`
-	Page        string      `json:"page"`
-	API         string      `json:"api"`
-	Public      []string    `json:"public"`
-	Assets      SiteAssets  `json:"assets"`
-	Setting     SiteSetting `json:"setting"`
-	Access      Access      `json:"access"`
-	Entry       string      `json:"entry"`
-}
-
 func Load(context.Context) (Config, error) {
 	loadOnce.Do(func() {
 		loadedConfig, loadedErr = load()
@@ -119,22 +93,7 @@ func Load(context.Context) (Config, error) {
 }
 
 func load() (Config, error) {
-	content, _, err := util.ReadJSONCFile(
-		filepath.Join("config", "front.jsonc"),
-		filepath.Join("config", "front.json"),
-	)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return normalizeConfig(defaultRawConfig())
-		}
-		return Config{}, err
-	}
-
-	var payload rawConfig
-	if err := util.UnmarshalNormalizedJSON(content, &payload); err != nil {
-		return Config{}, err
-	}
-	return normalizeConfig(payload)
+	return loadFromComponents(component.Active())
 }
 
 func MustLoad() Config {
@@ -283,6 +242,9 @@ func (cfg Config) AllPublicPaths() []string {
 	paths = append(paths, cfg.Public...)
 	for _, site := range cfg.Sites {
 		prefix := site.APIPrefix()
+		if site.UsesPublic() && !strings.EqualFold(prefix, DefaultAPI) {
+			paths = append(paths, cleanAbsPath(path.Join(prefix, "*")))
+		}
 		for _, item := range site.Public {
 			if item == "" {
 				continue
@@ -418,104 +380,107 @@ func (site Site) UsesLogin() bool {
 	return strings.EqualFold(site.Access.Mode, AccessModeLogin)
 }
 
-func defaultRawConfig() rawConfig {
-	return rawConfig{
-		Public: append([]string(nil), defaultGlobalPublic...),
-		Sites: map[string]rawSite{
-			DefaultSiteKey: {
-				Name:   "管理后台",
-				API:    DefaultAPI,
-				Public: append([]string(nil), defaultSitePublic...),
-				Access: Access{
-					Mode:         DefaultAccessMode,
-					AuthProvider: DefaultAuthProvider,
-				},
-			},
-		},
-	}
+func (site Site) UsesPublic() bool {
+	return strings.EqualFold(site.Access.Mode, AccessModePublic)
 }
 
-func normalizeConfig(payload rawConfig) (Config, error) {
-	publicPaths := normalizeGlobalPublic(payload.Public)
-	if len(publicPaths) == 0 {
-		publicPaths = append([]string(nil), defaultGlobalPublic...)
+func (site Site) RequiresAuth() bool {
+	return !site.UsesPublic()
+}
+
+func (site Site) IsPublicRuntimeEndpoint(requestPath string) bool {
+	if !site.UsesPublic() {
+		return false
+	}
+	if IsFrontRuntimeAPIEndpoint(requestPath, "main/info") ||
+		IsFrontRuntimeAPIEndpoint(requestPath, "main/bootstrap") ||
+		IsFrontRuntimeAPIEndpoint(requestPath, "route/info") ||
+		IsFrontRuntimeAPIEndpoint(requestPath, "route/data") ||
+		IsFrontRuntimeAPIEndpoint(requestPath, "route/batch_info") ||
+		IsFrontRuntimeAPIEndpoint(requestPath, "route/option") ||
+		IsFrontRuntimeAPIEndpoint(requestPath, "route/batch_option") ||
+		IsFrontRuntimeAPIEndpoint(requestPath, "route/action") {
+		return true
+	}
+	return false
+}
+
+func loadFromComponents(components []component.Component) (Config, error) {
+	if len(components) == 0 {
+		return Config{}, fmt.Errorf("front siteconfig: no active components registered; run `dever component` or `dever init --skip-tidy`")
 	}
 
-	rawSites := payload.Sites
-	if len(rawSites) == 0 {
-		rawSites = defaultRawConfig().Sites
-		if defaultSite, ok := rawSites[DefaultSiteKey]; ok {
-			defaultSite.Entry = payload.Entry
-			rawSites[DefaultSiteKey] = defaultSite
+	publicPaths := []string{}
+	sites := map[string]Site{}
+	owners := map[string]string{}
+
+	for _, current := range components {
+		publicPaths = append(publicPaths, current.Manifest.Front.Public...)
+		for siteKey, contribution := range current.Manifest.Front.Sites {
+			siteKey = normalizeSiteKey(siteKey)
+			if siteKey == "" {
+				continue
+			}
+			_, absoluteSitePublic := splitComponentSitePublic(contribution.Public)
+			publicPaths = append(publicPaths, absoluteSitePublic...)
+
+			site, ok := sites[siteKey]
+			if !ok {
+				site = defaultSite(siteKey)
+			}
+			if err := mergeComponentSite(&site, owners, current, contribution); err != nil {
+				return Config{}, err
+			}
+			sites[siteKey] = site
 		}
 	}
 
-	keys := make([]string, 0, len(rawSites))
-	for key := range rawSites {
+	if len(sites) == 0 {
+		sites[DefaultSiteKey] = defaultSite(DefaultSiteKey)
+	}
+	for key := range sites {
+		if key != DefaultSiteKey && owners[key] == "" {
+			delete(sites, key)
+		}
+	}
+	if len(sites) == 0 {
+		sites[DefaultSiteKey] = defaultSite(DefaultSiteKey)
+	}
+
+	keys := make([]string, 0, len(sites))
+	for key := range sites {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 
-	sites := make([]Site, 0, len(keys))
+	resultSites := make([]Site, 0, len(keys))
 	for _, key := range keys {
-		siteKey := normalizeSiteKey(key)
-		if siteKey == "" {
-			continue
-		}
-		site := normalizeSite(siteKey, rawSites[key])
-		sites = append(sites, site)
+		resultSites = append(resultSites, normalizeSite(sites[key]))
 	}
-	if len(sites) == 0 {
-		for siteKey, rawSite := range defaultRawConfig().Sites {
-			sites = append(sites, normalizeSite(siteKey, rawSite))
-		}
-	}
-	sites, componentPublic, err := mergeComponentSites(sites)
-	if err != nil {
-		return Config{}, err
-	}
-	publicPaths = normalizeGlobalPublic(append(publicPaths, componentPublic...))
 
 	return Config{
-		Public: publicPaths,
-		Sites:  sites,
+		Public: normalizeGlobalPublic(publicPaths),
+		Sites:  resultSites,
 	}, nil
 }
 
-func mergeComponentSites(sites []Site) ([]Site, []string, error) {
-	if len(sites) == 0 {
-		return sites, nil, nil
-	}
-	components := component.Active()
-	if len(components) == 0 {
-		return nil, nil, fmt.Errorf("front siteconfig: no active components registered; run `dever component` or `dever init --skip-tidy`")
-	}
-	globalPublic := make([]string, 0)
-
-	siteIndex := make(map[string]int, len(sites))
-	for index, site := range sites {
-		siteIndex[site.Key] = index
+func mergeComponentSite(site *Site, owners map[string]string, current component.Component, contribution component.ManifestSite) error {
+	if site == nil {
+		return nil
 	}
 
-	for _, current := range components {
-		globalPublic = append(globalPublic, current.Manifest.Public...)
-		for siteKey, contribution := range current.Manifest.Sites {
-			index, ok := siteIndex[normalizeSiteKey(siteKey)]
-			if !ok {
-				continue
-			}
-			site := sites[index]
-			sitePublic, absolutePublic := splitComponentSitePublic(contribution.Public)
-			site.Auth = mergeAuthSeeds(site.Auth, contribution.Auth)
-			site.Public = mergeSitePublic(site.Public, sitePublic)
-			globalPublic = append(globalPublic, absolutePublic...)
-			if site.Entry == "" && strings.TrimSpace(contribution.Entry) != "" {
-				site.Entry = strings.Trim(strings.TrimSpace(contribution.Entry), "/")
-			}
-			sites[index] = site
+	if hasSiteOwnerFields(contribution) {
+		if owner := owners[site.Key]; owner != "" && owner != current.Name {
+			return fmt.Errorf("front site %q 同时被 %s 和 %s 定义，请改用唯一站点名或只追加 auth/public", site.Key, owner, current.Name)
 		}
+		owners[site.Key] = current.Name
+		applySiteOwnerFields(site, contribution)
 	}
-	return sites, normalizeGlobalPublic(globalPublic), nil
+
+	sitePublic, _ := splitComponentSitePublic(contribution.Public)
+	site.Auth = mergeAuthSeeds(site.Auth, contribution.Auth)
+	site.Public = mergeSitePublic(site.Public, sitePublic)
+	return nil
 }
 
 func mergeAuthSeeds(base []AuthSeed, additions []AuthSeed) []AuthSeed {
@@ -567,34 +532,105 @@ func splitComponentSitePublic(items []string) ([]string, []string) {
 	return sitePublic, globalPublic
 }
 
-func normalizeSite(siteKey string, raw rawSite) Site {
-	api := cleanAPI(raw.API)
-	if api == "" {
-		if siteKey == DefaultSiteKey {
-			api = DefaultAPI
-		} else {
-			api = siteKey
-		}
-	}
-	if api == "" {
-		api = DefaultAPI
-	}
-
+func defaultSite(siteKey string) Site {
 	return Site{
-		Key:         siteKey,
-		Path:        cleanSitePath(siteKey),
-		Page:        cleanPage(raw.Page, siteKey),
-		Name:        strings.TrimSpace(raw.Name),
-		Subtitle:    strings.TrimSpace(raw.Subtitle),
-		Description: strings.TrimSpace(raw.Description),
-		URL:         strings.TrimSpace(raw.URL),
-		API:         api,
-		Public:      normalizeSitePublic(raw.Public),
-		Assets:      normalizeAssets(raw.Assets),
-		Setting:     normalizeSetting(raw.Setting),
-		Access:      normalizeAccess(raw.Access),
-		Entry:       strings.TrimSpace(raw.Entry),
+		Key:    normalizeSiteKey(siteKey),
+		Path:   cleanSitePath(siteKey),
+		Page:   cleanPage("", siteKey),
+		API:    defaultAPIForSite(siteKey),
+		Public: []string{},
+		Access: Access{
+			Mode:         DefaultAccessMode,
+			AuthProvider: DefaultAuthProvider,
+		},
 	}
+}
+
+func defaultAPIForSite(siteKey string) string {
+	siteKey = normalizeSiteKey(siteKey)
+	if siteKey == "" || siteKey == DefaultSiteKey {
+		return DefaultAPI
+	}
+	return siteKey
+}
+
+func hasSiteOwnerFields(site component.ManifestSite) bool {
+	return strings.TrimSpace(site.Name) != "" ||
+		strings.TrimSpace(site.Subtitle) != "" ||
+		strings.TrimSpace(site.Description) != "" ||
+		strings.TrimSpace(site.URL) != "" ||
+		strings.TrimSpace(site.Page) != "" ||
+		strings.TrimSpace(site.API) != "" ||
+		strings.TrimSpace(site.Entry) != "" ||
+		strings.TrimSpace(site.Assets.Logo) != "" ||
+		strings.TrimSpace(site.Assets.Favicon) != "" ||
+		hasSiteSetting(site.Setting) ||
+		hasSiteAccess(site.Access)
+}
+
+func hasSiteSetting(setting component.ManifestSiteSetting) bool {
+	return strings.TrimSpace(setting.Appearance.Theme) != "" ||
+		strings.TrimSpace(setting.Appearance.Sidebar) != "" ||
+		strings.TrimSpace(setting.Appearance.Layout) != "" ||
+		strings.TrimSpace(setting.Appearance.Direction) != "" ||
+		strings.TrimSpace(setting.Runtime.Skin) != "" ||
+		strings.TrimSpace(setting.Runtime.RouterMode) != "" ||
+		len(setting.Runtime.Plugins) > 0
+}
+
+func hasSiteAccess(access component.ManifestSiteAccess) bool {
+	return strings.TrimSpace(access.Mode) != "" ||
+		strings.TrimSpace(access.AuthProvider) != ""
+}
+
+func applySiteOwnerFields(site *Site, contribution component.ManifestSite) {
+	site.Name = strings.TrimSpace(contribution.Name)
+	site.Subtitle = strings.TrimSpace(contribution.Subtitle)
+	site.Description = strings.TrimSpace(contribution.Description)
+	site.URL = strings.TrimSpace(contribution.URL)
+	site.Page = cleanPage(contribution.Page, site.Key)
+	site.API = cleanAPI(contribution.API)
+	if site.API == "" {
+		site.API = defaultAPIForSite(site.Key)
+	}
+	site.Assets = normalizeAssets(SiteAssets{
+		Logo:    contribution.Assets.Logo,
+		Favicon: contribution.Assets.Favicon,
+	})
+	site.Setting = normalizeSetting(SiteSetting{
+		Appearance: AppearanceSetting{
+			Theme:     contribution.Setting.Appearance.Theme,
+			Sidebar:   contribution.Setting.Appearance.Sidebar,
+			Layout:    contribution.Setting.Appearance.Layout,
+			Direction: contribution.Setting.Appearance.Direction,
+		},
+		Runtime: RuntimeSetting{
+			Skin:       contribution.Setting.Runtime.Skin,
+			RouterMode: contribution.Setting.Runtime.RouterMode,
+			Plugins:    contribution.Setting.Runtime.Plugins,
+		},
+	})
+	site.Access = normalizeAccess(Access{
+		Mode:         contribution.Access.Mode,
+		AuthProvider: contribution.Access.AuthProvider,
+	})
+	site.Entry = strings.Trim(strings.TrimSpace(contribution.Entry), "/")
+}
+
+func normalizeSite(site Site) Site {
+	site.Key = normalizeSiteKey(site.Key)
+	site.Path = cleanSitePath(site.Key)
+	site.Page = cleanPage(site.Page, site.Key)
+	site.API = cleanAPI(site.API)
+	if site.API == "" {
+		site.API = defaultAPIForSite(site.Key)
+	}
+	site.Public = normalizeSitePublic(site.Public)
+	site.Assets = normalizeAssets(site.Assets)
+	site.Setting = normalizeSetting(site.Setting)
+	site.Access = normalizeAccess(site.Access)
+	site.Entry = strings.Trim(strings.TrimSpace(site.Entry), "/")
+	return site
 }
 
 func normalizeAssets(assets SiteAssets) SiteAssets {
@@ -622,7 +658,9 @@ func normalizeSetting(setting SiteSetting) SiteSetting {
 
 func normalizeAccess(access Access) Access {
 	mode := strings.ToLower(strings.TrimSpace(access.Mode))
-	if mode == "" {
+	switch mode {
+	case AccessModeRBAC, AccessModeLogin, AccessModePublic:
+	default:
 		mode = DefaultAccessMode
 	}
 	provider := strings.Trim(strings.TrimSpace(access.AuthProvider), "/")
@@ -648,9 +686,6 @@ func normalizeGlobalPublic(items []string) []string {
 }
 
 func normalizeSitePublic(items []string) []string {
-	if len(items) == 0 {
-		items = defaultSitePublic
-	}
 	paths := make([]string, 0, len(items))
 	for _, item := range items {
 		item = cleanRelativePath(item)

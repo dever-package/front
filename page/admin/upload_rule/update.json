@@ -46,11 +46,6 @@
           {
             "type": "required",
             "message": "规则名称不能为空。"
-          },
-          {
-            "type": "model",
-            "except": "$form.id",
-            "message": "该规则名称已存在，请更换。"
           }
         ],
         "meta": {

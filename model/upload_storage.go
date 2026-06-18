@@ -20,7 +20,7 @@ type UploadStorage struct {
 }
 
 type UploadStorageIndex struct {
-	Name struct{} `unique:"name"`
+	Name struct{} `index:"name,id"`
 }
 
 var (

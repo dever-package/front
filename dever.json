@@ -2,39 +2,95 @@
   "name": "front",
   "version": "0.1.0",
   "description": "Dever front runtime, admin shell, RBAC, upload and system pages",
-  "public": [
-    "/upload/*",
-    "/front/upload/open"
-  ],
-  "sites": {
-    "admin": {
-      "public": [
-        "auth/login"
-      ],
-      "auth": [
-        {
-          "key": "tongyong",
-          "name": "通用",
-          "icon": "layout-dashboard",
-          "type": 1,
-          "sort": 1
+  "front": {
+    "public": [
+      "/site/info",
+      "/qiniu/callback",
+      "/upload/*"
+    ],
+    "sites": {
+      "admin": {
+        "name": "管理后台",
+        "subtitle": "平台配置",
+        "description": "Dever 管理后台",
+        "api": "front",
+        "page": "admin",
+        "assets": {
+          "logo": "assets/images/logo.svg",
+          "favicon": "assets/images/favicon.svg"
         },
-        {
-          "key": "config",
-          "name": "平台配置",
-          "icon": "settings",
-          "type": 1,
-          "sort": 100
+        "setting": {
+          "appearance": {
+            "theme": "light",
+            "sidebar": "floating",
+            "layout": "compact",
+            "direction": "ltr"
+          },
+          "runtime": {
+            "skin": "default",
+            "routerMode": "history"
+          }
         },
-        {
-          "key": "system-settings",
-          "name": "系统设置",
-          "icon": "settings",
-          "parent": "config",
-          "type": 1,
-          "sort": 2
-        }
-      ]
+        "access": {
+          "mode": "rbac",
+          "authProvider": "front"
+        },
+        "public": [
+          "auth/login"
+        ],
+        "auth": [
+          {
+            "key": "tongyong",
+            "name": "通用",
+            "icon": "layout-dashboard",
+            "type": 1,
+            "sort": 1
+          },
+          {
+            "key": "config",
+            "name": "平台配置",
+            "icon": "settings",
+            "type": 1,
+            "sort": 100
+          },
+          {
+            "key": "system-settings",
+            "name": "系统设置",
+            "icon": "settings",
+            "parent": "config",
+            "type": 1,
+            "sort": 2
+          }
+        ]
+      },
+      "hello": {
+        "name": "Hello World",
+        "subtitle": "Public Demo",
+        "description": "Dever public site example",
+        "api": "front",
+        "page": "hello",
+        "assets": {
+          "logo": "assets/images/logo.svg",
+          "favicon": "assets/images/favicon.svg"
+        },
+        "setting": {
+          "appearance": {
+            "theme": "light",
+            "sidebar": "floating",
+            "layout": "compact",
+            "direction": "ltr"
+          },
+          "runtime": {
+            "skin": "default",
+            "routerMode": "history"
+          }
+        },
+        "access": {
+          "mode": "public",
+          "authProvider": "front"
+        },
+        "entry": "front/hello"
+      }
     }
   }
 }

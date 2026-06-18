@@ -3,6 +3,8 @@ package action
 import (
 	"context"
 
+	"github.com/shemic/dever/util"
+
 	frontpage "my/package/front/service/page"
 )
 
@@ -10,11 +12,28 @@ func resolveSavePayload(ctx context.Context, config frontpage.ActionConfig, form
 	if config.Data == nil {
 		return form, nil
 	}
-	return frontpage.ResolveTemplateValue(config.Data, frontpage.TemplateContext{
+	resolved := frontpage.ResolveTemplateValue(config.Data, frontpage.TemplateContext{
 		Context: ctx,
 		Form:    form,
 		Payload: form,
-	}), nil
+	})
+
+	if !util.ToBool(form["_partial"]) {
+		return resolved, nil
+	}
+
+	resolvedMap, ok := resolved.(map[string]any)
+	if !ok {
+		return resolved, nil
+	}
+
+	filtered := make(map[string]any, len(resolvedMap))
+	for key, val := range resolvedMap {
+		if _, exists := form[key]; exists {
+			filtered[key] = val
+		}
+	}
+	return filtered, nil
 }
 
 func resolveDeletePayload(ctx context.Context, config frontpage.ActionConfig, payload any) any {

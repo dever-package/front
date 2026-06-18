@@ -19,7 +19,7 @@ type UploadRule struct {
 }
 
 type UploadRuleIndex struct {
-	Name struct{} `unique:"name"`
+	Name struct{} `index:"name,id"`
 }
 
 var (

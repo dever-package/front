@@ -221,6 +221,9 @@ func configuredRuntimePluginDescriptor(value string) runtimePluginDescriptor {
 	if manifest == "" {
 		return runtimePluginDescriptor{}
 	}
+	if name := cleanPluginName(manifest); name == manifest && !strings.ContainsAny(manifest, "/?#") {
+		return runtimePluginDescriptor{Name: name}
+	}
 	return runtimePluginDescriptor{
 		Name:     runtimePluginNameFromURL(manifest),
 		Manifest: manifest,
@@ -486,6 +489,9 @@ func shouldReplaceRuntimePluginDescriptor(current runtimePluginDescriptor, next 
 		return true
 	}
 	if current.Entry == "" && next.Entry != "" {
+		return true
+	}
+	if current.Manifest == "" && next.Manifest != "" {
 		return true
 	}
 	return false

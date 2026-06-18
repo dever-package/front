@@ -13,7 +13,7 @@ type Role struct {
 }
 
 type RoleIndex struct {
-	Name struct{} `unique:"name"`
+	Name struct{} `index:"name,id"`
 }
 
 var roleAuthRelation = orm.Relation{

@@ -24,6 +24,10 @@ func (Upload) PostComplete(c *server.Context) error {
 	return uploadservice.CompleteUpload(c)
 }
 
+func (Upload) PostSign(c *server.Context) error {
+	return uploadservice.SignUploadOpen(c)
+}
+
 func (Upload) PostImportUrl(c *server.Context) error {
 	return uploadservice.ImportURLUpload(c)
 }

@@ -14,7 +14,7 @@ type UploadAcceptType struct {
 }
 
 type UploadAcceptTypeIndex struct {
-	Name struct{} `unique:"name"`
+	Name struct{} `index:"name,id"`
 }
 
 var uploadAcceptTypeSeed = []map[string]any{

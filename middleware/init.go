@@ -16,6 +16,7 @@ import (
 	cronservice "my/package/front/service/cron"
 	permissionservice "my/package/front/service/permission"
 	"my/package/front/service/siteconfig"
+	"my/package/front/service/upload/openurl"
 )
 
 const siteHeader = "X-Dever-Site"
@@ -73,7 +74,9 @@ func auth(settings middlewareSettings) coremiddleware.ContextFunc {
 		Allow: func(c *server.Context) bool {
 			path := strings.TrimSpace(c.Path())
 			return isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
+				openurl.IsSignedRequest(c) ||
 				siteconfig.MatchPublicPath(settings.publicPaths, path) ||
+				isPublicSiteRequest(settings.frontConfig, c, path) ||
 				isStaticSiteRequest(settings.frontConfig, c, path) ||
 				isPublicRouteSchemaRequest(settings.frontConfig, c, path) ||
 				allowAPIKeyRequest(settings.frontConfig, c, path)
@@ -117,7 +120,11 @@ func apiScopeGuard(settings middlewareSettings) coremiddleware.ContextFunc {
 			isStaticSiteRequest(settings.frontConfig, c, path) {
 			return nil
 		}
+		if openurl.IsSignedRequest(c) {
+			return nil
+		}
 		if siteconfig.MatchPublicPath(settings.publicPaths, path) ||
+			isPublicSiteRequest(settings.frontConfig, c, path) ||
 			isPublicRouteSchemaRequest(settings.frontConfig, c, path) {
 			if site, ok := requestSite(settings.frontConfig, c, path); ok {
 				c.SetContext(siteconfig.WithSite(c.Context(), site))
@@ -148,6 +155,48 @@ func allowAPIKeyRequest(frontConfig siteconfig.Config, c *server.Context, path s
 		return allowAPIKeyForSite(c, site)
 	}
 	return requestPathHasPrefix(path, "/user")
+}
+
+func isPublicSiteRequest(frontConfig siteconfig.Config, c *server.Context, path string) bool {
+	site, ok := requestSite(frontConfig, c, path)
+	if !ok || !site.UsesPublic() {
+		return false
+	}
+	if site.IsPublicRuntimeEndpoint(path) && isPublicSiteRuntimeRequest(c, site, path) {
+		return true
+	}
+	if strings.EqualFold(site.APIPrefix(), siteconfig.DefaultAPI) {
+		return false
+	}
+	return requestPathHasPrefix(path, site.APIPrefix())
+}
+
+func isPublicSiteRuntimeRequest(c *server.Context, site siteconfig.Site, path string) bool {
+	switch {
+	case siteconfig.IsFrontRuntimeAPIEndpoint(path, "main/info"),
+		siteconfig.IsFrontRuntimeAPIEndpoint(path, "main/bootstrap"):
+		return true
+	case siteconfig.IsFrontRuntimeAPIEndpoint(path, "route/info"),
+		siteconfig.IsFrontRuntimeAPIEndpoint(path, "route/data"):
+		return isSitePagePath(site, c.Input("path")) || isSitePagePath(site, c.Input("__route"))
+	case siteconfig.IsFrontRuntimeAPIEndpoint(path, "route/action"),
+		siteconfig.IsFrontRuntimeAPIEndpoint(path, "route/option"):
+		return isSitePagePath(site, c.Input("path"))
+	case siteconfig.IsFrontRuntimeAPIEndpoint(path, "route/batch_info"):
+		return batchInfoPathsBelongToSite(c, site)
+	case siteconfig.IsFrontRuntimeAPIEndpoint(path, "route/batch_option"):
+		return batchOptionPathsBelongToSite(c, site)
+	default:
+		return false
+	}
+}
+
+func isSitePagePath(site siteconfig.Site, pathValue string) bool {
+	pathValue = normalizePublicPagePath(pathValue)
+	if pathValue == "" {
+		return false
+	}
+	return requestPathHasPrefix(pathValue, strings.Trim(site.APIPrefix(), "/"))
 }
 
 func allowAPIKeyForSite(c *server.Context, site siteconfig.Site) bool {
@@ -281,9 +330,37 @@ func isFrontRouteEndpoint(requestPath string, site siteconfig.Site, endpoint str
 }
 
 func isPublicBatchInfoRequest(c *server.Context, site siteconfig.Site) bool {
+	paths, ok := batchInfoRequestPaths(c)
+	if !ok || len(paths) == 0 {
+		return false
+	}
+
+	loginPath := site.SystemPagePath("login")
+	for _, pathValue := range paths {
+		if normalizePublicPagePath(pathValue) != loginPath {
+			return false
+		}
+	}
+	return true
+}
+
+func batchInfoPathsBelongToSite(c *server.Context, site siteconfig.Site) bool {
+	paths, ok := batchInfoRequestPaths(c)
+	if !ok || len(paths) == 0 {
+		return false
+	}
+	for _, pathValue := range paths {
+		if !isSitePagePath(site, pathValue) {
+			return false
+		}
+	}
+	return true
+}
+
+func batchInfoRequestPaths(c *server.Context) ([]string, bool) {
 	body, ok := requestBody(c)
 	if !ok || len(body) == 0 {
-		return false
+		return nil, false
 	}
 
 	var request struct {
@@ -292,12 +369,35 @@ func isPublicBatchInfoRequest(c *server.Context, site siteconfig.Site) bool {
 		} `json:"paths"`
 	}
 	if err := json.Unmarshal(body, &request); err != nil || len(request.Paths) == 0 {
+		return nil, false
+	}
+
+	paths := make([]string, 0, len(request.Paths))
+	for _, item := range request.Paths {
+		pathValue := strings.TrimSpace(item.Path)
+		if pathValue == "" {
+			return nil, false
+		}
+		paths = append(paths, pathValue)
+	}
+	return paths, true
+}
+
+func batchOptionPathsBelongToSite(c *server.Context, site siteconfig.Site) bool {
+	body, ok := requestBody(c)
+	if !ok || len(body) == 0 {
 		return false
 	}
 
-	loginPath := site.SystemPagePath("login")
-	for _, item := range request.Paths {
-		if normalizePublicPagePath(item.Path) != loginPath {
+	var request struct {
+		Options []map[string]string `json:"options"`
+	}
+	if err := json.Unmarshal(body, &request); err != nil || len(request.Options) == 0 {
+		return false
+	}
+
+	for _, item := range request.Options {
+		if !isSitePagePath(site, item["path"]) {
 			return false
 		}
 	}

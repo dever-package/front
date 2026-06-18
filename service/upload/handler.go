@@ -301,6 +301,9 @@ func ensureUploadSessionToken(session resolvedUploadSession, token string) error
 
 func OpenUpload(c *server.Context) error {
 	fileID := util.ToUint64(c.Input("id", "required", "文件ID"))
+	if err := ensureUploadOpenAccess(c); err != nil {
+		return c.Error(err, http.StatusUnauthorized)
+	}
 	fileRecord, err := uploadrepo.FindUploadFile(c.Context(), fileID)
 	if err != nil {
 		return c.Error(err)

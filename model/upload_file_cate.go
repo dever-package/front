@@ -15,7 +15,7 @@ type UploadFileCate struct {
 }
 
 type UploadFileCateIndex struct {
-	Name struct{} `unique:"name"`
+	Name struct{} `index:"name,id"`
 	Sort struct{} `index:"sort,id"`
 }
 

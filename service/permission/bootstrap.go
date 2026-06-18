@@ -366,7 +366,7 @@ func loadComponentAuthRecords(ctx context.Context) ([]authRecord, error) {
 
 	records := make([]authRecord, 0)
 	for _, current := range component.Active() {
-		site, ok := current.Manifest.Sites[siteKey]
+		site, ok := current.Manifest.Front.Sites[siteKey]
 		if !ok {
 			continue
 		}

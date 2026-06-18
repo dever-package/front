@@ -53,11 +53,6 @@
           {
             "type": "required",
             "message": "任务名称不能为空。"
-          },
-          {
-            "type": "model",
-            "except": "$form.id",
-            "message": "该任务名称已存在，请更换。"
           }
         ],
         "meta": {

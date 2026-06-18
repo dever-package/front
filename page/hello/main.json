@@ -1,0 +1,26 @@
+{
+  "page": {
+    "name": "Hello Public",
+    "type": 2
+  },
+  "layout": {
+    "type": "container",
+    "className": "min-h-svh bg-background",
+    "children": {
+      "content": {
+        "type": "container",
+        "className": "min-h-svh"
+      }
+    }
+  },
+  "nodes": {
+    "content": [
+      {
+        "type": "app-outlet"
+      }
+    ]
+  },
+  "data": {},
+  "state": {},
+  "action": {}
+}

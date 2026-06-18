@@ -310,7 +310,7 @@ func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) 
 }
 
 func shouldBypassRBAC(site siteconfig.Site) bool {
-	return site.Key != "" && site.UsesLogin()
+	return site.Key != "" && (site.UsesLogin() || site.UsesPublic())
 }
 
 func canAccessAuthRow(snapshot *accessSnapshot, row map[string]any) bool {
