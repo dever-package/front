@@ -19,6 +19,12 @@ const (
 	DefaultAPI          = "front"
 	DefaultAccessMode   = "rbac"
 	DefaultAuthProvider = "front"
+	DefaultTheme        = "light"
+	DefaultSidebar      = "floating"
+	DefaultLayout       = "compact"
+	DefaultDirection    = "ltr"
+	DefaultSkin         = "default"
+	DefaultRouterMode   = "history"
 	AccessModeRBAC      = "rbac"
 	AccessModeLogin     = "login"
 	AccessModePublic    = "public"
@@ -641,16 +647,40 @@ func normalizeAssets(assets SiteAssets) SiteAssets {
 }
 
 func normalizeSetting(setting SiteSetting) SiteSetting {
+	theme := strings.TrimSpace(setting.Appearance.Theme)
+	if theme == "" {
+		theme = DefaultTheme
+	}
+	sidebar := strings.TrimSpace(setting.Appearance.Sidebar)
+	if sidebar == "" {
+		sidebar = DefaultSidebar
+	}
+	layout := strings.TrimSpace(setting.Appearance.Layout)
+	if layout == "" {
+		layout = DefaultLayout
+	}
+	direction := strings.TrimSpace(setting.Appearance.Direction)
+	if direction == "" {
+		direction = DefaultDirection
+	}
+	skin := strings.TrimSpace(setting.Runtime.Skin)
+	if skin == "" {
+		skin = DefaultSkin
+	}
+	routerMode := strings.TrimSpace(setting.Runtime.RouterMode)
+	if routerMode == "" {
+		routerMode = DefaultRouterMode
+	}
 	return SiteSetting{
 		Appearance: AppearanceSetting{
-			Theme:     strings.TrimSpace(setting.Appearance.Theme),
-			Sidebar:   strings.TrimSpace(setting.Appearance.Sidebar),
-			Layout:    strings.TrimSpace(setting.Appearance.Layout),
-			Direction: strings.TrimSpace(setting.Appearance.Direction),
+			Theme:     theme,
+			Sidebar:   sidebar,
+			Layout:    layout,
+			Direction: direction,
 		},
 		Runtime: RuntimeSetting{
-			Skin:       strings.TrimSpace(setting.Runtime.Skin),
-			RouterMode: strings.TrimSpace(setting.Runtime.RouterMode),
+			Skin:       skin,
+			RouterMode: routerMode,
 			Plugins:    normalizeStringList(setting.Runtime.Plugins),
 		},
 	}

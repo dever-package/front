@@ -15,6 +15,7 @@ import (
 	"github.com/shemic/dever/server"
 
 	frontroot "my/package/front"
+	renderservice "my/package/front/service/render"
 	"my/package/front/service/siteconfig"
 )
 
@@ -58,6 +59,7 @@ func register(s server.Server, siteSettings settings, frontConfig siteconfig.Con
 	for _, site := range frontConfig.Sites {
 		currentSite := site
 		registerPluginAssets(s, currentSite, siteSettings)
+		renderservice.RegisterSite(s, currentSite)
 		open := func(c *server.Context) error {
 			c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
 			return openFile(c, siteSettings, currentSite)
@@ -179,6 +181,12 @@ func openSiteAsset(raw *fiber.Ctx, site siteconfig.Site, rel string) (bool, erro
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, err
+	}
+
+	if content, servedRel, err := renderservice.ReadComponentAsset(site.Page, assetRel); err == nil {
+		raw.Set("Cache-Control", cacheHeader(servedRel))
+		setContentType(raw, servedRel)
+		return true, raw.Send(content)
 	}
 
 	return openBundledSiteAsset(raw, assetRel)

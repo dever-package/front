@@ -1,0 +1,31 @@
+{
+  "page": {
+    "name": "模板首页",
+    "render": "template"
+  },
+  "layout": {},
+  "nodes": {},
+  "data": {
+    "demo": {
+      "type": "service",
+      "service": "front.TemplateDemoService.LoadHomeMessage"
+    },
+    "accounts": {
+      "_model": "front.NewAccountModel",
+      "pageSize": 5,
+      "order": "id asc"
+    },
+    "seo": {
+      "title": "Dever Template Home",
+      "description": "$data.demo.message",
+      "canonical": "/home"
+    }
+  },
+  "state": {},
+  "action": {},
+  "template": {
+    "route": "/",
+    "layout": "layout.html",
+    "view": "home.html"
+  }
+}

@@ -2,6 +2,7 @@ package page
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -13,6 +14,7 @@ type TemplateContext struct {
 	Context context.Context
 	Form    map[string]any
 	Payload any
+	Data    map[string]any
 	Route   map[string]any
 	Query   map[string]any
 	Site    map[string]any
@@ -41,17 +43,27 @@ func ResolveTemplateValue(value any, ctx TemplateContext) any {
 }
 
 func resolveTemplateReference(value string, ctx TemplateContext) any {
+	if strings.Contains(value, "${") {
+		return interpolateTemplateString(value, ctx)
+	}
+
 	trimmed := strings.TrimSpace(value)
 	if !strings.HasPrefix(trimmed, "$") {
 		return value
 	}
 
-	root, path := splitTemplateReference(strings.TrimPrefix(trimmed, "$"))
+	return resolveTemplatePath(strings.TrimPrefix(trimmed, "$"), ctx)
+}
+
+func resolveTemplatePath(reference string, ctx TemplateContext) any {
+	root, path := splitTemplateReference(reference)
 	switch root {
 	case "form":
 		return readTemplateValue(ctx.Form, path)
 	case "payload":
 		return readTemplateValue(ctx.Payload, path)
+	case "data":
+		return readTemplateValue(ctx.Data, path)
 	case "route":
 		return readTemplateValue(ctx.Route, path)
 	case "query":
@@ -69,6 +81,34 @@ func resolveTemplateReference(value string, ctx TemplateContext) any {
 	default:
 		return nil
 	}
+}
+
+func interpolateTemplateString(value string, ctx TemplateContext) string {
+	var builder strings.Builder
+	rest := value
+	for {
+		start := strings.Index(rest, "${")
+		if start < 0 {
+			builder.WriteString(rest)
+			break
+		}
+		builder.WriteString(rest[:start])
+		rest = rest[start+2:]
+
+		end := strings.Index(rest, "}")
+		if end < 0 {
+			builder.WriteString("${")
+			builder.WriteString(rest)
+			break
+		}
+
+		reference := strings.TrimSpace(rest[:end])
+		if resolved := resolveTemplatePath(reference, ctx); resolved != nil {
+			builder.WriteString(fmt.Sprint(resolved))
+		}
+		rest = rest[end+1:]
+	}
+	return builder.String()
 }
 
 func splitTemplateReference(value string) (string, string) {

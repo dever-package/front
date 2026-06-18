@@ -1,0 +1,16 @@
+{{ define "layout.html" }}
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ .SEO.Title }}</title>
+    <meta name="description" content="{{ .SEO.Description }}">
+    {{ if .SEO.Canonical }}<link rel="canonical" href="{{ .SEO.Canonical }}">{{ end }}
+    <link rel="stylesheet" href="{{ .Site.AssetBase }}/css/home.css">
+  </head>
+  <body>
+    {{ template "home.html" . }}
+  </body>
+</html>
+{{ end }}

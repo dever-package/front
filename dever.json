@@ -73,23 +73,26 @@
           "logo": "assets/images/logo.svg",
           "favicon": "assets/images/favicon.svg"
         },
-        "setting": {
-          "appearance": {
-            "theme": "light",
-            "sidebar": "floating",
-            "layout": "compact",
-            "direction": "ltr"
-          },
-          "runtime": {
-            "skin": "default",
-            "routerMode": "history"
-          }
-        },
         "access": {
           "mode": "public",
           "authProvider": "front"
         },
         "entry": "front/hello"
+      },
+      "home": {
+        "name": "Template Home",
+        "subtitle": "Static Render Demo",
+        "description": "Dever template render demo site",
+        "api": "home",
+        "page": "home",
+        "assets": {
+          "logo": "assets/images/logo.svg",
+          "favicon": "assets/images/favicon.svg"
+        },
+        "access": {
+          "mode": "public",
+          "authProvider": "front"
+        }
       }
     }
   }
