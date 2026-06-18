@@ -120,7 +120,7 @@ func validateModelRule(
 		return nil, fmt.Errorf("validate.model.operator 不支持: %s", rule.Operator)
 	}
 
-	modelName := strings.TrimSpace(rule.Use)
+	modelName := strings.TrimSpace(rule.Model)
 	if modelName == "" {
 		modelName = strings.TrimSpace(submitModelName)
 	}
@@ -172,9 +172,9 @@ func validateServiceRule(
 	rule validateRule,
 	form map[string]any,
 ) (*Failure, error) {
-	serviceName := strings.TrimSpace(rule.Use)
+	serviceName := strings.TrimSpace(rule.Service)
 	if serviceName == "" {
-		return nil, fmt.Errorf("validate.service.use 不能为空")
+		return nil, fmt.Errorf("validate.service 不能为空")
 	}
 
 	payload := any(form)

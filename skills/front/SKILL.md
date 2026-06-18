@@ -1,12 +1,14 @@
 ---
 name: dever-front
-description: Use when 修改 Dever front 核心组件，包括后台 runtime、page JSON 解析、标准 action、权限、上传、导入导出、站点配置、插件加载、SDK、缓存和迁移行为。
+description: Use when 修改 Dever front 核心组件，包括后台 runtime、page JSON 解析、标准 action、权限、上传、导入导出、站点配置、插件加载、SDK、缓存和升级影响。
 version: 0.1.0
 ---
 
 # Front 核心组件
 
 本组件 skill 必须和 `shemic-dever` 一起使用。先遵守 Dever 框架规则，再按这里的 front runtime 边界修改。
+
+普通业务 page JSON 开发不要以本 skill 为主；先按 `shemic-dever` 的 `references/front-page-quick.md` 和 `references/front-page.md` 写。只有维护 `package/front` runtime 本身时，才使用下面的约束。
 
 ## 事实来源
 
@@ -32,7 +34,7 @@ version: 0.1.0
 - 不手改 `front/html` 及其 `assets`；主前端源码构建后才更新这里。
 - 不绕过 page/model/action registry 直连任意表、字段或 SQL。
 - 标准 action 必须经过站点、登录态、权限、字段白名单和 model 元数据校验。
-- page JSON 自动推导、Options、Relations、partial save、权限上下文不能为兼容单个旧页面而破坏。
+- page JSON 自动推导、Options、Relations、partial save、权限上下文不能为单个页面特殊分支而破坏。
 - 上传、导入、导出必须保留大小、类型、路径、权限、任务状态和错误脱敏边界。
 - 公开 route 只放 `dever.json.front.public` 或站点 `public` 中明确允许的路径。
 - runtime/cache 变更必须有统一失效路径；写操作成功后不能只依赖 TTL。

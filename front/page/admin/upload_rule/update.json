@@ -93,8 +93,13 @@
               "sourceNodeId": "upload-rule-storage",
               "sourceField": "type",
               "map": {
-                "local": ["relay"],
-                "qiniu": ["relay", "direct"]
+                "local": [
+                  "relay"
+                ],
+                "qiniu": [
+                  "relay",
+                  "direct"
+                ]
               }
             }
           ]

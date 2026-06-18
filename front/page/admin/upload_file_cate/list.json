@@ -27,7 +27,9 @@
         "meta": {
           "title": "资源分类",
           "description": "左侧维护分类，右侧资源列表会按当前分类筛选。",
-          "optionReloadPaths": ["parent.data.resourceMeta.categoryVersion"],
+          "optionReloadPaths": [
+            "parent.data.resourceMeta.categoryVersion"
+          ],
           "allowClear": true,
           "clearLabel": "全部资源",
           "uncategorized": true,
@@ -43,7 +45,9 @@
               "id": "$row.raw_id",
               "status": "$value"
             },
-            "then": ["refresh-parent-resource"]
+            "then": [
+              "refresh-parent-resource"
+            ]
           },
           "statusCases": [
             {
@@ -131,7 +135,9 @@
           "bodyClassName": "py-2"
         },
         "action": {
-          "success": ["refresh-parent-resource"]
+          "success": [
+            "refresh-parent-resource"
+          ]
         }
       },
       {
@@ -152,7 +158,9 @@
           "bodyClassName": "py-2"
         },
         "action": {
-          "success": ["refresh-parent-resource"]
+          "success": [
+            "refresh-parent-resource"
+          ]
         }
       },
       {
@@ -168,10 +176,11 @@
             "path": "front/upload_file_cate/update",
             "params": "actionTarget.deleteCategory",
             "before": {
-              "type": "service",
-              "use": "front.upload.UploadFileCateHook.BeforeDeleteUploadFileCate"
+              "service": "front.upload.UploadFileCateHook.BeforeDeleteUploadFileCate"
             },
-            "then": ["refresh-parent-resource"]
+            "then": [
+              "refresh-parent-resource"
+            ]
           }
         }
       }

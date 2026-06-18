@@ -71,7 +71,9 @@
         "mode": "search",
         "option": {
           "labelField": "name",
-          "searchFields": ["name"],
+          "searchFields": [
+            "name"
+          ],
           "pageSize": 20
         }
       },
@@ -358,9 +360,6 @@
       "scheduled_at_end": ""
     },
     "table": {
-      "page": 1,
-      "pageSize": 10,
-      "total": 0,
       "searchFields": [
         "request_id"
       ],

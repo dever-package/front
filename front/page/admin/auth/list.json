@@ -125,6 +125,7 @@
           "remote": true,
           "tree": true,
           "rowKey": "id",
+          "savePath": "front/auth/update",
           "columns": [
             {
               "value": "name",
@@ -283,9 +284,7 @@
       "keyword": ""
     },
     "table": {
-      "page": 1,
       "pageSize": 20,
-      "total": 0,
       "searchFields": [
         "name"
       ],

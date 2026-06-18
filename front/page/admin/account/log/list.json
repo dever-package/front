@@ -70,7 +70,10 @@
         "mode": "search",
         "option": {
           "labelField": "name",
-          "searchFields": ["name", "account"],
+          "searchFields": [
+            "name",
+            "account"
+          ],
           "pageSize": 20
         },
         "meta": {
@@ -369,10 +372,7 @@
       "viewLog": {}
     },
     "table": {
-      "modelName": "front.NewAccountLogModel",
-      "page": 1,
-      "pageSize": 10,
-      "total": 0,
+      "model": "front.NewAccountLogModel",
       "order": "main.created_at desc, main.id desc",
       "filterFields": [
         "account_id",

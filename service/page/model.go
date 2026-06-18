@@ -41,9 +41,12 @@ func resolveDataValue(
 			frontmeta.MergeOptionMap(collectedOptions, options)
 			return resolved, err
 		}
-		if resolved, options, ok, err := resolveModelListContainer(c, current, pathValue); ok {
+		if resolved, options, ok, err := resolveModelListContainer(c, key, current, pathValue); ok {
 			frontmeta.MergeOptionMap(collectedOptions, options)
 			return resolved, err
+		}
+		if resolved, ok := resolveServiceDataContainer(c, current); ok {
+			return resolved, nil
 		}
 		result := make(map[string]any, len(current))
 		for childKey, item := range current {
@@ -55,29 +58,18 @@ func resolveDataValue(
 		}
 		return result, nil
 	case string:
-		return resolveDataPlaceholder(c, key, current), nil
+		return current, nil
 	default:
 		return value, nil
 	}
 }
 
-func resolveDataPlaceholder(c *server.Context, key, value string) any {
-	trimmed := strings.TrimSpace(value)
-	if strings.HasPrefix(trimmed, "{{") && strings.HasSuffix(trimmed, "}}") {
-		name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "{{"), "}}"))
-		if name == "" {
-			return value
-		}
-		return load.Service(name, c)
+func resolveServiceDataContainer(c *server.Context, current map[string]any) (any, bool) {
+	serviceName := util.ToStringTrimmed(current["service"])
+	if serviceName == "" {
+		return nil, false
 	}
-	if strings.HasPrefix(trimmed, "<<") && strings.HasSuffix(trimmed, ">>") {
-		name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "<<"), ">>"))
-		if name == "" {
-			return value
-		}
-		return frontrecord.LoadSafe(name)
-	}
-	return value
+	return load.Service(serviceName, c), true
 }
 
 func syncQueryValues(c *server.Context, current map[string]any) map[string]any {
@@ -116,10 +108,11 @@ func syncQueryValuesExcept(c *server.Context, current map[string]any, skipped ma
 
 func resolveModelListContainer(
 	c *server.Context,
+	key string,
 	current map[string]any,
 	pathValue string,
 ) (any, map[string]any, bool, error) {
-	modelName, ok := resolveListModelName(current, pathValue)
+	modelName, ok := resolveListModelName(key, current, pathValue)
 	if !ok {
 		return nil, nil, false, nil
 	}
@@ -147,7 +140,7 @@ func resolveModelListContainer(
 		switch key {
 		case "list":
 			result[key] = rows
-		case "searchFields", "order", "modelName":
+		case "model", "service", "searchFields", "filterFields", "order", "modelName":
 			continue
 		default:
 			result[key] = value
@@ -310,12 +303,9 @@ func resolveFormModelName(
 }
 
 func explicitFormModelName(current map[string]any) string {
-	// JSON 表单内部字段：声明当前 form 应按哪个 model 自动加载，避免为固定单页写专用 service。
-	for _, key := range []string{"_model", "_use"} {
-		modelName := util.ToStringTrimmed(current[key])
-		if modelName != "" {
-			return modelName
-		}
+	modelName := util.ToStringTrimmed(current["model"])
+	if modelName != "" {
+		return modelName
 	}
 	return ""
 }
@@ -439,7 +429,7 @@ func cleanFormMetaFields(values map[string]any) map[string]any {
 
 func isFormMetaField(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "_model", "_use", "_default", "_defaults", "_fields", "service":
+	case "model", "service", "_default", "_defaults", "_fields":
 		return true
 	default:
 		return false
@@ -514,37 +504,16 @@ func resolveSubmitModelFrontOption(content []byte, pathValue string) map[string]
 	return resolveModelFrontOption(context.Background(), modelName, frontrecord.LoadSafe(modelName))
 }
 
-func parseModelPlaceholder(value string) (string, bool) {
-	trimmed := strings.TrimSpace(value)
-	if !strings.HasPrefix(trimmed, "<<") || !strings.HasSuffix(trimmed, ">>") {
-		return "", false
-	}
-
-	name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trimmed, "<<"), ">>"))
-	if name == "" {
-		return "", false
-	}
-	return name, true
-}
-
 func resolveListModelName(
+	key string,
 	current map[string]any,
 	pathValue string,
 ) (string, bool) {
-	if rawList, exists := current["list"]; exists {
-		if text, ok := rawList.(string); ok {
-			if modelName, ok := parseModelPlaceholder(text); ok {
-				return modelName, true
-			}
-			if strings.TrimSpace(text) != "" {
-				return "", false
-			}
-		} else if rawList != nil {
-			return "", false
-		}
+	if modelName := util.ToStringTrimmed(current["model"]); modelName != "" {
+		return modelName, true
 	}
 
-	if !shouldUseDefaultListModel(pathValue, current) {
+	if !shouldUseDefaultListModel(key, pathValue) {
 		return "", false
 	}
 
@@ -555,19 +524,12 @@ func resolveListModelName(
 	return modelName, true
 }
 
-func shouldUseDefaultListModel(pathValue string, current map[string]any) bool {
+func shouldUseDefaultListModel(key string, pathValue string) bool {
+	if strings.TrimSpace(key) != "table" {
+		return false
+	}
 	if !strings.HasSuffix(normalizePath(pathValue), "/list") {
 		return false
 	}
-	if _, ok := current["page"]; !ok {
-		return false
-	}
-	if _, ok := current["pageSize"]; !ok {
-		return false
-	}
-	if _, ok := current["total"]; !ok {
-		return false
-	}
-	rawList, exists := current["list"]
-	return !exists || rawList == nil
+	return true
 }

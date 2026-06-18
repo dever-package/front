@@ -282,11 +282,7 @@
       "title": "上传规则",
       "description": "上传规则只负责组合存储方式、允许类型、上传方式，以及分片大小和单文件大小限制，供所有 form-upload 字段复用。"
     },
-    "table": {
-      "page": 1,
-      "pageSize": 10,
-      "total": 0
-    },
+    "table": {},
     "actionTarget": {
       "editRuleId": "",
       "deleteRule": {}

@@ -7,11 +7,10 @@
   "nodes": {},
   "data": {
     "demo": {
-      "type": "service",
       "service": "front.TemplateDemoService.LoadHomeMessage"
     },
     "accounts": {
-      "_model": "front.NewAccountModel",
+      "model": "front.NewAccountModel",
       "pageSize": 5,
       "order": "id asc"
     },

@@ -15,6 +15,7 @@ import (
 	"github.com/shemic/dever/util"
 
 	operationlog "my/package/front/service/operationlog"
+	uploadaccess "my/package/front/service/upload/access"
 	uploadprovider "my/package/front/service/upload/provider"
 	uploadrepo "my/package/front/service/upload/repository"
 )
@@ -301,12 +302,12 @@ func ensureUploadSessionToken(session resolvedUploadSession, token string) error
 
 func OpenUpload(c *server.Context) error {
 	fileID := util.ToUint64(c.Input("id", "required", "文件ID"))
-	if err := ensureUploadOpenAccess(c); err != nil {
-		return c.Error(err, http.StatusUnauthorized)
-	}
 	fileRecord, err := uploadrepo.FindUploadFile(c.Context(), fileID)
 	if err != nil {
 		return c.Error(err)
+	}
+	if err := ensureUploadOpenAccess(c, fileRecord); err != nil {
+		return c.Error(err, uploadaccess.Status(err))
 	}
 
 	provider, err := uploadprovider.Resolve(resolveUploadStorageProvider(fileRecord.Storage))

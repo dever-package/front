@@ -98,12 +98,7 @@ func explicitDataContainerModelName(raw json.RawMessage) string {
 	if modelName := explicitFormModelName(current); modelName != "" {
 		return modelName
 	}
-	for _, key := range []string{"modelName", "model"} {
-		if modelName := util.ToStringTrimmed(current[key]); modelName != "" {
-			return modelName
-		}
-	}
-	if modelName, ok := parseModelPlaceholder(util.ToStringTrimmed(current["list"])); ok {
+	if modelName := util.ToStringTrimmed(current["model"]); modelName != "" {
 		return modelName
 	}
 	return ""

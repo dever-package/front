@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/shemic/dever/util"
@@ -223,8 +222,8 @@ func ResolveOption(input ResolveOptionInput) (ResolvedOption, error) {
 		Key:          key,
 		Path:         pathValue,
 		Type:         "model",
-		Model:        strings.TrimSpace(optionConfig.Use),
-		Service:      strings.TrimSpace(optionConfig.Use),
+		Model:        strings.TrimSpace(optionConfig.Model),
+		Service:      strings.TrimSpace(optionConfig.Service),
 		Filters:      resolveOptionFilters(optionConfig.Filters, input),
 		SearchFields: optionConfig.SearchFields,
 		ExtraFields:  optionConfig.ExtraFields,
@@ -242,10 +241,11 @@ func ResolveOption(input ResolveOptionInput) (ResolvedOption, error) {
 		ParentID:     strings.TrimSpace(input.ParentID),
 	}
 
-	if optionConfig.Type != "" {
-		resolved.Type = optionConfig.Type
+	if resolved.Model != "" && resolved.Service != "" {
+		return ResolvedOption{}, fmt.Errorf("option 不能同时声明 model 和 service: %s", key)
 	}
-	if resolved.Type == "service" {
+	if resolved.Service != "" {
+		resolved.Type = "service"
 		if resolved.Service == "" {
 			return ResolvedOption{}, fmt.Errorf("option service 不能为空")
 		}
@@ -308,8 +308,6 @@ func resolveOptionFilters(filters map[string]any, input ResolveOptionInput) map[
 
 type optionConfig struct {
 	Key          string         `json:"key"`
-	Type         string         `json:"type"`
-	Use          string         `json:"use"`
 	Model        string         `json:"model"`
 	Service      string         `json:"service"`
 	Filters      map[string]any `json:"filters"`
@@ -331,51 +329,17 @@ func normalizeOptionConfig(raw any) optionConfig {
 	case nil:
 		return optionConfig{}
 	case string:
-		return parseOptionURL(current)
+		return optionConfig{}
 	case map[string]any:
 		var config optionConfig
 		_ = mapToStruct(current, &config)
 		config.Key = strings.TrimSpace(config.Key)
-		config.Type = strings.ToLower(strings.TrimSpace(config.Type))
-		config.Use = util.FirstNonEmpty(config.Use, config.Model, config.Service)
-		if config.Type == "" && strings.TrimSpace(config.Service) != "" {
-			config.Type = "service"
-		}
+		config.Model = strings.TrimSpace(config.Model)
+		config.Service = strings.TrimSpace(config.Service)
 		return config
 	default:
 		return optionConfig{}
 	}
-}
-
-func parseOptionURL(raw string) optionConfig {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || !strings.Contains(raw, "route/option") {
-		return optionConfig{}
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return optionConfig{}
-	}
-	values := parsed.Query()
-	config := optionConfig{
-		Type:        strings.ToLower(strings.TrimSpace(values.Get("type"))),
-		Use:         strings.TrimSpace(values.Get("use")),
-		ValueField:  strings.TrimSpace(values.Get("valueField")),
-		LabelField:  strings.TrimSpace(values.Get("labelField")),
-		ParentField: strings.TrimSpace(values.Get("parentField")),
-		LeafField:   strings.TrimSpace(values.Get("leafField")),
-		Order:       strings.TrimSpace(values.Get("order")),
-		PageSize:    util.ToIntDefault(values.Get("pageSize"), 0),
-		Page:        util.ToIntDefault(values.Get("page"), 0),
-		Tree:        util.ToBool(values.Get("tree")),
-		RootValue:   strings.TrimSpace(values.Get("rootValue")),
-	}
-	if filterField := strings.TrimSpace(values.Get("filterField")); filterField != "" {
-		config.Filters = map[string]any{filterField: strings.TrimSpace(values.Get("filterValue"))}
-	}
-	config.SearchFields = splitCSV(values.Get("searchFields"))
-	config.ExtraFields = splitCSV(values.Get("extraFields"))
-	return config
 }
 
 func parseRawPageConfig(content []byte) (rawPageConfig, error) {
@@ -479,7 +443,7 @@ func defaultCategoryOptionKeyForNode(item map[string]any) string {
 		if key, ok := localOptionDataKey(rawOption); ok {
 			return normalizeOptionKey(key)
 		}
-		if rawOption != "" && !strings.Contains(rawOption, "route/option") {
+		if rawOption != "" {
 			return ""
 		}
 	}
@@ -540,16 +504,12 @@ func hasExplicitNodeOptionSource(item map[string]any) bool {
 	meta, _ := item["meta"].(map[string]any)
 	option, _ := item["option"].(map[string]any)
 	for _, value := range []string{
-		toString(meta["use"]),
 		toString(meta["model"]),
 		toString(meta["service"]),
-		toString(meta["childUse"]),
 		toString(meta["childModel"]),
 		toString(meta["childService"]),
-		toString(option["use"]),
 		toString(option["model"]),
 		toString(option["service"]),
-		toString(option["type"]),
 	} {
 		if strings.TrimSpace(value) != "" {
 			return true
@@ -591,7 +551,7 @@ func hasOptionSourceValue(raw any) bool {
 	case nil:
 		return false
 	case string:
-		return strings.Contains(strings.TrimSpace(current), "route/option")
+		return false
 	case map[string]any:
 		return len(current) > 0
 	default:
@@ -655,18 +615,11 @@ func mergeNodeOptionMeta(config optionConfig, item map[string]any, input Resolve
 		return config
 	}
 	childLevel := util.ToIntDefault(toString(input.Query["level"]), 0) > 0 &&
-		strings.TrimSpace(toString(meta["childUse"])) != ""
-	if config.Use == "" {
-		config.Use = util.FirstNonEmpty(
-			childOptionMetaValue(meta, childLevel, "Use", "use"),
-			toString(meta["model"]),
-			toString(meta["service"]),
-		)
-	}
-	if config.Type == "" {
-		config.Type = strings.ToLower(strings.TrimSpace(
-			childOptionMetaValue(meta, childLevel, "Type", "type"),
-		))
+		(strings.TrimSpace(toString(meta["childModel"])) != "" ||
+			strings.TrimSpace(toString(meta["childService"])) != "")
+	if config.Model == "" && config.Service == "" {
+		config.Model = childOptionMetaValue(meta, childLevel, "Model", "model")
+		config.Service = childOptionMetaValue(meta, childLevel, "Service", "service")
 	}
 	if config.ValueField == "" {
 		config.ValueField = toString(meta["valueField"])
@@ -702,12 +655,6 @@ func mergeNodeOptionMeta(config optionConfig, item map[string]any, input Resolve
 	}
 	if config.RootValue == "" {
 		config.RootValue = toString(meta["rootValue"])
-	}
-	if config.Use != "" && config.Type == "" && strings.TrimSpace(toString(meta["service"])) != "" {
-		config.Type = "service"
-	}
-	if config.Use != "" && config.Type == "" && childLevel && strings.EqualFold(toString(meta["type"]), "service") {
-		config.Type = "service"
 	}
 	return config
 }

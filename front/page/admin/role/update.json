@@ -75,7 +75,11 @@
         "option": {
           "model": "front.NewAuthModel",
           "tree": true,
-          "extraFields": ["type", "path", "key"]
+          "extraFields": [
+            "type",
+            "path",
+            "key"
+          ]
         },
         "info": "勾选子权限时会自动补齐上级菜单；单独勾选菜单时不会自动勾选其子权限。",
         "meta": {

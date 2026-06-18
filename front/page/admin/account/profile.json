@@ -64,18 +64,19 @@
     ]
   },
   "data": {
-    "form": "{{front.ProfileService.LoadCurrentAccountProfile}}"
+    "form": {
+      "service": "front.ProfileService.LoadCurrentAccountProfile"
+    }
   },
   "state": {},
   "action": {
     "submit": {
       "type": "save",
-      "use": "front.NewAccountModel",
       "params": "form",
       "before": {
-        "type": "service",
-        "use": "front.ProfileService.BeforeSaveAccountProfile"
-      }
+        "service": "front.ProfileService.BeforeSaveAccountProfile"
+      },
+      "model": "front.NewAccountModel"
     }
   }
 }

@@ -27,7 +27,8 @@ type validateRule struct {
 	Target    string              `json:"target"`
 	Min       *float64            `json:"min"`
 	Max       *float64            `json:"max"`
-	Use       string              `json:"use"`
+	Model     string              `json:"model"`
+	Service   string              `json:"service"`
 	Field     string              `json:"field"`
 	Operator  string              `json:"operator"`
 	Except    string              `json:"except"`

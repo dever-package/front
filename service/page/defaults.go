@@ -716,36 +716,10 @@ func resolveDefaultCategoryOptionValue(c *server.Context, root map[string]any, i
 				return nil, false, nil
 			}
 		}
-
-		items, err := resolveRemoteDefaultCategoryOptions(c, source, item, pathValue)
-		if err != nil {
-			return nil, false, err
-		}
-		value, ok := extractFirstMappedOptionValue(items)
-		return value, ok, nil
+		return nil, false, nil
 	default:
 		return nil, false, nil
 	}
-}
-
-func resolveRemoteDefaultCategoryOptions(c *server.Context, source string, item map[string]any, pathValue string) ([]map[string]any, error) {
-	if !strings.Contains(strings.TrimSpace(source), "route/option") {
-		return nil, nil
-	}
-	key := nodeOptionKey(item)
-	if pathValue == "" || key == "" {
-		return nil, fmt.Errorf("分类选项缺少 path 或 key")
-	}
-	return resolveOptionRows(c, func(name string) string {
-		switch name {
-		case "path":
-			return pathValue
-		case "key":
-			return key
-		default:
-			return ""
-		}
-	})
 }
 
 func extractFirstOptionValue(items []any) (any, bool) {

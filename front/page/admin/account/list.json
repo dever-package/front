@@ -210,11 +210,7 @@
       "title": "账户管理",
       "description": "维护后台登录账户，账户可同时绑定多个角色，并继承这些角色的菜单与权限。"
     },
-    "table": {
-      "page": 1,
-      "pageSize": 10,
-      "total": 0
-    },
+    "table": {},
     "actionTarget": {
       "editAccountId": "",
       "deleteAccount": {}

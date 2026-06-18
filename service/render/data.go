@@ -77,10 +77,15 @@ func resolveDataItem(
 		resolvedContainer = map[string]any{}
 	}
 
-	if serviceName := util.ToStringTrimmed(resolvedContainer["service"]); serviceName != "" && isServiceContainer(resolvedContainer) {
+	serviceName := util.ToStringTrimmed(resolvedContainer["service"])
+	modelName := modelNameFromContainer(resolvedContainer)
+	if modelName != "" && serviceName != "" {
+		return nil, fmt.Errorf("模板 data.%s 不能同时声明 model 和 service", key)
+	}
+	if serviceName != "" {
 		return resolveServiceContainer(c, route, key, serviceName, resolvedContainer, routeValues, query, data)
 	}
-	if modelName := modelNameFromContainer(resolvedContainer); modelName != "" {
+	if modelName != "" {
 		return resolveModelContainer(c, key, modelName, resolvedContainer)
 	}
 	return resolveNestedData(c, route, resolvedContainer, routeValues, query, siteData, data)
@@ -207,12 +212,7 @@ func templateContext(
 }
 
 func modelNameFromContainer(container map[string]any) string {
-	for _, key := range []string{"_model", "_use", "model"} {
-		if value := util.ToStringTrimmed(container[key]); value != "" {
-			return value
-		}
-	}
-	return ""
+	return util.ToStringTrimmed(container["model"])
 }
 
 func buildFilters(container map[string]any) any {
@@ -222,25 +222,9 @@ func buildFilters(container map[string]any) any {
 	return map[string]any{}
 }
 
-func isServiceContainer(container map[string]any) bool {
-	if util.ToStringTrimmed(container["type"]) == "service" {
-		return true
-	}
-	if _, ok := container["_model"]; ok {
-		return false
-	}
-	if _, ok := container["model"]; ok {
-		return false
-	}
-	if _, ok := container["_use"]; ok {
-		return false
-	}
-	return true
-}
-
 func isDataMetaField(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "_model", "_use", "model", "one", "required", "defaultFilters", "filterFields", "searchFields", "order", "service", "type":
+	case "model", "one", "required", "defaultFilters", "filterFields", "searchFields", "order", "service":
 		return true
 	default:
 		return false

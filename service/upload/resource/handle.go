@@ -8,6 +8,7 @@ import (
 
 	operationlog "my/package/front/service/operationlog"
 	frontrecord "my/package/front/service/record"
+	uploadaccess "my/package/front/service/upload/access"
 	uploadrepo "my/package/front/service/upload/repository"
 )
 
@@ -18,11 +19,6 @@ type assignCategoryInput struct {
 }
 
 func HandleList(c *server.Context) error {
-	fileModel, err := bootstrapFileModel(c)
-	if err != nil {
-		return c.Error(err)
-	}
-
 	page := maxPage(util.ToIntDefault(c.Input("page"), 0))
 	pageSize := normalizePageSize(resolvePageSize(c))
 	bizKey := uploadrepo.NormalizeBizKey(c.Input("biz_key"))
@@ -30,6 +26,19 @@ func HandleList(c *server.Context) error {
 	keyword := strings.TrimSpace(c.Input("keyword"))
 	fileType := strings.ToLower(strings.TrimSpace(c.Input("file_type")))
 	categoryID := strings.TrimSpace(c.Input("category_id"))
+	if err := uploadaccess.EnsureResourceRequest(c, uploadaccess.Request{
+		Operation:  uploadaccess.OperationList,
+		BizKey:     bizKey,
+		Kind:       kind,
+		CategoryID: categoryID,
+	}); err != nil {
+		return c.Error(err, uploadaccess.Status(err))
+	}
+
+	fileModel, err := bootstrapFileModel(c)
+	if err != nil {
+		return c.Error(err)
+	}
 
 	filters, err := buildFilters(c.Context(), bizKey, kind, keyword, fileType, categoryID)
 	if err != nil {
@@ -61,14 +70,20 @@ func HandleList(c *server.Context) error {
 }
 
 func HandleListCategories(c *server.Context) error {
+	bizKey := uploadrepo.NormalizeBizKey(c.Input("biz_key"))
+	kind := normalizeKind(c.Input("kind"))
+	withStats := util.ToBool(c.Input("stats"))
+	if err := uploadaccess.EnsureResourceRequest(c, uploadaccess.Request{
+		Operation: uploadaccess.OperationList,
+		BizKey:    bizKey,
+		Kind:      kind,
+	}); err != nil {
+		return c.Error(err, uploadaccess.Status(err))
+	}
 	fileModel, err := bootstrapFileModel(c)
 	if err != nil {
 		return c.Error(err)
 	}
-
-	bizKey := uploadrepo.NormalizeBizKey(c.Input("biz_key"))
-	kind := normalizeKind(c.Input("kind"))
-	withStats := util.ToBool(c.Input("stats"))
 	items, err := loadCategoryItems(c.Context(), fileModel, bizKey, kind, withStats)
 	if err != nil {
 		return c.Error(err)
@@ -77,12 +92,17 @@ func HandleListCategories(c *server.Context) error {
 }
 
 func HandleListSources(c *server.Context) error {
+	kind := normalizeKind(c.Input("kind"))
+	if err := uploadaccess.EnsureResourceRequest(c, uploadaccess.Request{
+		Operation: uploadaccess.OperationList,
+		Kind:      kind,
+	}); err != nil {
+		return c.Error(err, uploadaccess.Status(err))
+	}
 	fileModel, err := bootstrapFileModel(c)
 	if err != nil {
 		return c.Error(err)
 	}
-
-	kind := normalizeKind(c.Input("kind"))
 	items, err := loadSourceItems(c.Context(), fileModel, kind)
 	if err != nil {
 		return c.Error(err)
@@ -99,6 +119,9 @@ func HandleAssignCategory(c *server.Context) error {
 	fileIDs := normalizeFileIDs(input.FileID, input.FileIDs)
 	if len(fileIDs) == 0 {
 		return c.Error("资源文件不能为空")
+	}
+	if err := ensureManageResourceFiles(c, fileIDs); err != nil {
+		return c.Error(err, uploadaccess.Status(err))
 	}
 
 	categoryID, err := uploadrepo.EnsureUploadCateID(c.Context(), input.CategoryID)
@@ -140,6 +163,19 @@ func joinUint64IDs(ids []uint64) string {
 		values = append(values, util.ToString(id))
 	}
 	return strings.Join(values, ",")
+}
+
+func ensureManageResourceFiles(c *server.Context, fileIDs []uint64) error {
+	for _, fileID := range fileIDs {
+		fileRecord, err := uploadrepo.FindUploadFile(c.Context(), fileID)
+		if err != nil {
+			return err
+		}
+		if err := uploadaccess.EnsureFile(c, uploadaccess.OperationManage, fileRecord); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func bootstrapFileModel(c *server.Context) (frontrecord.Model, error) {

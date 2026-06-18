@@ -204,11 +204,7 @@
       "title": "角色管理",
       "description": "角色负责聚合菜单和普通权限，账户绑定角色后即可继承授权结果。"
     },
-    "table": {
-      "page": 1,
-      "pageSize": 10,
-      "total": 0
-    },
+    "table": {},
     "actionTarget": {
       "editRoleId": "",
       "deleteRole": {}

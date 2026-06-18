@@ -16,6 +16,7 @@ import (
 	cronservice "my/package/front/service/cron"
 	permissionservice "my/package/front/service/permission"
 	"my/package/front/service/siteconfig"
+	uploadservice "my/package/front/service/upload"
 	"my/package/front/service/upload/openurl"
 )
 
@@ -38,8 +39,12 @@ func Register() {
 			panic(err)
 		}
 		cronservice.Start()
+		uploadservice.StartSessionCleanup()
 		server.OnShutdown(func(ctx context.Context) error {
-			return cronservice.Stop(ctx)
+			if err := cronservice.Stop(ctx); err != nil {
+				return err
+			}
+			return uploadservice.StopSessionCleanup(ctx)
 		})
 		coremiddleware.UseGlobalFunc(auth(settings))
 		coremiddleware.UseGlobalFunc(apiScopeGuard(settings))

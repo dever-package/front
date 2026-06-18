@@ -10,7 +10,7 @@ import (
 type ActionConfig struct {
 	Type    string `json:"type"`
 	Path    string `json:"path"`
-	Use     string `json:"use"`
+	Model   string `json:"model"`
 	PK      string `json:"pk"`
 	Data    any    `json:"data"`
 	Params  any    `json:"params"`
@@ -44,7 +44,7 @@ var actionEnvelopeCache util.ConcurrentMap[ContentSignature, actionEnvelopeCache
 func NormalizeAction(config ActionConfig) ActionConfig {
 	config.Type = strings.ToLower(strings.TrimSpace(config.Type))
 	config.Path = normalizePath(config.Path)
-	config.Use = strings.TrimSpace(config.Use)
+	config.Model = strings.TrimSpace(config.Model)
 	config.PK = strings.TrimSpace(config.PK)
 	config.Key = normalizeActionKey(config.Key)
 	return config
@@ -64,7 +64,7 @@ func SubmitModelName(content []byte, pathValue string) string {
 }
 
 func ActionModelName(pathValue string, config ActionConfig) string {
-	if modelName := strings.TrimSpace(config.Use); modelName != "" {
+	if modelName := strings.TrimSpace(config.Model); modelName != "" {
 		return modelName
 	}
 	return DefaultModelName(ActionPath(pathValue, config))

@@ -223,11 +223,7 @@
       "title": "存储方式",
       "description": "把本地、七牛云等存储配置单独维护起来，上传规则只关心引用哪一种存储方式。"
     },
-    "table": {
-      "page": 1,
-      "pageSize": 10,
-      "total": 0
-    },
+    "table": {},
     "actionTarget": {
       "editStorageId": "",
       "deleteStorage": {}

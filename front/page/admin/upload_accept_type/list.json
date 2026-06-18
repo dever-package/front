@@ -210,11 +210,7 @@
       "title": "允许类型",
       "description": "把常用文件类型预先配置成标准 Accept 规则，上传规则只需要选中对应类型即可。"
     },
-    "table": {
-      "page": 1,
-      "pageSize": 10,
-      "total": 0
-    },
+    "table": {},
     "actionTarget": {
       "editAcceptTypeId": "",
       "deleteAcceptType": {}

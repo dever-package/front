@@ -323,7 +323,6 @@
         "value": "form.use",
         "mode": "form",
         "option": {
-          "type": "service",
           "service": "front.cron.CronOptionService.LoadCronProviders",
           "valueField": "id",
           "labelField": "value"
@@ -487,8 +486,7 @@
       "type": "save",
       "params": "form",
       "before": {
-        "type": "service",
-        "use": "front.cron.CronHook.BeforeSaveCron"
+        "service": "front.cron.CronHook.BeforeSaveCron"
       },
       "data": {
         "id": "$form.id",

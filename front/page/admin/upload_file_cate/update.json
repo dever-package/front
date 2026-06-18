@@ -90,8 +90,7 @@
       "type": "save",
       "params": "form",
       "before": {
-        "type": "service",
-        "use": "front.upload.UploadFileCateHook.BeforeSaveUploadFileCate"
+        "service": "front.upload.UploadFileCateHook.BeforeSaveUploadFileCate"
       }
     }
   }

@@ -10,6 +10,7 @@ import (
 	"github.com/shemic/dever/util"
 
 	authctx "my/package/front/service/internal/authctx"
+	uploadaccess "my/package/front/service/upload/access"
 	"my/package/front/service/upload/openurl"
 	uploadrepo "my/package/front/service/upload/repository"
 )
@@ -34,8 +35,12 @@ func SignUploadOpen(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
-	if _, err := uploadrepo.FindUploadFile(c.Context(), input.ID); err != nil {
+	fileRecord, err := uploadrepo.FindUploadFile(c.Context(), input.ID)
+	if err != nil {
 		return c.Error(err)
+	}
+	if err := uploadaccess.EnsureFile(c, uploadaccess.OperationSign, fileRecord); err != nil {
+		return c.Error(err, uploadaccess.Status(err))
 	}
 
 	openURL, expiresAt, err := openurl.BuildSigned(input.ID, uploadOpenTTL(input))
@@ -50,14 +55,11 @@ func SignUploadOpen(c *server.Context) error {
 	})
 }
 
-func ensureUploadOpenAccess(c *server.Context) error {
+func ensureUploadOpenAccess(c *server.Context, file uploadrepo.UploadFile) error {
 	if openurl.ValidateRequest(c) == nil {
 		return nil
 	}
-	if hasUploadOpenActor(c) {
-		return nil
-	}
-	return fmt.Errorf("请先登录或使用有效的文件签名")
+	return uploadaccess.EnsureFile(c, uploadaccess.OperationRead, file)
 }
 
 func hasUploadOpenActor(c *server.Context) bool {

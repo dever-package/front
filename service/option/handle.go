@@ -23,7 +23,13 @@ import (
 	"my/package/front/service/siteconfig"
 )
 
-const optionCacheTTL = 5 * time.Second
+const (
+	optionCacheTTL              = 5 * time.Second
+	maxOptionKeywordLength      = 100
+	maxOptionSelectedTextLength = 4096
+	maxOptionSelectedValues     = 100
+	maxOptionPageSize           = 500
+)
 
 var optionCache = devercache.New[string, []map[string]any](
 	devercache.WithTTL(optionCacheTTL),
@@ -61,22 +67,10 @@ func GetByInput(c *server.Context, getInput func(string) string) ([]map[string]a
 			return c.Input(key)
 		}
 	}
-	if pathValue := strings.TrimSpace(getInput("path")); pathValue != "" || strings.TrimSpace(getInput("key")) != "" {
-		return GetResolvedOptions(c, getInput)
+	if strings.TrimSpace(getInput("path")) == "" || strings.TrimSpace(getInput("key")) == "" {
+		return nil, fmt.Errorf("option.path 和 option.key 不能为空")
 	}
-	optionType := strings.ToLower(strings.TrimSpace(getInput("type")))
-	if optionType == "" {
-		optionType = "model"
-	}
-
-	switch optionType {
-	case "model":
-		return GetModelOptionsByInput(c.Context(), getInput)
-	case "service":
-		return GetServiceOptionsByInput(c, getInput)
-	default:
-		return nil, fmt.Errorf("option.type 不支持: %s", optionType)
-	}
+	return GetResolvedOptions(c, getInput)
 }
 
 func GetResolvedOptions(c *server.Context, getInput func(string) string) ([]map[string]any, error) {
@@ -85,8 +79,8 @@ func GetResolvedOptions(c *server.Context, getInput func(string) string) ([]map[
 		Context:  c.Context(),
 		Path:     pathValue,
 		Key:      getInput("key"),
-		Keyword:  getInput("keyword"),
-		Selected: getInput("selected"),
+		Keyword:  normalizeOptionKeyword(getInput("keyword")),
+		Selected: normalizeOptionSelectedText(getInput("selected")),
 		ParentID: getInput("parentId"),
 		Query:    collectOptionQuery(getInput, pathValue, pathQuery),
 	})
@@ -171,11 +165,10 @@ func getResolvedOptions(c *server.Context, resolved frontpage.ResolvedOption) ([
 
 func resolvedOptionInput(resolved frontpage.ResolvedOption) func(string) string {
 	values := url.Values{}
-	values.Set("type", util.FirstNonEmpty(resolved.Type, "model"))
 	if strings.EqualFold(resolved.Type, "service") {
-		values.Set("use", resolved.Service)
+		values.Set("service", resolved.Service)
 	} else {
-		values.Set("use", resolved.Model)
+		values.Set("model", resolved.Model)
 	}
 	values.Set("valueField", resolved.ValueField)
 	values.Set("labelField", resolved.LabelField)
@@ -217,7 +210,7 @@ func resolvedOptionInput(resolved frontpage.ResolvedOption) func(string) string 
 }
 
 func GetModelOptionsByInput(ctx context.Context, getInput func(string) string) ([]map[string]any, error) {
-	modelName := strings.TrimSpace(getInput("use"))
+	modelName := strings.TrimSpace(getInput("model"))
 	if modelName == "" {
 		return nil, fmt.Errorf("模型名不能为空")
 	}
@@ -266,7 +259,7 @@ func GetModelOptionsByInput(ctx context.Context, getInput func(string) string) (
 	queryFilters := buildModelOptionQueryFilters(
 		filters,
 		columnLookup,
-		strings.TrimSpace(getInput("keyword")),
+		normalizeOptionKeyword(getInput("keyword")),
 		getInput("searchFields"),
 		labelField,
 	)
@@ -280,7 +273,7 @@ func GetModelOptionsByInput(ctx context.Context, getInput func(string) string) (
 		options["order"] = order
 	}
 	if !treeMode {
-		if pageSize := util.ToIntDefault(getInput("pageSize"), 0); pageSize > 0 {
+		if pageSize := normalizeOptionPageSize(getInput("pageSize")); pageSize > 0 {
 			options["pageSize"] = pageSize
 			if page := util.ToIntDefault(getInput("page"), 1); page > 0 {
 				options["page"] = page
@@ -358,6 +351,37 @@ func mergeSelectedOptionRows(
 	return result
 }
 
+func normalizeOptionKeyword(value string) string {
+	return truncateOptionInput(value, maxOptionKeywordLength)
+}
+
+func normalizeOptionSelectedText(value string) string {
+	return truncateOptionInput(value, maxOptionSelectedTextLength)
+}
+
+func normalizeOptionPageSize(value string) int {
+	pageSize := util.ToIntDefault(value, 0)
+	if pageSize <= 0 {
+		return 0
+	}
+	if pageSize > maxOptionPageSize {
+		return maxOptionPageSize
+	}
+	return pageSize
+}
+
+func truncateOptionInput(value string, maxLength int) string {
+	value = strings.TrimSpace(value)
+	if maxLength <= 0 || value == "" {
+		return value
+	}
+	runes := []rune(value)
+	if len(runes) <= maxLength {
+		return value
+	}
+	return string(runes[:maxLength])
+}
+
 func normalizeSelectedOptionValues(rawSelected string) []any {
 	trimmed := strings.TrimSpace(rawSelected)
 	if trimmed == "" {
@@ -369,9 +393,13 @@ func normalizeSelectedOptionValues(rawSelected string) []any {
 		return normalizeSelectedOptionItems(decoded)
 	}
 
+	trimmed = normalizeOptionSelectedText(trimmed)
 	parts := strings.Split(trimmed, ",")
 	values := make([]any, 0, len(parts))
 	for _, part := range parts {
+		if len(values) >= maxOptionSelectedValues {
+			break
+		}
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -382,8 +410,15 @@ func normalizeSelectedOptionValues(rawSelected string) []any {
 }
 
 func normalizeSelectedOptionItems(items []any) []any {
-	values := make([]any, 0, len(items))
+	capacity := len(items)
+	if capacity > maxOptionSelectedValues {
+		capacity = maxOptionSelectedValues
+	}
+	values := make([]any, 0, capacity)
 	for _, item := range items {
+		if len(values) >= maxOptionSelectedValues {
+			break
+		}
 		text := strings.TrimSpace(util.ToString(item))
 		if text == "" {
 			continue
@@ -512,8 +547,8 @@ func optionRequestCacheKey(c *server.Context) string {
 			cleanPath,
 			optionPathQueryCacheKey(pathQuery),
 			strings.TrimSpace(c.Input("key")),
-			strings.TrimSpace(c.Input("keyword")),
-			strings.TrimSpace(c.Input("selected")),
+			normalizeOptionKeyword(c.Input("keyword")),
+			normalizeOptionSelectedText(c.Input("selected")),
 			strings.TrimSpace(c.Input("parentId")),
 			strings.TrimSpace(c.Input("level")),
 		}, "|")
@@ -542,7 +577,7 @@ func cloneOptionRows(rows []map[string]any) []map[string]any {
 }
 
 func GetServiceOptionsByInput(c *server.Context, getInput func(string) string) ([]map[string]any, error) {
-	serviceName := strings.TrimSpace(getInput("use"))
+	serviceName := strings.TrimSpace(getInput("service"))
 	if serviceName == "" {
 		return nil, fmt.Errorf("服务名不能为空")
 	}
@@ -552,9 +587,9 @@ func GetServiceOptionsByInput(c *server.Context, getInput func(string) string) (
 		"value_field":  util.FirstNonEmpty(getInput("valueField"), "id"),
 		"label_field":  util.FirstNonEmpty(getInput("labelField"), "name"),
 		"leaf_field":   strings.TrimSpace(getInput("leafField")),
-		"keyword":      strings.TrimSpace(getInput("keyword")),
-		"selected":     strings.TrimSpace(getInput("selected")),
-		"page_size":    util.ToIntDefault(getInput("pageSize"), 0),
+		"keyword":      normalizeOptionKeyword(getInput("keyword")),
+		"selected":     normalizeOptionSelectedText(getInput("selected")),
+		"page_size":    normalizeOptionPageSize(getInput("pageSize")),
 		"page":         util.ToIntDefault(getInput("page"), 0),
 	}
 	if tree := strings.TrimSpace(getInput("tree")); tree != "" {

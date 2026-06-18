@@ -200,8 +200,7 @@
                           "updated_at": "$row.updated_at"
                         },
                         "after": {
-                          "type": "service",
-                          "use": "front.cron.CronAction.RunNow"
+                          "service": "front.cron.CronAction.RunNow"
                         }
                       }
                     }
@@ -324,9 +323,6 @@
       "status": ""
     },
     "table": {
-      "page": 1,
-      "pageSize": 10,
-      "total": 0,
       "searchFields": [
         "name",
         "schedule_mode",

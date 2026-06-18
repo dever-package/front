@@ -175,7 +175,8 @@ func (Route) GetOption(c *server.Context) error {
 		return c.Error("option.key 不能为空")
 	}
 	lookup := requestInputLookup(pathQuery, c.Input)
-	if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
+	var accessScope *permissionservice.AccessScope
+	if err := ensureRouteOptionAccess(c, &accessScope, pathValue, lookup); err != nil {
 		return permissionDeniedPayload(c, err)
 	}
 
@@ -195,6 +196,7 @@ func (Route) PostBatchOption(c *server.Context) error {
 	}
 
 	results := make([]batchResult, 0, len(request.Options))
+	var accessScope *permissionservice.AccessScope
 	for _, params := range request.Options {
 		pathValue, optionParams := normalizeOptionParams(params)
 		lookup := mapStringLookup(optionParams)
@@ -202,7 +204,7 @@ func (Route) PostBatchOption(c *server.Context) error {
 			results = append(results, batchResult{Code: 400, Path: pathValue, Message: "option.path 和 option.key 不能为空"})
 			continue
 		}
-		if err := permissionservice.EnsurePageAccessWithInput(c.Context(), pathValue, lookup); err != nil {
+		if err := ensureRouteOptionAccess(c, &accessScope, pathValue, lookup); err != nil {
 			results = append(results, batchResult{
 				Code:    403,
 				Path:    pathValue,
@@ -228,6 +230,22 @@ func (Route) PostBatchOption(c *server.Context) error {
 	}
 
 	return c.JSON(results)
+}
+
+func ensureRouteOptionAccess(
+	c *server.Context,
+	accessScope **permissionservice.AccessScope,
+	pathValue string,
+	lookup permissionservice.InputLookup,
+) error {
+	if *accessScope == nil {
+		scope, err := permissionservice.NewAccessScope(c.Context())
+		if err != nil {
+			return err
+		}
+		*accessScope = scope
+	}
+	return (*accessScope).EnsurePageAccess(c.Context(), pathValue, lookup)
 }
 
 func (Route) PostAction(c *server.Context) error {
