@@ -2,6 +2,9 @@
   "name": "front",
   "version": "0.1.0",
   "description": "Dever front runtime, admin shell, RBAC, upload and system pages",
+  "skills": [
+    "skills/front/SKILL.md"
+  ],
   "front": {
     "public": [
       "/site/info",
