@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -25,9 +26,13 @@ const (
 	DefaultDirection    = "ltr"
 	DefaultSkin         = "default"
 	DefaultRouterMode   = "history"
+	ShellModeApp        = "app"
+	ShellModeBlank      = "blank"
+	DefaultShell        = ShellModeApp
 	AccessModeRBAC      = "rbac"
 	AccessModeLogin     = "login"
 	AccessModePublic    = "public"
+	projectConfigPath   = "config/front.json"
 )
 
 var (
@@ -43,25 +48,29 @@ type Config struct {
 }
 
 type Site struct {
-	Key         string
-	Path        string
-	Page        string
-	Name        string
-	Subtitle    string
-	Description string
-	URL         string
-	API         string
-	Public      []string
-	Assets      SiteAssets
-	Setting     SiteSetting
-	Access      Access
-	Auth        []AuthSeed
-	Entry       string
+	Key     string
+	Path    string
+	Page    string
+	API     string
+	Public  []string
+	Config  SiteConfig
+	Setting SiteSetting
+	Access  Access
+	Auth    []AuthSeed
+	Entry   string
 }
 
-type SiteAssets struct {
-	Logo    string `json:"logo"`
-	Favicon string `json:"favicon"`
+type SiteConfig struct {
+	Name        string `json:"name"`
+	Subtitle    string `json:"subtitle"`
+	Description string `json:"description"`
+	URL         string `json:"url"`
+	Logo        string `json:"logo"`
+	Favicon     string `json:"favicon"`
+}
+
+type projectConfig struct {
+	Sites map[string]SiteConfig `json:"sites"`
 }
 
 type SiteSetting struct {
@@ -79,6 +88,7 @@ type AppearanceSetting struct {
 type RuntimeSetting struct {
 	Skin       string   `json:"skin"`
 	RouterMode string   `json:"routerMode"`
+	Shell      string   `json:"shell"`
 	Plugins    []string `json:"plugins,omitempty"`
 }
 
@@ -99,7 +109,11 @@ func Load(context.Context) (Config, error) {
 }
 
 func load() (Config, error) {
-	return loadFromComponents(component.Active())
+	cfg, err := loadFromComponents(component.Active())
+	if err != nil {
+		return Config{}, err
+	}
+	return applyProjectConfig(cfg)
 }
 
 func MustLoad() Config {
@@ -367,15 +381,15 @@ func (site Site) AssetURL(value string) string {
 	if isExternalAssetURL(value) || strings.HasPrefix(value, "/") {
 		return value
 	}
-	return cleanAbsPath(path.Join(site.Path, "assets", trimAssetPrefix(value)))
+	return cleanAbsPath(path.Join(site.Path, "assets", value))
 }
 
 func (site Site) LogoURL() string {
-	return site.AssetURL(site.Assets.Logo)
+	return site.AssetURL(site.Config.Logo)
 }
 
 func (site Site) FaviconURL() string {
-	return site.AssetURL(site.Assets.Favicon)
+	return site.AssetURL(site.Config.Favicon)
 }
 
 func (site Site) UsesRBAC() bool {
@@ -470,6 +484,169 @@ func loadFromComponents(components []component.Component) (Config, error) {
 	}, nil
 }
 
+func applyProjectConfig(cfg Config) (Config, error) {
+	project, err := loadProjectConfig()
+	if err != nil {
+		return Config{}, err
+	}
+	if len(project.Sites) == 0 {
+		return cfg, nil
+	}
+
+	sites := make([]Site, len(cfg.Sites))
+	copy(sites, cfg.Sites)
+	for siteKey, config := range project.Sites {
+		siteKey = normalizeSiteKey(siteKey)
+		if siteKey == "" {
+			continue
+		}
+		found := false
+		for index := range sites {
+			if sites[index].Key != siteKey {
+				continue
+			}
+			sites[index].Config = mergeSiteConfig(sites[index].Config, config)
+			found = true
+			break
+		}
+		if !found {
+			return Config{}, fmt.Errorf("%s 定义了未知站点 %q", projectConfigPath, siteKey)
+		}
+	}
+	cfg.Sites = sites
+	return cfg, nil
+}
+
+func loadProjectConfig() (projectConfig, error) {
+	content, err := os.ReadFile(projectConfigPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return projectConfig{}, nil
+		}
+		return projectConfig{}, err
+	}
+	if err := validateProjectConfig(content); err != nil {
+		return projectConfig{}, err
+	}
+	var config projectConfig
+	if err := util.UnmarshalJSONC(content, &config); err != nil {
+		return projectConfig{}, err
+	}
+	config = normalizeProjectConfig(config)
+	if err := validateProjectSiteConfigs(config); err != nil {
+		return projectConfig{}, err
+	}
+	return config, nil
+}
+
+func validateProjectConfig(content []byte) error {
+	var root map[string]map[string]map[string]any
+	if err := util.UnmarshalJSONC(content, &root); err != nil {
+		return err
+	}
+	for key := range root {
+		if key != "sites" {
+			return fmt.Errorf("%s 只允许 sites 字段，不允许 %q", projectConfigPath, key)
+		}
+	}
+	for siteKey, siteConfig := range root["sites"] {
+		for key := range siteConfig {
+			switch key {
+			case "name", "subtitle", "description", "url", "logo", "favicon":
+			default:
+				return fmt.Errorf("%s sites.%s 只允许 name/subtitle/description/url/logo/favicon，不允许 %q", projectConfigPath, siteKey, key)
+			}
+		}
+	}
+	return nil
+}
+
+func normalizeProjectConfig(config projectConfig) projectConfig {
+	if len(config.Sites) == 0 {
+		return projectConfig{}
+	}
+	sites := make(map[string]SiteConfig, len(config.Sites))
+	for key, siteConfig := range config.Sites {
+		key = normalizeSiteKey(key)
+		if key == "" {
+			continue
+		}
+		sites[key] = normalizeSiteConfig(siteConfig)
+	}
+	return projectConfig{Sites: sites}
+}
+
+func validateProjectSiteConfigs(config projectConfig) error {
+	for siteKey, siteConfig := range config.Sites {
+		if err := validateSiteConfig(siteConfig, fmt.Sprintf("%s sites.%s", projectConfigPath, siteKey)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeSiteConfig(base SiteConfig, override SiteConfig) SiteConfig {
+	if override.Name != "" {
+		base.Name = override.Name
+	}
+	if override.Subtitle != "" {
+		base.Subtitle = override.Subtitle
+	}
+	if override.Description != "" {
+		base.Description = override.Description
+	}
+	if override.URL != "" {
+		base.URL = override.URL
+	}
+	if override.Logo != "" {
+		base.Logo = override.Logo
+	}
+	if override.Favicon != "" {
+		base.Favicon = override.Favicon
+	}
+	return normalizeSiteConfig(base)
+}
+
+func manifestSiteConfig(config component.ManifestSiteConfig) SiteConfig {
+	return SiteConfig{
+		Name:        config.Name,
+		Subtitle:    config.Subtitle,
+		Description: config.Description,
+		URL:         config.URL,
+		Logo:        config.Logo,
+		Favicon:     config.Favicon,
+	}
+}
+
+func validateSiteConfig(config SiteConfig, source string) error {
+	if err := validateAssetRefValue(config.Logo); err != nil {
+		return fmt.Errorf("%s.logo 不合法: %w", source, err)
+	}
+	if err := validateAssetRefValue(config.Favicon); err != nil {
+		return fmt.Errorf("%s.favicon 不合法: %w", source, err)
+	}
+	return nil
+}
+
+func validateAssetRefValue(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" || isExternalAssetURL(value) || strings.HasPrefix(value, "/") {
+		return nil
+	}
+	value = cleanRelativePath(value)
+	if value == "" {
+		return fmt.Errorf("资源路径为空或包含非法上级目录")
+	}
+	if strings.HasPrefix(value, "config/assets/") && cleanRelativePath(strings.TrimPrefix(value, "config/assets/")) != "" {
+		return nil
+	}
+	parts := strings.SplitN(value, "/", 3)
+	if len(parts) == 3 && parts[0] != "" && parts[1] == "assets" && cleanRelativePath(parts[2]) != "" {
+		return nil
+	}
+	return fmt.Errorf("必须使用 config/assets/...、<component>/assets/...、绝对路径或外部 URL")
+}
+
 func mergeComponentSite(site *Site, owners map[string]string, current component.Component, contribution component.ManifestSite) error {
 	if site == nil {
 		return nil
@@ -478,6 +655,9 @@ func mergeComponentSite(site *Site, owners map[string]string, current component.
 	if hasSiteOwnerFields(contribution) {
 		if owner := owners[site.Key]; owner != "" && owner != current.Name {
 			return fmt.Errorf("front site %q 同时被 %s 和 %s 定义，请改用唯一站点名或只追加 auth/public", site.Key, owner, current.Name)
+		}
+		if err := validateSiteConfig(manifestSiteConfig(contribution.Config), fmt.Sprintf("组件 %s front.sites.%s.config", current.Name, site.Key)); err != nil {
+			return err
 		}
 		owners[site.Key] = current.Name
 		applySiteOwnerFields(site, contribution)
@@ -561,17 +741,21 @@ func defaultAPIForSite(siteKey string) string {
 }
 
 func hasSiteOwnerFields(site component.ManifestSite) bool {
-	return strings.TrimSpace(site.Name) != "" ||
-		strings.TrimSpace(site.Subtitle) != "" ||
-		strings.TrimSpace(site.Description) != "" ||
-		strings.TrimSpace(site.URL) != "" ||
-		strings.TrimSpace(site.Page) != "" ||
+	return strings.TrimSpace(site.Page) != "" ||
 		strings.TrimSpace(site.API) != "" ||
 		strings.TrimSpace(site.Entry) != "" ||
-		strings.TrimSpace(site.Assets.Logo) != "" ||
-		strings.TrimSpace(site.Assets.Favicon) != "" ||
+		hasManifestSiteConfig(site.Config) ||
 		hasSiteSetting(site.Setting) ||
 		hasSiteAccess(site.Access)
+}
+
+func hasManifestSiteConfig(config component.ManifestSiteConfig) bool {
+	return strings.TrimSpace(config.Name) != "" ||
+		strings.TrimSpace(config.Subtitle) != "" ||
+		strings.TrimSpace(config.Description) != "" ||
+		strings.TrimSpace(config.URL) != "" ||
+		strings.TrimSpace(config.Logo) != "" ||
+		strings.TrimSpace(config.Favicon) != ""
 }
 
 func hasSiteSetting(setting component.ManifestSiteSetting) bool {
@@ -581,6 +765,7 @@ func hasSiteSetting(setting component.ManifestSiteSetting) bool {
 		strings.TrimSpace(setting.Appearance.Direction) != "" ||
 		strings.TrimSpace(setting.Runtime.Skin) != "" ||
 		strings.TrimSpace(setting.Runtime.RouterMode) != "" ||
+		strings.TrimSpace(setting.Runtime.Shell) != "" ||
 		len(setting.Runtime.Plugins) > 0
 }
 
@@ -590,18 +775,22 @@ func hasSiteAccess(access component.ManifestSiteAccess) bool {
 }
 
 func applySiteOwnerFields(site *Site, contribution component.ManifestSite) {
-	site.Name = strings.TrimSpace(contribution.Name)
-	site.Subtitle = strings.TrimSpace(contribution.Subtitle)
-	site.Description = strings.TrimSpace(contribution.Description)
-	site.URL = strings.TrimSpace(contribution.URL)
 	site.Page = cleanPage(contribution.Page, site.Key)
 	site.API = cleanAPI(contribution.API)
 	if site.API == "" {
 		site.API = defaultAPIForSite(site.Key)
 	}
-	site.Assets = normalizeAssets(SiteAssets{
-		Logo:    contribution.Assets.Logo,
-		Favicon: contribution.Assets.Favicon,
+	site.Config = normalizeSiteConfig(SiteConfig{
+		Name:        contribution.Config.Name,
+		Subtitle:    contribution.Config.Subtitle,
+		Description: contribution.Config.Description,
+		URL:         contribution.Config.URL,
+		Logo:        contribution.Config.Logo,
+		Favicon:     contribution.Config.Favicon,
+	})
+	site.Access = normalizeAccess(Access{
+		Mode:         contribution.Access.Mode,
+		AuthProvider: contribution.Access.AuthProvider,
 	})
 	site.Setting = normalizeSetting(SiteSetting{
 		Appearance: AppearanceSetting{
@@ -613,13 +802,10 @@ func applySiteOwnerFields(site *Site, contribution component.ManifestSite) {
 		Runtime: RuntimeSetting{
 			Skin:       contribution.Setting.Runtime.Skin,
 			RouterMode: contribution.Setting.Runtime.RouterMode,
+			Shell:      contribution.Setting.Runtime.Shell,
 			Plugins:    contribution.Setting.Runtime.Plugins,
 		},
-	})
-	site.Access = normalizeAccess(Access{
-		Mode:         contribution.Access.Mode,
-		AuthProvider: contribution.Access.AuthProvider,
-	})
+	}, defaultShellForSite(*site))
 	site.Entry = strings.Trim(strings.TrimSpace(contribution.Entry), "/")
 }
 
@@ -632,21 +818,25 @@ func normalizeSite(site Site) Site {
 		site.API = defaultAPIForSite(site.Key)
 	}
 	site.Public = normalizeSitePublic(site.Public)
-	site.Assets = normalizeAssets(site.Assets)
-	site.Setting = normalizeSetting(site.Setting)
+	site.Config = normalizeSiteConfig(site.Config)
 	site.Access = normalizeAccess(site.Access)
+	site.Setting = normalizeSetting(site.Setting, defaultShellForSite(site))
 	site.Entry = strings.Trim(strings.TrimSpace(site.Entry), "/")
 	return site
 }
 
-func normalizeAssets(assets SiteAssets) SiteAssets {
-	return SiteAssets{
-		Logo:    cleanAssetValue(assets.Logo),
-		Favicon: cleanAssetValue(assets.Favicon),
+func normalizeSiteConfig(config SiteConfig) SiteConfig {
+	return SiteConfig{
+		Name:        strings.TrimSpace(config.Name),
+		Subtitle:    strings.TrimSpace(config.Subtitle),
+		Description: strings.TrimSpace(config.Description),
+		URL:         strings.TrimSpace(config.URL),
+		Logo:        cleanAssetValue(config.Logo),
+		Favicon:     cleanAssetValue(config.Favicon),
 	}
 }
 
-func normalizeSetting(setting SiteSetting) SiteSetting {
+func normalizeSetting(setting SiteSetting, defaultShell string) SiteSetting {
 	theme := strings.TrimSpace(setting.Appearance.Theme)
 	if theme == "" {
 		theme = DefaultTheme
@@ -671,6 +861,7 @@ func normalizeSetting(setting SiteSetting) SiteSetting {
 	if routerMode == "" {
 		routerMode = DefaultRouterMode
 	}
+	shell := normalizeShell(setting.Runtime.Shell, defaultShell)
 	return SiteSetting{
 		Appearance: AppearanceSetting{
 			Theme:     theme,
@@ -681,8 +872,33 @@ func normalizeSetting(setting SiteSetting) SiteSetting {
 		Runtime: RuntimeSetting{
 			Skin:       skin,
 			RouterMode: routerMode,
+			Shell:      shell,
 			Plugins:    normalizeStringList(setting.Runtime.Plugins),
 		},
+	}
+}
+
+func defaultShellForSite(site Site) string {
+	if strings.EqualFold(site.Key, DefaultSiteKey) || site.UsesRBAC() {
+		return ShellModeApp
+	}
+	return ShellModeBlank
+}
+
+func normalizeShell(value string, fallback string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case ShellModeApp:
+		return ShellModeApp
+	case ShellModeBlank:
+		return ShellModeBlank
+	}
+	switch strings.ToLower(strings.TrimSpace(fallback)) {
+	case ShellModeApp:
+		return ShellModeApp
+	case ShellModeBlank:
+		return ShellModeBlank
+	default:
+		return DefaultShell
 	}
 }
 
@@ -756,11 +972,6 @@ func cleanAssetValue(value string) string {
 		return value
 	}
 	return cleanRelativePath(value)
-}
-
-func trimAssetPrefix(value string) string {
-	value = strings.Trim(strings.TrimSpace(value), "/")
-	return strings.TrimPrefix(value, "assets/")
 }
 
 func isExternalAssetURL(value string) bool {

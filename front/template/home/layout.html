@@ -7,7 +7,7 @@
     <title>{{ .SEO.Title }}</title>
     <meta name="description" content="{{ .SEO.Description }}">
     {{ if .SEO.Canonical }}<link rel="canonical" href="{{ .SEO.Canonical }}">{{ end }}
-    <link rel="stylesheet" href="{{ .Site.AssetBase }}/css/home.css">
+    <link rel="stylesheet" href="{{ .Site.AssetBase }}/front/assets/home/css/home.css">
   </head>
   <body>
     {{ template "home.html" . }}

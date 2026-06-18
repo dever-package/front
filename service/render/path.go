@@ -37,6 +37,10 @@ func componentAssetPath(current component.Component, pageName, value string) str
 	return filepath.ToSlash(filepath.Join(componentResourceRoot(current, "assets"), cleanRelativePath(pageName), cleanRelativePath(value)))
 }
 
+func componentAssetRefPath(current component.Component, rel string) string {
+	return filepath.ToSlash(filepath.Join(componentResourceRoot(current, "assets"), cleanRelativePath(rel)))
+}
+
 func componentResourceRoot(current component.Component, name string) string {
 	prefix := strings.Trim(filepath.ToSlash(current.PagePrefix), "/")
 	if prefix == "" || prefix == "." {
@@ -49,10 +53,10 @@ func componentResourceRoot(current component.Component, name string) string {
 	return path.Join(dir, name)
 }
 
-func assetBase(apiPrefix string) string {
-	apiPrefix = strings.Trim(cleanAbsPath(apiPrefix), "/")
-	if apiPrefix == "" {
+func assetBase(sitePath string) string {
+	sitePath = strings.Trim(cleanAbsPath(sitePath), "/")
+	if sitePath == "" {
 		return "/assets"
 	}
-	return "/" + path.Join(apiPrefix, "assets")
+	return "/" + path.Join(sitePath, "assets")
 }

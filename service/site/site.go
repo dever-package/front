@@ -20,13 +20,11 @@ import (
 )
 
 const (
-	defaultDir               = "package/front/html"
-	embedDir                 = "html"
-	indexFile                = "index.html"
-	siteAssetPrefix          = "assets/"
-	siteAssetDir             = "config/front/assets"
-	defaultBundledAssetScope = "assets/images"
-	defaultPluginDevURL      = "http://127.0.0.1:5174"
+	defaultDir          = "package/front/front/html"
+	embedDir            = "front/html"
+	indexFile           = "index.html"
+	siteAssetPrefix     = "assets/"
+	defaultPluginDevURL = "http://127.0.0.1:5174"
 )
 
 type settings struct {
@@ -165,46 +163,13 @@ func openSiteAsset(raw *fiber.Ctx, site siteconfig.Site, rel string) (bool, erro
 		return false, nil
 	}
 
-	root, err := filepath.Abs(filepath.Join(siteAssetDir, site.Key))
-	if err != nil {
-		return false, err
-	}
-	file := filepath.Join(root, filepath.FromSlash(assetRel))
-	if err := ensureInside(root, file); err != nil {
-		return false, err
-	}
-	info, err := os.Stat(file)
-	if err == nil && !info.IsDir() {
-		raw.Set("Cache-Control", "no-cache")
-		setContentType(raw, assetRel)
-		return true, raw.SendFile(file)
-	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, err
-	}
-
-	if content, servedRel, err := renderservice.ReadComponentAsset(site.Page, assetRel); err == nil {
-		raw.Set("Cache-Control", cacheHeader(servedRel))
-		setContentType(raw, servedRel)
-		return true, raw.Send(content)
-	}
-
-	return openBundledSiteAsset(raw, assetRel)
-}
-
-func openBundledSiteAsset(raw *fiber.Ctx, assetRel string) (bool, error) {
-	bundledRel := filepath.ToSlash(filepath.Join(defaultBundledAssetScope, filepath.Base(assetRel)))
-	content, servedRel, err := readEmbeddedFile(bundledRel)
-	if err != nil {
+	if err := renderservice.SendAssetRef(raw, assetRel); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
 		return false, err
 	}
-
-	raw.Set("Cache-Control", cacheHeader(servedRel))
-	setContentType(raw, servedRel)
-	return true, raw.Send(content)
+	return true, nil
 }
 
 func resolveDiskFile(rootDir, rel string) (string, string, error) {

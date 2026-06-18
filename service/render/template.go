@@ -67,8 +67,8 @@ func Render(c *server.Context, site siteconfig.Site, route TemplateRoute) error 
 			Path:      site.Path,
 			Page:      site.Page,
 			API:       site.APIPrefix(),
-			Name:      site.Name,
-			AssetBase: assetBase(site.APIPrefix()),
+			Name:      site.Config.Name,
+			AssetBase: assetBase(site.Path),
 		},
 	}
 

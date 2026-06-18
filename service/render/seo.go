@@ -32,11 +32,11 @@ func resolveSEO(
 
 	title := util.ToStringTrimmed(resolved["title"])
 	if title == "" {
-		title = site.Name
+		title = site.Config.Name
 	}
 	description := util.ToStringTrimmed(resolved["description"])
 	if description == "" {
-		description = site.Description
+		description = site.Config.Description
 	}
 	canonical := util.ToStringTrimmed(resolved["canonical"])
 	if canonical != "" && !strings.HasPrefix(canonical, "http://") && !strings.HasPrefix(canonical, "https://") {

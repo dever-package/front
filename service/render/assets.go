@@ -18,12 +18,13 @@ import (
 )
 
 const projectAssetRoot = "config/front/assets"
+const configAssetPrefix = "config/assets/"
 
 func RegisterAssets(s server.Server, site siteconfig.Site) {
 	if s == nil {
 		return
 	}
-	assetRoute := cleanAbsPath(path.Join(site.APIPrefix(), "assets", "*"))
+	assetRoute := cleanAbsPath(path.Join(site.Path, "assets", "*"))
 	s.Get(assetRoute, func(c *server.Context) error {
 		c.SetContext(siteconfig.WithSite(c.Context(), site))
 		return OpenAsset(c, site)
@@ -41,56 +42,111 @@ func OpenAsset(c *server.Context, site siteconfig.Site) error {
 		return c.Error("资源不存在", http.StatusNotFound)
 	}
 
-	if served, err := openProjectAsset(raw, site, rel); served || err != nil {
-		return err
-	}
-	content, servedRel, err := ReadComponentAsset(site.Page, rel)
-	if err != nil {
+	if err := SendAssetRef(raw, rel); err != nil {
 		return c.Error("资源不存在", http.StatusNotFound)
 	}
-
-	raw.Set("Cache-Control", cacheHeader(servedRel))
-	setContentType(raw, servedRel)
-	return raw.Send(content)
+	return nil
 }
 
-func openProjectAsset(raw *fiber.Ctx, site siteconfig.Site, rel string) (bool, error) {
-	root, err := filepath.Abs(filepath.Join(projectAssetRoot, site.Key))
+func SendAssetRef(raw *fiber.Ctx, ref string) error {
+	asset, err := ReadAssetRef(ref)
 	if err != nil {
-		return false, err
+		return err
+	}
+	raw.Set("Cache-Control", asset.CacheControl)
+	setContentType(raw, asset.ServedRel)
+	if asset.FilePath != "" {
+		return raw.SendFile(asset.FilePath)
+	}
+	return raw.Send(asset.Content)
+}
+
+type AssetResult struct {
+	Content      []byte
+	FilePath     string
+	ServedRel    string
+	CacheControl string
+}
+
+func ReadAssetRef(ref string) (AssetResult, error) {
+	ref = cleanRelativePath(ref)
+	if ref == "" {
+		return AssetResult{}, fs.ErrNotExist
+	}
+	if strings.HasPrefix(ref, configAssetPrefix) {
+		return readProjectAssetRef(strings.TrimPrefix(ref, configAssetPrefix))
+	}
+	componentName, rel, ok := splitComponentAssetRef(ref)
+	if !ok {
+		return AssetResult{}, fs.ErrNotExist
+	}
+	return readComponentAssetRef(componentName, rel)
+}
+
+func readProjectAssetRef(rel string) (AssetResult, error) {
+	rel = cleanRelativePath(rel)
+	if rel == "" {
+		return AssetResult{}, fs.ErrNotExist
+	}
+	root, err := filepath.Abs(projectAssetRoot)
+	if err != nil {
+		return AssetResult{}, err
 	}
 	file := filepath.Join(root, filepath.FromSlash(rel))
 	if err := ensureInside(root, file); err != nil {
-		return false, err
+		return AssetResult{}, err
 	}
 	info, err := os.Stat(file)
 	if err == nil && !info.IsDir() {
-		raw.Set("Cache-Control", "no-cache")
-		setContentType(raw, rel)
-		return true, raw.SendFile(file)
+		return AssetResult{
+			FilePath:     file,
+			ServedRel:    rel,
+			CacheControl: "no-cache",
+		}, nil
 	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, err
+		return AssetResult{}, err
 	}
-	return false, nil
+	return AssetResult{}, fs.ErrNotExist
 }
 
-func ReadComponentAsset(pageName, rel string) ([]byte, string, error) {
-	if cleanRelativePath(pageName) == "" || cleanRelativePath(rel) == "" {
+func splitComponentAssetRef(ref string) (string, string, bool) {
+	parts := strings.SplitN(cleanRelativePath(ref), "/", 3)
+	if len(parts) != 3 || parts[1] != "assets" {
+		return "", "", false
+	}
+	componentName := strings.TrimSpace(parts[0])
+	rel := cleanRelativePath(parts[2])
+	return componentName, rel, componentName != "" && rel != ""
+}
+
+func readComponentAssetRef(componentName, rel string) (AssetResult, error) {
+	current, ok := component.Find(componentName)
+	if !ok || current.PageFS == nil {
+		return AssetResult{}, fs.ErrNotExist
+	}
+	content, servedRel, err := ReadComponentAsset(current, rel)
+	if err != nil {
+		return AssetResult{}, err
+	}
+	return AssetResult{
+		Content:      content,
+		ServedRel:    servedRel,
+		CacheControl: cacheHeader(servedRel),
+	}, nil
+}
+
+func ReadComponentAsset(current component.Component, rel string) ([]byte, string, error) {
+	if current.PageFS == nil || cleanRelativePath(rel) == "" {
 		return nil, "", fs.ErrNotExist
 	}
-	for _, current := range component.Active() {
-		if current.PageFS == nil {
-			continue
-		}
-		fullPath := componentAssetPath(current, pageName, rel)
-		content, err := fs.ReadFile(current.PageFS, fullPath)
-		if err == nil {
-			return content, rel, nil
-		}
-		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			return nil, "", err
-		}
+	fullPath := componentAssetRefPath(current, rel)
+	content, err := fs.ReadFile(current.PageFS, fullPath)
+	if err == nil {
+		return content, rel, nil
+	}
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return nil, "", err
 	}
 	return nil, "", fs.ErrNotExist
 }

@@ -41,6 +41,7 @@ type runtimeSitePayload struct {
 type runtimeSettingPayload struct {
 	Skin       string                    `json:"skin,omitempty"`
 	RouterMode string                    `json:"routerMode,omitempty"`
+	Shell      string                    `json:"shell,omitempty"`
 	Plugins    []runtimePluginDescriptor `json:"plugins,omitempty"`
 }
 
@@ -96,6 +97,7 @@ func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 	runtimeSetting := runtimeSettingPayload{
 		Skin:       site.Setting.Runtime.Skin,
 		RouterMode: site.Setting.Runtime.RouterMode,
+		Shell:      site.Setting.Runtime.Shell,
 		Plugins:    runtimePluginDescriptors(site, pluginDev),
 	}
 
@@ -106,10 +108,10 @@ func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 		APIHost:     runtimeAPIHost(siteconfig.DefaultAPI),
 		SiteAPIHost: runtimeAPIHost(strings.Trim(site.APIPrefix(), "/")),
 		Site: runtimeSitePayload{
-			Name:        site.Name,
-			Subtitle:    site.Subtitle,
-			Description: site.Description,
-			URL:         site.URL,
+			Name:        site.Config.Name,
+			Subtitle:    site.Config.Subtitle,
+			Description: site.Config.Description,
+			URL:         site.Config.URL,
 			Logo:        site.LogoURL(),
 			Favicon:     site.FaviconURL(),
 		},

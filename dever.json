@@ -10,14 +10,14 @@
     ],
     "sites": {
       "admin": {
-        "name": "管理后台",
-        "subtitle": "平台配置",
-        "description": "Dever 管理后台",
         "api": "front",
         "page": "admin",
-        "assets": {
-          "logo": "assets/images/logo.svg",
-          "favicon": "assets/images/favicon.svg"
+        "config": {
+          "name": "管理后台",
+          "subtitle": "平台配置",
+          "description": "Dever 管理后台",
+          "logo": "front/assets/admin/images/logo.svg",
+          "favicon": "front/assets/admin/images/favicon.svg"
         },
         "setting": {
           "appearance": {
@@ -64,14 +64,14 @@
         ]
       },
       "hello": {
-        "name": "Hello World",
-        "subtitle": "Public Demo",
-        "description": "Dever public site example",
         "api": "front",
         "page": "hello",
-        "assets": {
-          "logo": "assets/images/logo.svg",
-          "favicon": "assets/images/favicon.svg"
+        "config": {
+          "name": "Hello World",
+          "subtitle": "Public Demo",
+          "description": "Dever public site example",
+          "logo": "front/assets/hello/images/logo.svg",
+          "favicon": "front/assets/hello/images/favicon.svg"
         },
         "access": {
           "mode": "public",
@@ -80,14 +80,14 @@
         "entry": "front/hello"
       },
       "home": {
-        "name": "Template Home",
-        "subtitle": "Static Render Demo",
-        "description": "Dever template render demo site",
         "api": "home",
         "page": "home",
-        "assets": {
-          "logo": "assets/images/logo.svg",
-          "favicon": "assets/images/favicon.svg"
+        "config": {
+          "name": "Template Home",
+          "subtitle": "Static Render Demo",
+          "description": "Dever template render demo site",
+          "logo": "front/assets/home/images/logo.svg",
+          "favicon": "front/assets/home/images/favicon.svg"
         },
         "access": {
           "mode": "public",

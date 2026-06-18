@@ -178,7 +178,7 @@ func SiteTemplateData(ctx context.Context) map[string]any {
 		"path": site.Path,
 		"page": site.Page,
 		"api":  site.API,
-		"name": site.Name,
+		"name": site.Config.Name,
 	}
 }
 
