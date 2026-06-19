@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	frontmeta "github.com/dever-package/front/service/meta"
 	"github.com/shemic/dever/util"
-	frontmeta "my/package/front/service/meta"
 )
 
 func applyNodeLabels(rawNodes json.RawMessage, pathValue string, content []byte) (json.RawMessage, error) {

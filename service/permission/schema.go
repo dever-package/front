@@ -9,10 +9,10 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	frontpage "my/package/front/service/page"
-	embedpageservice "my/package/front/service/permission/embedpage"
-	"my/package/front/service/siteconfig"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	frontpage "github.com/dever-package/front/service/page"
+	embedpageservice "github.com/dever-package/front/service/permission/embedpage"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 type pageSchemaPermissionFilter struct {

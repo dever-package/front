@@ -11,8 +11,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	authctx "my/package/front/service/internal/authctx"
-	permissionservice "my/package/front/service/permission"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	permissionservice "github.com/dever-package/front/service/permission"
 )
 
 func CreateTask(c *server.Context) error {

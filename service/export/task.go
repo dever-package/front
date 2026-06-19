@@ -9,7 +9,7 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontmodel "my/package/front/model"
+	frontmodel "github.com/dever-package/front/model"
 )
 
 func createTask(

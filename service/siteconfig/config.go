@@ -262,7 +262,7 @@ func (cfg Config) AllPublicPaths() []string {
 	paths = append(paths, cfg.Public...)
 	for _, site := range cfg.Sites {
 		prefix := site.APIPrefix()
-		if site.UsesPublic() && !strings.EqualFold(prefix, DefaultAPI) {
+		if site.UsesPublic() && !site.UsesDefaultAPI() {
 			paths = append(paths, cleanAbsPath(path.Join(prefix, "*")))
 		}
 		for _, item := range site.Public {
@@ -320,6 +320,10 @@ func (cfg Config) findByPath(requestPath string, prefix func(Site) string) (Site
 
 func (site Site) APIPrefix() string {
 	return cleanAbsPath(site.API)
+}
+
+func (site Site) UsesDefaultAPI() bool {
+	return strings.EqualFold(site.APIPrefix(), cleanAbsPath(DefaultAPI))
 }
 
 func isSiteReservedAPIRoot(site Site, requestPath string) bool {

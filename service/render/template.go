@@ -18,8 +18,8 @@ import (
 	dlog "github.com/shemic/dever/log"
 	"github.com/shemic/dever/server"
 
-	"my/package/front/service/runtimecache"
-	"my/package/front/service/siteconfig"
+	"github.com/dever-package/front/service/runtimecache"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 var (

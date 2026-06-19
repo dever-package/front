@@ -8,8 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/shemic/dever/server"
 
-	frontstream "my/package/front/service/stream"
-	uploadrepo "my/package/front/service/upload/repository"
+	frontstream "github.com/dever-package/front/service/stream"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 const uploadImportStreamTimeout = 15 * time.Minute

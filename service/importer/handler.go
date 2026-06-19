@@ -8,9 +8,9 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	authctx "my/package/front/service/internal/authctx"
-	frontmeta "my/package/front/service/meta"
-	permissionservice "my/package/front/service/permission"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	frontmeta "github.com/dever-package/front/service/meta"
+	permissionservice "github.com/dever-package/front/service/permission"
 )
 
 func Analyze(c *server.Context) error {

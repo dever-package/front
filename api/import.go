@@ -3,8 +3,8 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
-	importerservice "my/package/front/service/importer"
-	operationlog "my/package/front/service/operationlog"
+	importerservice "github.com/dever-package/front/service/importer"
+	operationlog "github.com/dever-package/front/service/operationlog"
 )
 
 type Import struct{}

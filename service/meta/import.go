@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	frontrecord "my/package/front/service/record"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 type ResolvedImportMeta struct {

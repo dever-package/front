@@ -5,7 +5,7 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontpage "my/package/front/service/page"
+	frontpage "github.com/dever-package/front/service/page"
 )
 
 func resolveSavePayload(ctx context.Context, config frontpage.ActionConfig, form map[string]any) (any, error) {

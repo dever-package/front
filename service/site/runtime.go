@@ -11,8 +11,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	"my/package/front/service/runtimecache"
-	"my/package/front/service/siteconfig"
+	"github.com/dever-package/front/service/runtimecache"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const runtimeHTMLPlaceholder = "<!-- dever:runtime -->"

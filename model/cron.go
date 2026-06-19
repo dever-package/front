@@ -7,7 +7,7 @@ import (
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	"my/package/front/service/cronexpr"
+	"github.com/dever-package/front/service/cronexpr"
 )
 
 const (

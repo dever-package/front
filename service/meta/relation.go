@@ -13,9 +13,9 @@ import (
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	optionseed "my/package/front/service/internal/optionseed"
-	frontrecord "my/package/front/service/record"
-	"my/package/front/service/siteconfig"
+	optionseed "github.com/dever-package/front/service/internal/optionseed"
+	frontrecord "github.com/dever-package/front/service/record"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 type OptionModel interface {

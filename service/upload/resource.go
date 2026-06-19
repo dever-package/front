@@ -3,7 +3,7 @@ package upload
 import (
 	"github.com/shemic/dever/server"
 
-	uploadresource "my/package/front/service/upload/resource"
+	uploadresource "github.com/dever-package/front/service/upload/resource"
 )
 
 func ListResources(c *server.Context) error {

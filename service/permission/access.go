@@ -8,11 +8,11 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	authctx "my/package/front/service/internal/authctx"
-	embedpageservice "my/package/front/service/permission/embedpage"
-	frontrecord "my/package/front/service/record"
-	"my/package/front/service/siteconfig"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	embedpageservice "github.com/dever-package/front/service/permission/embedpage"
+	frontrecord "github.com/dever-package/front/service/record"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 type InputLookup func(key string) string

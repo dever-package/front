@@ -16,8 +16,8 @@ import (
 	"github.com/shemic/dever/component"
 	"github.com/shemic/dever/util"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	"my/package/front/service/siteconfig"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 var (

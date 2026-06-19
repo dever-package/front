@@ -11,10 +11,10 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	frontauthctx "my/package/front/service/internal/authctx"
-	frontmeta "my/package/front/service/meta"
-	frontrecord "my/package/front/service/record"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	frontauthctx "github.com/dever-package/front/service/internal/authctx"
+	frontmeta "github.com/dever-package/front/service/meta"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 const (

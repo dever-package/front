@@ -14,7 +14,7 @@ import (
 	"github.com/shemic/dever/component"
 	"github.com/shemic/dever/server"
 
-	"my/package/front/service/siteconfig"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const projectAssetRoot = "config/front/assets"

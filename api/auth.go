@@ -3,7 +3,7 @@ package api
 import (
 	"github.com/shemic/dever/server"
 
-	frontservice "my/package/front/service"
+	frontservice "github.com/dever-package/front/service"
 )
 
 type Auth struct{}

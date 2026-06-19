@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	uploadrepo "my/package/front/service/upload/repository"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 func buildUploadObjectKey(ruleID uint64, hash, ext, bizKey string) string {

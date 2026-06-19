@@ -3,7 +3,7 @@ package validate
 import (
 	"github.com/shemic/dever/util"
 
-	frontpage "my/package/front/service/page"
+	frontpage "github.com/dever-package/front/service/page"
 )
 
 type validateEnvelope struct {

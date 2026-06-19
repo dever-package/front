@@ -5,9 +5,9 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	pagecontent "my/package/front/service/internal/pagecontent"
-	"my/package/front/service/siteconfig"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	pagecontent "github.com/dever-package/front/service/internal/pagecontent"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 var parentCache util.ConcurrentMap[string, map[string]map[string]struct{}]

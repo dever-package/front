@@ -12,15 +12,15 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	authctx "my/package/front/service/internal/authctx"
-	frontcall "my/package/front/service/internal/call"
-	optionseed "my/package/front/service/internal/optionseed"
-	frontpage "my/package/front/service/page"
-	embedpageservice "my/package/front/service/permission/embedpage"
-	frontrecord "my/package/front/service/record"
-	"my/package/front/service/runtimecache"
-	"my/package/front/service/siteconfig"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	frontcall "github.com/dever-package/front/service/internal/call"
+	optionseed "github.com/dever-package/front/service/internal/optionseed"
+	frontpage "github.com/dever-package/front/service/page"
+	embedpageservice "github.com/dever-package/front/service/permission/embedpage"
+	frontrecord "github.com/dever-package/front/service/record"
+	"github.com/dever-package/front/service/runtimecache"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const (

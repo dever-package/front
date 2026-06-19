@@ -7,12 +7,12 @@ import (
 
 	"github.com/shemic/dever/server"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	actionservice "my/package/front/service/action"
-	optionservice "my/package/front/service/option"
-	pageservice "my/package/front/service/page"
-	permissionservice "my/package/front/service/permission"
-	"my/package/front/service/siteconfig"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	actionservice "github.com/dever-package/front/service/action"
+	optionservice "github.com/dever-package/front/service/option"
+	pageservice "github.com/dever-package/front/service/page"
+	permissionservice "github.com/dever-package/front/service/permission"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 type Route struct{}

@@ -14,10 +14,10 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	operationlog "my/package/front/service/operationlog"
-	uploadaccess "my/package/front/service/upload/access"
-	uploadprovider "my/package/front/service/upload/provider"
-	uploadrepo "my/package/front/service/upload/repository"
+	operationlog "github.com/dever-package/front/service/operationlog"
+	uploadaccess "github.com/dever-package/front/service/upload/access"
+	uploadprovider "github.com/dever-package/front/service/upload/provider"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 func InitUpload(c *server.Context) error {

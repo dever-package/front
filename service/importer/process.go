@@ -10,11 +10,11 @@ import (
 	"github.com/shemic/dever/util"
 	"github.com/xuri/excelize/v2"
 
-	actionservice "my/package/front/service/action"
-	frontcall "my/package/front/service/internal/call"
-	frontmeta "my/package/front/service/meta"
-	frontoption "my/package/front/service/option"
-	frontrecord "my/package/front/service/record"
+	actionservice "github.com/dever-package/front/service/action"
+	frontcall "github.com/dever-package/front/service/internal/call"
+	frontmeta "github.com/dever-package/front/service/meta"
+	frontoption "github.com/dever-package/front/service/option"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 func importWorkbookRows(ctx context.Context, task taskSnapshot, config importConfig) (importSummary, error) {

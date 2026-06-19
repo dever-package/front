@@ -8,8 +8,8 @@ import (
 	dlog "github.com/shemic/dever/log"
 	"github.com/shemic/dever/util"
 
-	frontmodel "my/package/front/model"
-	"my/package/front/service/cronexpr"
+	frontmodel "github.com/dever-package/front/model"
+	"github.com/dever-package/front/service/cronexpr"
 )
 
 const (

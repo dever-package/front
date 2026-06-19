@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	authctx "my/package/front/service/internal/authctx"
-	"my/package/front/service/siteconfig"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 type TemplateContext struct {

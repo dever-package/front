@@ -10,11 +10,11 @@ import (
 
 	"github.com/shemic/dever/server"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	authctx "my/package/front/service/internal/authctx"
-	"my/package/front/service/permission"
-	"my/package/front/service/siteconfig"
-	uploadrepo "my/package/front/service/upload/repository"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	"github.com/dever-package/front/service/permission"
+	"github.com/dever-package/front/service/siteconfig"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 type Operation string

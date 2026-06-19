@@ -11,10 +11,10 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	operationlog "my/package/front/service/operationlog"
-	permissionservice "my/package/front/service/permission"
-	frontrecord "my/package/front/service/record"
-	"my/package/front/service/siteconfig"
+	operationlog "github.com/dever-package/front/service/operationlog"
+	permissionservice "github.com/dever-package/front/service/permission"
+	frontrecord "github.com/dever-package/front/service/record"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 func Login(c *server.Context) error {

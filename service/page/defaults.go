@@ -8,8 +8,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontmeta "my/package/front/service/meta"
-	"my/package/front/service/siteconfig"
+	frontmeta "github.com/dever-package/front/service/meta"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 func applyNodeDefaults(

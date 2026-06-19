@@ -1,7 +1,7 @@
 package upload
 
 import (
-	uploadrepo "my/package/front/service/upload/repository"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 const (

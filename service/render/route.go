@@ -11,9 +11,9 @@ import (
 	devercache "github.com/shemic/dever/cache"
 	"github.com/shemic/dever/server"
 
-	frontpage "my/package/front/service/page"
-	"my/package/front/service/runtimecache"
-	"my/package/front/service/siteconfig"
+	frontpage "github.com/dever-package/front/service/page"
+	"github.com/dever-package/front/service/runtimecache"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 var routeCache = devercache.New[string, []TemplateRoute](

@@ -6,9 +6,9 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontmodel "my/package/front/model"
-	frontaction "my/package/front/service/action"
-	"my/package/front/service/cronexpr"
+	frontmodel "github.com/dever-package/front/model"
+	frontaction "github.com/dever-package/front/service/action"
+	"github.com/dever-package/front/service/cronexpr"
 )
 
 type CronHook struct{}

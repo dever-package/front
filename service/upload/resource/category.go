@@ -5,9 +5,9 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	uploadrepo "my/package/front/service/upload/repository"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 
-	frontrecord "my/package/front/service/record"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 func loadCategoryItems(

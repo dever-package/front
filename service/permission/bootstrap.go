@@ -10,12 +10,12 @@ import (
 	"github.com/shemic/dever/component"
 	"github.com/shemic/dever/util"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	pagecontent "my/package/front/service/internal/pagecontent"
-	embedpageservice "my/package/front/service/permission/embedpage"
-	frontrecord "my/package/front/service/record"
-	"my/package/front/service/runtimecache"
-	"my/package/front/service/siteconfig"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	pagecontent "github.com/dever-package/front/service/internal/pagecontent"
+	embedpageservice "github.com/dever-package/front/service/permission/embedpage"
+	frontrecord "github.com/dever-package/front/service/record"
+	"github.com/dever-package/front/service/runtimecache"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 func EnsureBootstrap(ctx context.Context) error {

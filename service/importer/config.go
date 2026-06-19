@@ -8,8 +8,8 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontmeta "my/package/front/service/meta"
-	frontpage "my/package/front/service/page"
+	frontmeta "github.com/dever-package/front/service/meta"
+	frontpage "github.com/dever-package/front/service/page"
 )
 
 type rawPageSchema struct {

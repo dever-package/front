@@ -3,7 +3,7 @@ package action
 import (
 	"strings"
 
-	actionvalidate "my/package/front/service/action/validate"
+	actionvalidate "github.com/dever-package/front/service/action/validate"
 )
 
 type FieldError struct {

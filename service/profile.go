@@ -4,8 +4,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	authctx "my/package/front/service/internal/authctx"
-	frontrecord "my/package/front/service/record"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 type ProfileService struct{}

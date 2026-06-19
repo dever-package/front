@@ -5,10 +5,10 @@ import (
 
 	"github.com/shemic/dever/server"
 
-	operationlog "my/package/front/service/operationlog"
-	pageservice "my/package/front/service/page"
-	permissionservice "my/package/front/service/permission"
-	"my/package/front/service/siteconfig"
+	operationlog "github.com/dever-package/front/service/operationlog"
+	pageservice "github.com/dever-package/front/service/page"
+	permissionservice "github.com/dever-package/front/service/permission"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 type Main struct{}

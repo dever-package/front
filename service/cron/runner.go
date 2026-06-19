@@ -10,7 +10,7 @@ import (
 	dlog "github.com/shemic/dever/log"
 	"github.com/shemic/dever/util"
 
-	frontmodel "my/package/front/model"
+	frontmodel "github.com/dever-package/front/model"
 )
 
 type cronSnapshot struct {

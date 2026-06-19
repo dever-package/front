@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	frontrecord "my/package/front/service/record"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 func normalizePath(path string) string {

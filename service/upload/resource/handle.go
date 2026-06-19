@@ -6,10 +6,10 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	operationlog "my/package/front/service/operationlog"
-	frontrecord "my/package/front/service/record"
-	uploadaccess "my/package/front/service/upload/access"
-	uploadrepo "my/package/front/service/upload/repository"
+	operationlog "github.com/dever-package/front/service/operationlog"
+	frontrecord "github.com/dever-package/front/service/record"
+	uploadaccess "github.com/dever-package/front/service/upload/access"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 type assignCategoryInput struct {

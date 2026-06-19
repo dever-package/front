@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	uploadrepo "my/package/front/service/upload/repository"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 func validateUploadInit(rule resolvedUploadRule, input uploadInitInput) error {

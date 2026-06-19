@@ -9,8 +9,8 @@ import (
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	frontmeta "my/package/front/service/meta"
-	frontrecord "my/package/front/service/record"
+	frontmeta "github.com/dever-package/front/service/meta"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 func hashPlainPassword(password string) string {

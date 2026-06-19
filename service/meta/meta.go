@@ -7,7 +7,7 @@ import (
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	frontrecord "my/package/front/service/record"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 func ResolveModelConfig(modelName string) orm.ModelConfig {

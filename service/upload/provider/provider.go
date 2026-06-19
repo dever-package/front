@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	frontmodel "my/package/front/model"
+	frontmodel "github.com/dever-package/front/model"
 )
 
 type Rule struct {

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"my/package/front/service/siteconfig"
-	uploadprovider "my/package/front/service/upload/provider"
+	"github.com/dever-package/front/service/siteconfig"
+	uploadprovider "github.com/dever-package/front/service/upload/provider"
 )
 
 func BuildUploadFilePayload(file UploadFile) map[string]any {

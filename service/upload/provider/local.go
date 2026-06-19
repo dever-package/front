@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"my/package/front/service/upload/internal/transfer"
+	"github.com/dever-package/front/service/upload/internal/transfer"
 )
 
 type localDriver struct{}

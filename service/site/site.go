@@ -14,9 +14,9 @@ import (
 	"github.com/shemic/dever/config"
 	"github.com/shemic/dever/server"
 
-	frontroot "my/package/front"
-	renderservice "my/package/front/service/render"
-	"my/package/front/service/siteconfig"
+	frontroot "github.com/dever-package/front"
+	renderservice "github.com/dever-package/front/service/render"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const (

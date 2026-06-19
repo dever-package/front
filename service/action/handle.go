@@ -7,13 +7,13 @@ import (
 
 	"github.com/shemic/dever/server"
 
-	frontpagepath "my/package/front/internal/pagepath"
-	actionvalidate "my/package/front/service/action/validate"
-	operationlog "my/package/front/service/operationlog"
-	frontpage "my/package/front/service/page"
-	permissionservice "my/package/front/service/permission"
-	frontrecord "my/package/front/service/record"
-	"my/package/front/service/runtimecache"
+	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	actionvalidate "github.com/dever-package/front/service/action/validate"
+	operationlog "github.com/dever-package/front/service/operationlog"
+	frontpage "github.com/dever-package/front/service/page"
+	permissionservice "github.com/dever-package/front/service/permission"
+	frontrecord "github.com/dever-package/front/service/record"
+	"github.com/dever-package/front/service/runtimecache"
 )
 
 func PostAction(c *server.Context) error {

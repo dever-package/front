@@ -14,8 +14,8 @@ import (
 
 	"github.com/shemic/dever/server"
 
-	"my/package/front/service/upload/internal/transfer"
-	uploadrepo "my/package/front/service/upload/repository"
+	"github.com/dever-package/front/service/upload/internal/transfer"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 const importURLTimeout = 10 * time.Minute

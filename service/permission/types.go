@@ -4,7 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"my/package/front/service/siteconfig"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const (

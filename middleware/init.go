@@ -13,11 +13,11 @@ import (
 	coremiddleware "github.com/shemic/dever/middleware"
 	"github.com/shemic/dever/server"
 
-	cronservice "my/package/front/service/cron"
-	permissionservice "my/package/front/service/permission"
-	"my/package/front/service/siteconfig"
-	uploadservice "my/package/front/service/upload"
-	"my/package/front/service/upload/openurl"
+	cronservice "github.com/dever-package/front/service/cron"
+	permissionservice "github.com/dever-package/front/service/permission"
+	"github.com/dever-package/front/service/siteconfig"
+	uploadservice "github.com/dever-package/front/service/upload"
+	"github.com/dever-package/front/service/upload/openurl"
 )
 
 const siteHeader = "X-Dever-Site"
@@ -170,13 +170,14 @@ func isPublicSiteRequest(frontConfig siteconfig.Config, c *server.Context, path 
 	if !ok || !site.UsesPublic() {
 		return false
 	}
-	if site.IsPublicRuntimeEndpoint(path) && isPublicSiteRuntimeRequest(c, site, path) {
+	requestPath := cleanRequestPath(path)
+	if site.IsPublicRuntimeEndpoint(requestPath) && isPublicSiteRuntimeRequest(c, site, requestPath) {
 		return true
 	}
-	if strings.EqualFold(site.APIPrefix(), siteconfig.DefaultAPI) {
+	if site.UsesDefaultAPI() {
 		return false
 	}
-	return requestPathHasPrefix(path, site.APIPrefix())
+	return requestPathHasPrefix(requestPath, site.APIPrefix())
 }
 
 func isPublicSiteRuntimeRequest(c *server.Context, site siteconfig.Site, path string) bool {
@@ -442,6 +443,12 @@ func cleanRequestPath(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""
+	}
+	if pathValue, _, ok := strings.Cut(value, "?"); ok {
+		value = pathValue
+	}
+	if pathValue, _, ok := strings.Cut(value, "#"); ok {
+		value = pathValue
 	}
 	return "/" + strings.Trim(value, "/")
 }

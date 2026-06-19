@@ -20,8 +20,8 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	"my/package/front/service/runtimecache"
-	"my/package/front/service/siteconfig"
+	"github.com/dever-package/front/service/runtimecache"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const (
@@ -195,23 +195,23 @@ func runtimePluginDescriptors(site siteconfig.Site, pluginDev bool) []runtimePlu
 }
 
 func discoverRuntimePluginDescriptors(site siteconfig.Site, pluginDev bool) []runtimePluginDescriptor {
+	distNames := discoverDistPluginNames()
 	sourceNames := []string{}
 	if pluginDev {
 		sourceNames = discoverSourcePluginNames()
 	}
-	distNames := discoverDistPluginNames()
 
 	descriptors := make([]runtimePluginDescriptor, 0, len(sourceNames)+len(distNames))
 	seen := map[string]struct{}{}
-	for _, name := range sourceNames {
-		seen[name] = struct{}{}
-		descriptors = append(descriptors, sourceRuntimePluginDescriptor(site, name))
-	}
 	for _, name := range distNames {
+		seen[name] = struct{}{}
+		descriptors = append(descriptors, distRuntimePluginDescriptor(site, name))
+	}
+	for _, name := range sourceNames {
 		if _, ok := seen[name]; ok {
 			continue
 		}
-		descriptors = append(descriptors, distRuntimePluginDescriptor(site, name))
+		descriptors = append(descriptors, sourceRuntimePluginDescriptor(site, name))
 	}
 	return descriptors
 }
@@ -247,9 +247,20 @@ func sourceRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runt
 }
 
 func distRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtimePluginDescriptor {
-	metadata := pluginSourceMetadata{Name: pluginName}
-	if sourceRoot, err := resolvePluginSourceRoot(pluginName); err == nil {
-		metadata = readPluginSourceMetadata(pluginName, filepath.Join(sourceRoot, pluginSourceEntry))
+	metadata := readPluginDistMetadata(pluginName)
+	if metadata.Name == "" {
+		metadata.Name = pluginName
+	}
+	if len(metadata.Nodes) == 0 && len(metadata.Depends) == 0 {
+		sourceRoot, err := resolvePluginSourceRoot(pluginName)
+		if err == nil {
+			// 兼容旧 dist：旧 manifest 没有 __plugin metadata 时，仍可从本地源码读取。
+			// 远程 package 发布态应在 manifest.json 内携带 __plugin。
+			metadata = readPluginSourceMetadata(pluginName, filepath.Join(sourceRoot, pluginSourceEntry))
+		}
+	}
+	if metadata.Name == "" {
+		metadata.Name = pluginName
 	}
 
 	return runtimePluginDescriptor{
@@ -258,6 +269,38 @@ func distRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtim
 		Nodes:    metadata.Nodes,
 		Depends:  metadata.Depends,
 	}
+}
+
+func readPluginDistMetadata(pluginName string) pluginSourceMetadata {
+	for _, root := range pluginDiskRoots(pluginName) {
+		content, err := os.ReadFile(filepath.Join(root, pluginManifest))
+		if err == nil {
+			return decodePluginDistMetadata(pluginName, content)
+		}
+	}
+	if content, ok, err := readEmbeddedPluginAsset(pluginName, pluginManifest); err == nil && ok {
+		return decodePluginDistMetadata(pluginName, content)
+	}
+	return pluginSourceMetadata{}
+}
+
+func decodePluginDistMetadata(defaultName string, content []byte) pluginSourceMetadata {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(content, &raw); err != nil {
+		return pluginSourceMetadata{}
+	}
+
+	var metadata pluginSourceMetadata
+	if content, ok := raw["__plugin"]; ok {
+		_ = json.Unmarshal(content, &metadata)
+	}
+	metadata.Name = strings.TrimSpace(metadata.Name)
+	metadata.Nodes = uniqueStrings(metadata.Nodes)
+	metadata.Depends = uniqueStrings(metadata.Depends)
+	if metadata.Name == "" && (len(metadata.Nodes) > 0 || len(metadata.Depends) > 0) {
+		metadata.Name = defaultName
+	}
+	return metadata
 }
 
 func readPluginSourceMetadata(defaultName string, entryFile string) pluginSourceMetadata {

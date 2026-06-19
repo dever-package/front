@@ -7,7 +7,7 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontrecord "my/package/front/service/record"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 func Rows(modelName, parentField string, parentValue any) []map[string]any {

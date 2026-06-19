@@ -6,7 +6,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontpage "my/package/front/service/page"
+	frontpage "github.com/dever-package/front/service/page"
 )
 
 func Form(

@@ -8,10 +8,10 @@ import (
 	devercache "github.com/shemic/dever/cache"
 	"github.com/shemic/dever/util"
 
-	authctx "my/package/front/service/internal/authctx"
-	embedpageservice "my/package/front/service/permission/embedpage"
-	"my/package/front/service/runtimecache"
-	"my/package/front/service/siteconfig"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	embedpageservice "github.com/dever-package/front/service/permission/embedpage"
+	"github.com/dever-package/front/service/runtimecache"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const (

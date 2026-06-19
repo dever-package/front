@@ -10,9 +10,9 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontcall "my/package/front/service/internal/call"
-	frontmeta "my/package/front/service/meta"
-	frontrecord "my/package/front/service/record"
+	frontcall "github.com/dever-package/front/service/internal/call"
+	frontmeta "github.com/dever-package/front/service/meta"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 func resolveDataValue(

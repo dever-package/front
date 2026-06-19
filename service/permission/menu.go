@@ -8,7 +8,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	"my/package/front/service/siteconfig"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 type menuNode struct {

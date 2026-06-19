@@ -7,7 +7,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	frontmodel "my/package/front/model"
+	frontmodel "github.com/dever-package/front/model"
 )
 
 type CronAction struct{}

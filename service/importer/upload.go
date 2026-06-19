@@ -12,9 +12,9 @@ import (
 
 	"github.com/xuri/excelize/v2"
 
-	frontmeta "my/package/front/service/meta"
-	uploadservice "my/package/front/service/upload"
-	uploadrepo "my/package/front/service/upload/repository"
+	frontmeta "github.com/dever-package/front/service/meta"
+	uploadservice "github.com/dever-package/front/service/upload"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 type importUploadContext struct {

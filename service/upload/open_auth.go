@@ -9,10 +9,10 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	authctx "my/package/front/service/internal/authctx"
-	uploadaccess "my/package/front/service/upload/access"
-	"my/package/front/service/upload/openurl"
-	uploadrepo "my/package/front/service/upload/repository"
+	authctx "github.com/dever-package/front/service/internal/authctx"
+	uploadaccess "github.com/dever-package/front/service/upload/access"
+	"github.com/dever-package/front/service/upload/openurl"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 const (

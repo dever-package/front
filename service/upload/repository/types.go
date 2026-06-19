@@ -1,7 +1,7 @@
 package repository
 
 import (
-	frontmodel "my/package/front/model"
+	frontmodel "github.com/dever-package/front/model"
 )
 
 type UploadStorage = frontmodel.UploadStorage

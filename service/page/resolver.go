@@ -8,7 +8,7 @@ import (
 
 	"github.com/shemic/dever/util"
 
-	frontmeta "my/package/front/service/meta"
+	frontmeta "github.com/dever-package/front/service/meta"
 )
 
 const (

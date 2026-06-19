@@ -3,7 +3,7 @@ package page
 import (
 	"context"
 
-	pagecontent "my/package/front/service/internal/pagecontent"
+	pagecontent "github.com/dever-package/front/service/internal/pagecontent"
 )
 
 type ContentSignature = pagecontent.ContentSignature

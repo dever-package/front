@@ -11,7 +11,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/shemic/dever/server"
 
-	"my/package/front/service/siteconfig"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const pluginDevProxyTimeout = 30 * time.Second

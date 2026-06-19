@@ -8,10 +8,10 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
-	actionpayload "my/package/front/service/action/internal/payload"
-	frontcall "my/package/front/service/internal/call"
-	frontpage "my/package/front/service/page"
-	frontrecord "my/package/front/service/record"
+	actionpayload "github.com/dever-package/front/service/action/internal/payload"
+	frontcall "github.com/dever-package/front/service/internal/call"
+	frontpage "github.com/dever-package/front/service/page"
+	frontrecord "github.com/dever-package/front/service/record"
 )
 
 var validateEmailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
