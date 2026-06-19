@@ -251,17 +251,6 @@ func distRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtim
 	if metadata.Name == "" {
 		metadata.Name = pluginName
 	}
-	if len(metadata.Nodes) == 0 && len(metadata.Depends) == 0 {
-		sourceRoot, err := resolvePluginSourceRoot(pluginName)
-		if err == nil {
-			// 兼容旧 dist：旧 manifest 没有 __plugin metadata 时，仍可从本地源码读取。
-			// 远程 package 发布态应在 manifest.json 内携带 __plugin。
-			metadata = readPluginSourceMetadata(pluginName, filepath.Join(sourceRoot, pluginSourceEntry))
-		}
-	}
-	if metadata.Name == "" {
-		metadata.Name = pluginName
-	}
 
 	return runtimePluginDescriptor{
 		Name:     metadata.Name,

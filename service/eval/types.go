@@ -6,10 +6,13 @@ const (
 	LanguageJavaScript = "javascript"
 	LanguageJS         = "js"
 
-	DefaultEntry          = "evaluate"
-	DefaultTimeout        = 100 * time.Millisecond
-	MaxTimeout            = time.Second
-	DefaultMaxScriptBytes = 64 * 1024
+	DefaultEntry                = "evaluate"
+	DefaultTimeout              = 100 * time.Millisecond
+	MaxTimeout                  = time.Second
+	DefaultMaxScriptBytes       = 64 * 1024
+	DefaultMaxOutputBytes       = 64 * 1024
+	DefaultMaxOutputDepth       = 8
+	DefaultMaxOutputArrayLength = 2000
 )
 
 const (
@@ -24,13 +27,16 @@ const (
 )
 
 type Request struct {
-	Language       string
-	Script         string
-	Input          any
-	Config         any
-	Entry          string
-	Timeout        time.Duration
-	MaxScriptBytes int
+	Language             string
+	Script               string
+	Input                any
+	Config               any
+	Entry                string
+	Timeout              time.Duration
+	MaxScriptBytes       int
+	MaxOutputBytes       int
+	MaxOutputDepth       int
+	MaxOutputArrayLength int
 }
 
 type Result struct {

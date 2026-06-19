@@ -2,7 +2,6 @@ package permission
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"github.com/dever-package/front/service/siteconfig"
 )
@@ -67,6 +66,6 @@ type accessSnapshot struct {
 var (
 	bootstrapState struct {
 		mu   sync.Mutex
-		done atomic.Bool
+		done map[string]struct{}
 	}
 )

@@ -30,21 +30,22 @@ func EnsureBootstrapForSite(ctx context.Context, site siteconfig.Site) error {
 	if !shouldBootstrapSite(site) {
 		return nil
 	}
-	if bootstrapState.done.Load() {
+	siteKey := bootstrapDoneKey(site)
+	if bootstrapDone(siteKey) {
 		return nil
 	}
 
 	bootstrapState.mu.Lock()
 	defer bootstrapState.mu.Unlock()
 
-	if bootstrapState.done.Load() {
+	if bootstrapDoneLocked(siteKey) {
 		return nil
 	}
 
 	if err := runBootstrap(ctx); err != nil {
 		return err
 	}
-	bootstrapState.done.Store(true)
+	markBootstrapDoneLocked(ctx, siteKey)
 	runtimecache.Invalidate()
 	return nil
 }
@@ -69,7 +70,7 @@ func ForceBootstrapForSite(ctx context.Context, site siteconfig.Site) error {
 	if err := runBootstrap(ctx); err != nil {
 		return err
 	}
-	bootstrapState.done.Store(true)
+	markBootstrapDoneLocked(ctx, bootstrapDoneKey(site))
 	runtimecache.Invalidate()
 	return nil
 }
@@ -115,6 +116,42 @@ func WarmupSite(ctx context.Context, site siteconfig.Site) error {
 
 func shouldBootstrapSite(site siteconfig.Site) bool {
 	return site.UsesRBAC() && strings.TrimSpace(site.Access.AuthProvider) == siteconfig.DefaultAuthProvider
+}
+
+func bootstrapDoneKey(site siteconfig.Site) string {
+	key := strings.TrimSpace(site.Key)
+	if key == "" {
+		return siteconfig.DefaultSiteKey
+	}
+	return key
+}
+
+func bootstrapDone(siteKey string) bool {
+	bootstrapState.mu.Lock()
+	defer bootstrapState.mu.Unlock()
+	return bootstrapDoneLocked(siteKey)
+}
+
+func bootstrapDoneLocked(siteKey string) bool {
+	if bootstrapState.done == nil {
+		return false
+	}
+	_, ok := bootstrapState.done[strings.TrimSpace(siteKey)]
+	return ok
+}
+
+func markBootstrapDoneLocked(ctx context.Context, fallbackSiteKey string) {
+	if bootstrapState.done == nil {
+		bootstrapState.done = map[string]struct{}{}
+	}
+	if sites, err := bootstrapSites(ctx); err == nil {
+		for _, site := range sites {
+			bootstrapState.done[bootstrapDoneKey(site)] = struct{}{}
+		}
+	}
+	if fallbackSiteKey != "" {
+		bootstrapState.done[strings.TrimSpace(fallbackSiteKey)] = struct{}{}
+	}
 }
 
 func runBootstrap(ctx context.Context) error {
@@ -873,7 +910,7 @@ func ensureDefaultRole(ctx context.Context) error {
 	return nil
 }
 
-func EnsureDefaultAccount(ctx context.Context, account, password string, hashPassword func(string) string) error {
+func EnsureDefaultAccount(ctx context.Context, account, password string, hashPassword func(string) (string, error)) error {
 	accountModel := frontrecord.Resolve("front.NewAccountModel")
 	if accountModel == nil {
 		return fmt.Errorf("账户模型未注册")
@@ -889,13 +926,17 @@ func EnsureDefaultAccount(ctx context.Context, account, password string, hashPas
 	if account == "" || password == "" {
 		return fmt.Errorf("首次登录需要输入账户和密码")
 	}
+	passwordHash, err := hashPassword(password)
+	if err != nil {
+		return err
+	}
 
 	columnLookup := frontrecord.ResolveColumnLookup("front.NewAccountModel", accountModel)
 	record := map[string]any{
 		"id":       defaultAccountID,
 		"name":     defaultAccountName,
 		"account":  account,
-		"password": hashPassword(password),
+		"password": passwordHash,
 		"role_id":  defaultRoleID,
 	}
 	frontrecord.ApplyCreatedAt(record, columnLookup)

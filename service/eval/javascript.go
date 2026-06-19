@@ -58,9 +58,14 @@ func runJavaScript(ctx context.Context, req Request) (Result, error) {
 	if err != nil {
 		return Result{}, javascriptError(timeoutCtx, err)
 	}
-	output, err := cloneJSONValue(value.Export())
+	output, err := cloneJSONValueWithLimit(
+		value.Export(),
+		req.MaxOutputBytes,
+		req.MaxOutputDepth,
+		req.MaxOutputArrayLength,
+	)
 	if err != nil {
-		return Result{}, Error{Code: ErrorCodeInvalidOutput, Message: "eval 输出必须是 JSON 可序列化数据"}
+		return Result{}, Error{Code: ErrorCodeInvalidOutput, Message: "eval 输出必须是 JSON 可序列化数据且不能超过大小限制"}
 	}
 
 	return Result{

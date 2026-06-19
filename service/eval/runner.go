@@ -38,6 +38,15 @@ func normalizeRequest(req Request) (Request, error) {
 	if req.MaxScriptBytes <= 0 {
 		req.MaxScriptBytes = DefaultMaxScriptBytes
 	}
+	if req.MaxOutputBytes <= 0 {
+		req.MaxOutputBytes = DefaultMaxOutputBytes
+	}
+	if req.MaxOutputDepth <= 0 {
+		req.MaxOutputDepth = DefaultMaxOutputDepth
+	}
+	if req.MaxOutputArrayLength <= 0 {
+		req.MaxOutputArrayLength = DefaultMaxOutputArrayLength
+	}
 
 	if strings.TrimSpace(req.Script) == "" {
 		return Request{}, Error{Code: ErrorCodeInvalidRequest, Message: "eval script 不能为空"}

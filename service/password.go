@@ -4,28 +4,53 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
+	"golang.org/x/crypto/bcrypt"
 
 	frontmeta "github.com/dever-package/front/service/meta"
 	frontrecord "github.com/dever-package/front/service/record"
 )
 
-func hashPlainPassword(password string) string {
+func hashLegacyMD5Password(password string) string {
 	sum := md5.Sum([]byte(strings.TrimSpace(password)))
 	return hex.EncodeToString(sum[:])
 }
 
-func HashPlainPassword(password string) string {
-	return hashPlainPassword(password)
+func hashModelPassword(password string) (string, error) {
+	password = strings.TrimSpace(password)
+	if password == "" {
+		return "", fmt.Errorf("密码不能为空")
+	}
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("密码哈希失败: %w", err)
+	}
+	return string(hashed), nil
 }
 
-func NormalizeModelPasswordFields(modelName string, data map[string]any, columnLookup map[string]string) {
+func HashPassword(password string) (string, error) {
+	return hashModelPassword(password)
+}
+
+func VerifyPassword(stored string, password string) bool {
+	return verifyStoredPassword(stored, password)
+}
+
+func PasswordNeedsUpgrade(stored string) bool {
+	return shouldUpgradeStoredPassword(stored)
+}
+
+func NormalizeModelPasswordFields(modelName string, data map[string]any, columnLookup map[string]string) error {
 	for _, passwordColumn := range resolveModelPasswordColumns(modelName, columnLookup) {
-		normalizeModelPasswordColumn(data, passwordColumn)
+		if err := normalizeModelPasswordColumn(data, passwordColumn); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func resolveModelPasswordColumns(modelName string, columnLookup map[string]string) []string {
@@ -47,19 +72,24 @@ func resolveModelPasswordColumns(modelName string, columnLookup map[string]strin
 	return columns
 }
 
-func normalizeModelPasswordColumn(data map[string]any, passwordColumn string) {
+func normalizeModelPasswordColumn(data map[string]any, passwordColumn string) error {
 	rawValue, exists := data[passwordColumn]
 	if !exists {
-		return
+		return nil
 	}
 
 	password := util.ToStringTrimmed(rawValue)
 	if password == "" {
 		delete(data, passwordColumn)
-		return
+		return nil
 	}
 
-	data[passwordColumn] = hashPlainPassword(password)
+	hashed, err := hashModelPassword(password)
+	if err != nil {
+		return err
+	}
+	data[passwordColumn] = hashed
+	return nil
 }
 
 func verifyAccountPassword(
@@ -78,20 +108,50 @@ func verifyAccountPassword(
 		return false
 	}
 
-	hashed := hashPlainPassword(password)
-	if stored == hashed {
+	if verifyStoredPassword(stored, password) {
+		if shouldUpgradeStoredPassword(stored) {
+			upgradeAccountPassword(ctx, accountModel, util.ToUint64(accountRow["id"]), password)
+		}
 		return true
 	}
 
-	if stored != password {
+	return false
+}
+
+func verifyStoredPassword(stored string, password string) bool {
+	stored = util.ToStringTrimmed(stored)
+	password = strings.TrimSpace(password)
+	if stored == "" || password == "" {
 		return false
 	}
+	if isBcryptPasswordHash(stored) {
+		return bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) == nil
+	}
+	return stored == hashLegacyMD5Password(password)
+}
 
-	accountID := util.ToUint64(accountRow["id"])
+func shouldUpgradeStoredPassword(stored string) bool {
+	stored = util.ToStringTrimmed(stored)
+	return stored != "" && !isBcryptPasswordHash(stored)
+}
+
+func isBcryptPasswordHash(stored string) bool {
+	stored = util.ToStringTrimmed(stored)
+	if !strings.HasPrefix(stored, "$2a$") && !strings.HasPrefix(stored, "$2b$") && !strings.HasPrefix(stored, "$2y$") {
+		return false
+	}
+	_, err := bcrypt.Cost([]byte(stored))
+	return err == nil
+}
+
+func upgradeAccountPassword(ctx context.Context, accountModel frontrecord.Model, accountID uint64, password string) {
 	if accountID > 0 {
+		hashed, err := hashModelPassword(password)
+		if err != nil {
+			return
+		}
 		accountModel.Update(ctx, map[string]any{"id": accountID}, map[string]any{
 			"password": hashed,
 		})
 	}
-	return true
 }

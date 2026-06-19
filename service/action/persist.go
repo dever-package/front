@@ -42,7 +42,9 @@ func saveModelRecord(c *server.Context, modelName string, record map[string]any,
 	}
 
 	data := frontrecord.SanitizeRecord(record, columnLookup)
-	frontservice.NormalizeModelPasswordFields(modelName, data, columnLookup)
+	if err := frontservice.NormalizeModelPasswordFields(modelName, data, columnLookup); err != nil {
+		return nil, err
+	}
 
 	pkColumn := frontrecord.ResolveColumnName(columnLookup, primaryKey)
 	if pkColumn == "" {

@@ -34,7 +34,7 @@ func Login(c *server.Context) error {
 		return c.Error("账户模型未注册")
 	}
 
-	if err := permissionservice.EnsureDefaultAccount(c.Context(), account, password, hashPlainPassword); err != nil {
+	if err := permissionservice.EnsureDefaultAccount(c.Context(), account, password, HashPassword); err != nil {
 		return c.Error(err)
 	}
 
