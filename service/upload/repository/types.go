@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	frontmodel "github.com/dever-package/front/model"
 )
 
@@ -45,6 +47,7 @@ type UploadSession struct {
 	UploadedParts    string
 	ProviderUploadID string
 	Status           string
+	ExpiredAt        time.Time
 }
 
 type UploadFile struct {

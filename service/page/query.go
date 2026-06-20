@@ -30,6 +30,11 @@ type listModel interface {
 	Count(ctx context.Context, filters any, options ...map[string]any) int64
 }
 
+const (
+	maxQueryListPageSize = 500
+	maxQueryKeywordRunes = 100
+)
+
 func queryRecordID(c *server.Context, key string) (uint64, bool) {
 	value := normalizeQueryInputText(c.Input(key))
 	if value == "" {
@@ -64,7 +69,7 @@ func queryModelListWithLookup(
 	lookup queryValueLookup,
 ) ([]map[string]any, int64, int, int, error) {
 	treeMode := util.ToBool(current["tree"])
-	pageSize := queryIntValue(lookup, "pageSize", util.ToIntDefault(current["pageSize"], 10))
+	pageSize := normalizeQueryListPageSize(queryIntValue(lookup, "pageSize", util.ToIntDefault(current["pageSize"], 10)))
 	page := queryIntValue(lookup, "page", util.ToIntDefault(current["page"], 1))
 	if page < 1 {
 		page = 1
@@ -135,7 +140,7 @@ func buildModelFiltersWithLookup(
 ) any {
 	filters := buildExactModelFiltersWithLookup(ctx, lookup, current)
 
-	keyword := normalizeQueryInputText(lookup("keyword"))
+	keyword := normalizeQueryKeyword(lookup("keyword"))
 	if keyword == "" {
 		return filters
 	}
@@ -355,6 +360,35 @@ func queryIntValue(lookup queryValueLookup, key string, fallback int) int {
 		return fallback
 	}
 	return number
+}
+
+func normalizeQueryListPageSize(value int) int {
+	if value > maxQueryListPageSize {
+		return maxQueryListPageSize
+	}
+	if value < 0 {
+		return 0
+	}
+	return value
+}
+
+func normalizeQueryKeyword(raw string) string {
+	value := normalizeQueryInputText(raw)
+	if value == "" {
+		return ""
+	}
+	return truncateQueryText(value, maxQueryKeywordRunes)
+}
+
+func truncateQueryText(value string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return value
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes])
 }
 
 func readContextQueryLookup(c *server.Context) queryValueLookup {

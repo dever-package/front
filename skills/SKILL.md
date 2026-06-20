@@ -37,6 +37,7 @@ version: 0.1.0
 - page JSON 自动推导、Options、Relations、partial save、权限上下文不能为单个页面特殊分支而破坏。
 - 上传、导入、导出必须保留大小、类型、路径、权限、任务状态和错误脱敏边界。
 - 公开 route 只放 `dever.json.front.public` 或站点 `public` 中明确允许的路径。
+- 站点 API 前缀只通过 `front.sites.<site>.api` 合并和匹配；不要引入第二套别名字段。
 - runtime/cache 变更必须有统一失效路径；写操作成功后不能只依赖 TTL。
 - package/module front 插件加载走 `service/site` 和 Dever CLI 编译器，不在业务组件里复制插件静态服务。
 - 站点运行契约属于组件 `dever.json.front.sites`；项目 `config/front.json` 只覆盖展示配置。

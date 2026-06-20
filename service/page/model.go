@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/shemic/dever/load"
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
@@ -45,8 +44,8 @@ func resolveDataValue(
 			frontmeta.MergeOptionMap(collectedOptions, options)
 			return resolved, err
 		}
-		if resolved, ok := resolveServiceDataContainer(c, current); ok {
-			return resolved, nil
+		if resolved, ok, err := resolveServiceDataContainer(c, current); ok {
+			return resolved, err
 		}
 		result := make(map[string]any, len(current))
 		for childKey, item := range current {
@@ -64,12 +63,13 @@ func resolveDataValue(
 	}
 }
 
-func resolveServiceDataContainer(c *server.Context, current map[string]any) (any, bool) {
+func resolveServiceDataContainer(c *server.Context, current map[string]any) (any, bool, error) {
 	serviceName := util.ToStringTrimmed(current["service"])
 	if serviceName == "" {
-		return nil, false
+		return nil, false, nil
 	}
-	return load.Service(serviceName, c), true
+	result, err := frontcall.ServiceWithArgs(serviceName, c)
+	return result, true, err
 }
 
 func syncQueryValues(c *server.Context, current map[string]any) map[string]any {

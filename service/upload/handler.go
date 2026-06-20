@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -19,6 +21,8 @@ import (
 	uploadprovider "github.com/dever-package/front/service/upload/provider"
 	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
+
+var uploadSessionPartLocks [64]sync.Mutex
 
 func InitUpload(c *server.Context) error {
 	var input uploadInitInput
@@ -65,6 +69,8 @@ func InitUpload(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
+	now := time.Now()
+	expiredAt := now.Add(6 * time.Hour)
 
 	sessionID := util.ToUint64(sessionModel.Insert(c.Context(), map[string]any{
 		"rule_id":            rule.ID,
@@ -84,8 +90,8 @@ func InitUpload(c *server.Context) error {
 		"uploaded_parts":     "[]",
 		"provider_upload_id": "",
 		"status":             uploadSessionPending,
-		"created_at":         time.Now(),
-		"expired_at":         time.Now().Add(6 * time.Hour),
+		"created_at":         now,
+		"expired_at":         expiredAt,
 	}))
 	if sessionID == 0 {
 		return c.Error("创建上传会话失败")
@@ -114,6 +120,7 @@ func InitUpload(c *server.Context) error {
 		ChunkSize:  chunkSize,
 		ChunkTotal: chunkTotal,
 		Status:     uploadSessionPending,
+		ExpiredAt:  expiredAt,
 	}
 
 	result := map[string]any{
@@ -159,6 +166,9 @@ func UploadPart(c *server.Context) error {
 	if err := ensureUploadSessionToken(session, c.Input("token")); err != nil {
 		return c.Error(err)
 	}
+	if err := ensureUploadSessionActive(session); err != nil {
+		return c.Error(err)
+	}
 	rule, err := uploadrepo.FindUploadRule(c.Context(), session.RuleID)
 	if err != nil {
 		return c.Error(err)
@@ -188,11 +198,7 @@ func UploadPart(c *server.Context) error {
 		return c.Error(err)
 	}
 
-	parts := appendUploadPart(session.UploadedParts, partNumber)
-	if err := uploadrepo.UpdateUploadSession(c.Context(), sessionID, map[string]any{
-		"uploaded_parts": encodeUploadParts(parts),
-		"status":         uploadSessionUploading,
-	}); err != nil {
+	if err := recordUploadPart(c.Context(), sessionID, partNumber); err != nil {
 		return c.Error(err)
 	}
 
@@ -215,9 +221,17 @@ func CompleteUpload(c *server.Context) error {
 	if err := ensureUploadSessionToken(session, input.Token); err != nil {
 		return c.Error(err)
 	}
+	if err := ensureUploadSessionActive(session); err != nil {
+		return c.Error(err)
+	}
 	rule, err := uploadrepo.FindUploadRule(c.Context(), session.RuleID)
 	if err != nil {
 		return c.Error(err)
+	}
+	if strings.EqualFold(rule.Transport, "direct") {
+		if err := validateUploadStoredFile(rule, session.Name, session.Mime); err != nil {
+			return c.Error(err)
+		}
 	}
 
 	if existing := uploadrepo.FindUploadFileByPath(c.Context(), session.ObjectKey); existing != nil && strings.EqualFold(rule.Transport, "direct") {
@@ -300,6 +314,40 @@ func ensureUploadSessionToken(session resolvedUploadSession, token string) error
 	return nil
 }
 
+func ensureUploadSessionActive(session resolvedUploadSession) error {
+	if !session.ExpiredAt.IsZero() && !time.Now().Before(session.ExpiredAt) {
+		return fmt.Errorf("上传会话已过期，请重新上传")
+	}
+	if strings.EqualFold(session.Status, uploadSessionComplete) {
+		return fmt.Errorf("上传会话已完成")
+	}
+	return nil
+}
+
+func recordUploadPart(ctx context.Context, sessionID uint64, partNumber int) error {
+	lock := uploadSessionPartLock(sessionID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	session, err := uploadrepo.FindUploadSession(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if err := ensureUploadSessionActive(session); err != nil {
+		return err
+	}
+	parts := appendUploadPart(session.UploadedParts, partNumber)
+	return uploadrepo.UpdateUploadSession(ctx, sessionID, map[string]any{
+		"uploaded_parts": encodeUploadParts(parts),
+		"status":         uploadSessionUploading,
+	})
+}
+
+func uploadSessionPartLock(sessionID uint64) *sync.Mutex {
+	index := int(sessionID % uint64(len(uploadSessionPartLocks)))
+	return &uploadSessionPartLocks[index]
+}
+
 func OpenUpload(c *server.Context) error {
 	fileID := util.ToUint64(c.Input("id", "required", "文件ID"))
 	fileRecord, err := uploadrepo.FindUploadFile(c.Context(), fileID)
@@ -329,6 +377,7 @@ func OpenUpload(c *server.Context) error {
 	if target == nil {
 		return c.Error("文件不存在")
 	}
+	setUploadResponseHeaders(raw)
 	if strings.TrimSpace(target.Redirect) != "" {
 		return raw.Redirect(strings.TrimSpace(target.Redirect), http.StatusFound)
 	}
@@ -336,6 +385,10 @@ func OpenUpload(c *server.Context) error {
 		return c.Error("文件不存在")
 	}
 	return raw.SendFile(strings.TrimSpace(target.LocalPath))
+}
+
+func setUploadResponseHeaders(raw *fiber.Ctx) {
+	raw.Set("X-Content-Type-Options", "nosniff")
 }
 
 func ensureUploadSessionDir(sessionID uint64) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shemic/dever/load"
@@ -31,6 +32,8 @@ const (
 	cronStartReasonCreateFailed = "创建计划任务运行记录失败"
 )
 
+var cronRunLocks [64]sync.Mutex
+
 func runClaimedCron(parent context.Context, item cronSnapshot, scheduledAt time.Time) {
 	now := time.Now()
 	_, _, reason := startCronRun(parent, item, scheduledAt, now)
@@ -49,6 +52,10 @@ func startCronRun(parent context.Context, item cronSnapshot, scheduledAt time.Ti
 		ctx = context.Background()
 	}
 
+	lock := cronRunLock(item.ID)
+	lock.Lock()
+	defer lock.Unlock()
+
 	failExpiredRuns(ctx, item, now)
 	if hasRunningRun(ctx, item.ID) {
 		return 0, "", cronStartReasonRunning
@@ -62,6 +69,11 @@ func startCronRun(parent context.Context, item cronSnapshot, scheduledAt time.Ti
 
 	go executeRun(context.Background(), item, runID, requestID)
 	return runID, requestID, ""
+}
+
+func cronRunLock(cronID uint64) *sync.Mutex {
+	index := int(cronID % uint64(len(cronRunLocks)))
+	return &cronRunLocks[index]
 }
 
 func executeRun(parent context.Context, item cronSnapshot, runID uint64, requestID string) {

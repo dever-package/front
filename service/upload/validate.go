@@ -2,6 +2,9 @@ package upload
 
 import (
 	"fmt"
+	"mime"
+	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -27,6 +30,9 @@ func validateUploadInit(rule resolvedUploadRule, input uploadInitInput) error {
 	if err := validateUploadAccept(rule.Accept, input.Name, input.Mime); err != nil {
 		return err
 	}
+	if err := validateUploadActiveContent(rule.Accept, input.Name, input.Mime); err != nil {
+		return err
+	}
 	if strings.EqualFold(rule.Transport, "direct") && strings.EqualFold(resolveUploadStorageProvider(rule.Storage), "local") {
 		return fmt.Errorf("本地上传不支持前端直传")
 	}
@@ -36,6 +42,13 @@ func validateUploadInit(rule resolvedUploadRule, input uploadInitInput) error {
 	return nil
 }
 
+func validateUploadStoredFile(rule resolvedUploadRule, fileName, mimeType string) error {
+	if err := validateUploadAccept(rule.Accept, fileName, mimeType); err != nil {
+		return err
+	}
+	return validateUploadActiveContent(rule.Accept, fileName, mimeType)
+}
+
 func validateUploadAccept(accept, fileName, mimeType string) error {
 	accept = strings.TrimSpace(accept)
 	if accept == "" || accept == "*" || accept == "*/*" {
@@ -43,7 +56,7 @@ func validateUploadAccept(accept, fileName, mimeType string) error {
 	}
 
 	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(fileName)))
-	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	mimeType = normalizeUploadMimeType(mimeType)
 	for _, token := range splitUploadAccept(accept) {
 		switch {
 		case token == "*" || token == "*/*":
@@ -57,6 +70,76 @@ func validateUploadAccept(accept, fileName, mimeType string) error {
 		}
 	}
 	return fmt.Errorf("文件类型不被允许")
+}
+
+func validateUploadActiveContent(accept, fileName, mimeType string) error {
+	if !isActiveUploadContent(fileName, mimeType) {
+		return nil
+	}
+	if acceptExplicitlyAllowsActiveContent(accept, fileName, mimeType) {
+		return nil
+	}
+	return fmt.Errorf("文件类型不被允许")
+}
+
+func isActiveUploadContent(fileName, mimeType string) bool {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(fileName)))
+	switch ext {
+	case ".svg", ".html", ".htm", ".xhtml", ".xml":
+		return true
+	}
+
+	switch normalizeUploadMimeType(mimeType) {
+	case "image/svg+xml", "text/html", "application/xhtml+xml", "application/xml", "text/xml":
+		return true
+	default:
+		return false
+	}
+}
+
+func acceptExplicitlyAllowsActiveContent(accept, fileName, mimeType string) bool {
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(fileName)))
+	mimeType = normalizeUploadMimeType(mimeType)
+	for _, token := range splitUploadAccept(accept) {
+		if (ext != "" && token == ext) || (mimeType != "" && token == mimeType) {
+			return true
+		}
+	}
+	return false
+}
+
+func detectUploadFileMime(localPath, fileName, fallback string) (string, error) {
+	file, err := os.Open(localPath)
+	if err != nil {
+		return "", fmt.Errorf("读取上传文件失败: %w", err)
+	}
+	defer file.Close()
+
+	header := make([]byte, 512)
+	n, _ := file.Read(header)
+	return detectUploadMimeFromHeader(header[:n], fileName, fallback), nil
+}
+
+func detectUploadMimeFromHeader(header []byte, fileName, fallback string) string {
+	detected := normalizeUploadMimeType(http.DetectContentType(header))
+	if detected != "" && detected != "application/octet-stream" {
+		return detected
+	}
+	if fallback = normalizeUploadMimeType(fallback); fallback != "" {
+		return fallback
+	}
+	return normalizeUploadMimeType(mime.TypeByExtension(filepath.Ext(fileName)))
+}
+
+func normalizeUploadMimeType(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if mediaType, _, err := mime.ParseMediaType(value); err == nil {
+		value = mediaType
+	}
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func splitUploadAccept(accept string) []string {

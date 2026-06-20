@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"mime"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -196,13 +194,7 @@ func inspectImportFile(localPath, fileName, rawMime string) (int64, string, stri
 
 	header := make([]byte, 512)
 	n, _ := file.Read(header)
-	mimeType := strings.TrimSpace(rawMime)
-	if mimeType == "" {
-		mimeType = strings.TrimSpace(http.DetectContentType(header[:n]))
-	}
-	if mimeType == "" {
-		mimeType = strings.TrimSpace(mime.TypeByExtension(filepath.Ext(fileName)))
-	}
+	mimeType := detectUploadMimeFromHeader(header[:n], fileName, rawMime)
 	if _, err = file.Seek(0, 0); err != nil {
 		return 0, "", "", fmt.Errorf("重置导入文件读取位置失败: %w", err)
 	}

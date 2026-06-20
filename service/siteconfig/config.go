@@ -52,6 +52,7 @@ type Site struct {
 	Path    string
 	Page    string
 	API     string
+	APIs    []string
 	Public  []string
 	Config  SiteConfig
 	Setting SiteSetting
@@ -175,22 +176,20 @@ func (cfg Config) FindBySiteKey(siteKey string) (Site, bool) {
 }
 
 func (cfg Config) FindByAPIPrefix(apiPrefix string) (Site, bool) {
-	requestPath := cleanAbsPath(apiPrefix)
-	return cfg.findByPath(requestPath, func(site Site) string {
-		return site.APIPrefix()
-	})
+	site, _, ok := cfg.findByAPIMatch(apiPrefix)
+	return site, ok
 }
 
 func (cfg Config) FindByAPIRequestPath(requestPath string) (Site, bool) {
 	requestPath = cleanAbsPath(requestPath)
-	site, ok := cfg.FindByAPIPrefix(requestPath)
+	site, apiPrefix, ok := cfg.findByAPIMatch(requestPath)
 	if !ok {
 		return Site{}, false
 	}
-	if site.APIPrefix() != site.Path {
+	if cleanAbsPath(apiPrefix) != site.Path {
 		return site, true
 	}
-	if isSiteReservedAPIRoot(site, requestPath) {
+	if isSiteReservedAPIRootForPrefix(site, apiPrefix, requestPath) {
 		return site, true
 	}
 	return Site{}, false
@@ -318,8 +317,50 @@ func (cfg Config) findByPath(requestPath string, prefix func(Site) string) (Site
 	return matched, matchedLen >= 0
 }
 
+func (cfg Config) findByAPIMatch(requestPath string) (Site, string, bool) {
+	requestPath = cleanAbsPath(requestPath)
+	var matched Site
+	matchedPrefix := ""
+	matchedLen := -1
+	for _, site := range cfg.Sites {
+		for _, prefix := range site.APIPrefixes() {
+			value := cleanAbsPath(prefix)
+			if !matchPathPrefix(value, requestPath) {
+				continue
+			}
+			if len(value) > matchedLen {
+				matched = site
+				matchedPrefix = value
+				matchedLen = len(value)
+			}
+		}
+	}
+	return matched, matchedPrefix, matchedLen >= 0
+}
+
 func (site Site) APIPrefix() string {
 	return cleanAbsPath(site.API)
+}
+
+func (site Site) APIPrefixes() []string {
+	items := make([]string, 0, len(site.APIs)+1)
+	seen := map[string]struct{}{}
+	add := func(value string) {
+		value = cleanAbsPath(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		items = append(items, value)
+	}
+	add(site.API)
+	for _, api := range site.APIs {
+		add(api)
+	}
+	return items
 }
 
 func (site Site) UsesDefaultAPI() bool {
@@ -327,7 +368,11 @@ func (site Site) UsesDefaultAPI() bool {
 }
 
 func isSiteReservedAPIRoot(site Site, requestPath string) bool {
-	root := requestRootAfterPrefix(requestPath, site.APIPrefix())
+	return isSiteReservedAPIRootForPrefix(site, site.APIPrefix(), requestPath)
+}
+
+func isSiteReservedAPIRootForPrefix(site Site, apiPrefix string, requestPath string) bool {
+	root := requestRootAfterPrefix(requestPath, apiPrefix)
 	if root == "" {
 		return false
 	}
@@ -656,9 +701,10 @@ func mergeComponentSite(site *Site, owners map[string]string, current component.
 		return nil
 	}
 
+	contributedAPI := cleanAPI(contribution.API)
 	if hasSiteOwnerFields(contribution) {
 		if owner := owners[site.Key]; owner != "" && owner != current.Name {
-			return fmt.Errorf("front site %q 同时被 %s 和 %s 定义，请改用唯一站点名或只追加 auth/public", site.Key, owner, current.Name)
+			return fmt.Errorf("front site %q 同时被 %s 和 %s 定义，请改用唯一站点名或只追加 api/auth/public", site.Key, owner, current.Name)
 		}
 		if err := validateSiteConfig(manifestSiteConfig(contribution.Config), fmt.Sprintf("组件 %s front.sites.%s.config", current.Name, site.Key)); err != nil {
 			return err
@@ -668,9 +714,20 @@ func mergeComponentSite(site *Site, owners map[string]string, current component.
 	}
 
 	sitePublic, _ := splitComponentSitePublic(contribution.Public)
+	if contributedAPI != "" && contributedAPI != cleanAPI(site.API) {
+		site.APIs = mergeSiteAPIs(site.APIs, []string{contributedAPI})
+	}
 	site.Auth = mergeAuthSeeds(site.Auth, contribution.Auth)
 	site.Public = mergeSitePublic(site.Public, sitePublic)
 	return nil
+}
+
+func mergeSiteAPIs(base []string, additions []string) []string {
+	if len(additions) == 0 {
+		return base
+	}
+	items := append(append([]string(nil), base...), additions...)
+	return normalizeSiteAPIs(items, "")
 }
 
 func mergeAuthSeeds(base []AuthSeed, additions []AuthSeed) []AuthSeed {
@@ -746,7 +803,6 @@ func defaultAPIForSite(siteKey string) string {
 
 func hasSiteOwnerFields(site component.ManifestSite) bool {
 	return strings.TrimSpace(site.Page) != "" ||
-		strings.TrimSpace(site.API) != "" ||
 		strings.TrimSpace(site.Entry) != "" ||
 		hasManifestSiteConfig(site.Config) ||
 		hasSiteSetting(site.Setting) ||
@@ -821,6 +877,7 @@ func normalizeSite(site Site) Site {
 	if site.API == "" {
 		site.API = defaultAPIForSite(site.Key)
 	}
+	site.APIs = normalizeSiteAPIs(site.APIs, site.API)
 	site.Public = normalizeSitePublic(site.Public)
 	site.Config = normalizeSiteConfig(site.Config)
 	site.Access = normalizeAccess(site.Access)
@@ -945,6 +1002,28 @@ func normalizeSitePublic(items []string) []string {
 		paths = append(paths, item)
 	}
 	return uniqueStrings(paths)
+}
+
+func normalizeSiteAPIs(items []string, primary string) []string {
+	primary = cleanAPI(primary)
+	paths := make([]string, 0, len(items))
+	seen := map[string]struct{}{}
+	if primary != "" {
+		seen[cleanAbsPath(primary)] = struct{}{}
+	}
+	for _, item := range items {
+		item = cleanAPI(item)
+		if item == "" {
+			continue
+		}
+		key := cleanAbsPath(item)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		paths = append(paths, item)
+	}
+	return paths
 }
 
 func normalizeSiteKey(value string) string {

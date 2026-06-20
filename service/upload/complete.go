@@ -22,6 +22,9 @@ func completeDirectUploadSession(ctx context.Context, rule resolvedUploadRule, s
 	if session.ObjectKey == "" {
 		return resolvedUploadFile{}, fmt.Errorf("直传文件缺少对象路径")
 	}
+	if err := validateUploadStoredFile(rule, session.Name, session.Mime); err != nil {
+		return resolvedUploadFile{}, err
+	}
 	if existing := uploadrepo.FindUploadFileByPath(ctx, session.ObjectKey); existing != nil {
 		return *existing, nil
 	}
@@ -47,7 +50,17 @@ func completeRelayUploadSession(ctx context.Context, rule resolvedUploadRule, se
 	if session.Hash != "" && session.Hash != hash {
 		return resolvedUploadFile{}, fmt.Errorf("文件校验失败，请重新上传")
 	}
+	detectedMime, err := detectUploadFileMime(mergedPath, session.Name, session.Mime)
+	if err != nil {
+		return resolvedUploadFile{}, err
+	}
+	if err = validateUploadStoredFile(rule, session.Name, detectedMime); err != nil {
+		return resolvedUploadFile{}, err
+	}
 	session.Size = size
+	session.Mime = detectedMime
+	session.Ext = resolveUploadExt(session.Name, detectedMime)
+	session.Kind = resolveUploadKind(session.Kind, session.Name, detectedMime)
 
 	objectKey := buildUploadObjectKey(rule.ID, hash, session.Ext, session.BizKey)
 	if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
@@ -84,6 +97,10 @@ func completeRelayUploadSession(ctx context.Context, rule resolvedUploadRule, se
 
 	if err = uploadrepo.UpdateUploadSession(ctx, session.ID, map[string]any{
 		"hash":       hash,
+		"kind":       session.Kind,
+		"ext":        session.Ext,
+		"mime":       session.Mime,
+		"size":       size,
 		"object_key": objectKey,
 		"status":     uploadSessionComplete,
 	}); err != nil {

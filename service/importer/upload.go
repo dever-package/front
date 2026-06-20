@@ -270,6 +270,10 @@ func resolveImportUploadPaths(rawPath string, field frontmeta.ImportField, workb
 	if rawPath == "" {
 		return nil
 	}
+	rootAbs, rootReal, ok := resolveImportUploadRoot(workbookDir)
+	if !ok || filepath.IsAbs(rawPath) {
+		return nil
+	}
 
 	candidates := make([]string, 0, 4)
 	appendCandidate := func(value string) {
@@ -277,26 +281,21 @@ func resolveImportUploadPaths(rawPath string, field frontmeta.ImportField, workb
 		if value == "" {
 			return
 		}
-		if !filepath.IsAbs(value) {
-			value = filepath.Clean(value)
+		candidate, ok := resolveImportUploadCandidate(rootAbs, rootReal, value)
+		if !ok {
+			return
 		}
-		if _, err := os.Stat(value); err == nil {
-			candidates = append(candidates, value)
+		if _, err := os.Stat(candidate); err == nil {
+			candidates = append(candidates, candidate)
 		}
 	}
 
-	if filepath.IsAbs(rawPath) {
-		appendCandidate(rawPath)
-	} else {
-		if baseDir := strings.TrimSpace(field.BaseDir); baseDir != "" {
-			if !filepath.IsAbs(baseDir) {
-				baseDir = filepath.Join(workbookDir, baseDir)
-			}
+	if baseDir := strings.TrimSpace(field.BaseDir); baseDir != "" {
+		if !filepath.IsAbs(baseDir) {
 			appendCandidate(filepath.Join(baseDir, rawPath))
 		}
-		appendCandidate(filepath.Join(workbookDir, rawPath))
-		appendCandidate(rawPath)
 	}
+	appendCandidate(rawPath)
 
 	if len(candidates) == 0 {
 		return nil
@@ -322,7 +321,11 @@ func resolveImportUploadPaths(rawPath string, field frontmeta.ImportField, workb
 			if entry.IsDir() {
 				continue
 			}
-			dirFiles = append(dirFiles, filepath.Join(candidate, entry.Name()))
+			filePath, ok := resolveExistingImportUploadFile(rootReal, filepath.Join(candidate, entry.Name()))
+			if !ok {
+				continue
+			}
+			dirFiles = append(dirFiles, filePath)
 		}
 		slices.Sort(dirFiles)
 		if !field.Multiple {
@@ -334,6 +337,64 @@ func resolveImportUploadPaths(rawPath string, field frontmeta.ImportField, workb
 		expanded = append(expanded, dirFiles...)
 	}
 	return uniqueImportStrings(expanded)
+}
+
+func resolveImportUploadRoot(workbookDir string) (string, string, bool) {
+	workbookDir = strings.TrimSpace(workbookDir)
+	if workbookDir == "" {
+		return "", "", false
+	}
+	rootAbs, err := filepath.Abs(filepath.Clean(workbookDir))
+	if err != nil {
+		return "", "", false
+	}
+	rootReal, err := filepath.EvalSymlinks(rootAbs)
+	if err != nil {
+		rootReal = rootAbs
+	}
+	return rootAbs, rootReal, true
+}
+
+func resolveImportUploadCandidate(rootAbs, rootReal, value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" || filepath.IsAbs(value) {
+		return "", false
+	}
+	candidate, err := filepath.Abs(filepath.Join(rootAbs, filepath.Clean(value)))
+	if err != nil || !isImportUploadPathInside(rootAbs, candidate) {
+		return "", false
+	}
+	if realPath, ok := resolveExistingImportUploadPath(rootReal, candidate); ok {
+		return realPath, true
+	}
+	return candidate, true
+}
+
+func resolveExistingImportUploadFile(rootReal, filePath string) (string, bool) {
+	info, err := os.Stat(filePath)
+	if err != nil || info.IsDir() {
+		return "", false
+	}
+	return resolveExistingImportUploadPath(rootReal, filePath)
+}
+
+func resolveExistingImportUploadPath(rootReal, filePath string) (string, bool) {
+	realPath, err := filepath.EvalSymlinks(filePath)
+	if err != nil {
+		return "", false
+	}
+	if !isImportUploadPathInside(rootReal, realPath) {
+		return "", false
+	}
+	return realPath, true
+}
+
+func isImportUploadPathInside(rootPath, targetPath string) bool {
+	rel, err := filepath.Rel(rootPath, targetPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
 }
 
 func normalizeImportUploadValue(ids []any, urlItems []importUploadURLItem, field frontmeta.ImportField) (any, error) {

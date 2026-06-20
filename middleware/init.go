@@ -231,33 +231,16 @@ func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) 
 		if site, ok := siteconfig.FromContext(c.Context()); ok {
 			return site, true
 		}
-		if site, ok := requestSiteFromHeader(frontConfig, c); ok {
-			return site, true
-		}
 		if siteconfig.IsFrontRuntimeAPIPath(path) {
 			if siteKey := requestSiteKey(c); siteKey != "" {
 				return frontConfig.FindBySiteKey(siteKey)
 			}
 		}
 	}
-	if hasSiteContextHeader(c) {
-		return frontConfig.FindByAPIPrefix(path)
-	}
 	if site, ok := frontConfig.FindByAPIRequestPath(path); ok {
 		return site, true
 	}
 	return frontConfig.FindBySitePath(path)
-}
-
-func requestSiteFromHeader(frontConfig siteconfig.Config, c *server.Context) (siteconfig.Site, bool) {
-	if c == nil {
-		return siteconfig.Site{}, false
-	}
-	siteKey := strings.TrimSpace(c.Header(siteHeader))
-	if siteKey == "" {
-		return siteconfig.Site{}, false
-	}
-	return frontConfig.FindBySiteKey(siteKey)
 }
 
 func requestSiteKey(c *server.Context) string {
@@ -275,9 +258,6 @@ func tokenAllowsSite(c *server.Context, site siteconfig.Site) bool {
 	provider := strings.TrimSpace(site.Access.AuthProvider)
 
 	if siteKey == site.Key || scope == provider {
-		return true
-	}
-	if siteKey == "" && scope == "" && provider == siteconfig.DefaultAuthProvider {
 		return true
 	}
 	return false

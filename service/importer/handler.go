@@ -17,6 +17,7 @@ func Analyze(c *server.Context) error {
 	pagePath := strings.TrimSpace(c.Input("path", "required", "页面路径"))
 	importKey := strings.TrimSpace(c.Input("importKey"))
 	fileID := util.ToUint64(c.Input("fileId", "required", "导入文件"))
+	fileHash := strings.TrimSpace(c.Input("fileHash", "required", "导入文件校验"))
 	sheetName := strings.TrimSpace(c.Input("sheetName"))
 
 	if err := permissionservice.EnsurePageAccess(c.Context(), pagePath); err != nil {
@@ -44,6 +45,9 @@ func Analyze(c *server.Context) error {
 	fileRecord, filePath, err := resolveImportFilePath(c.Context(), fileID)
 	if err != nil {
 		return c.Error(err)
+	}
+	if err := ensureImportFileAccess(pagePath, config, fileRecord, fileHash); err != nil {
+		return c.Error(err, http.StatusForbidden)
 	}
 
 	analysis, err := analyzeWorkbook(filePath, sheetName, config.Fields)
@@ -76,6 +80,7 @@ func CreateTask(c *server.Context) error {
 	pagePath := strings.TrimSpace(c.Input("path", "required", "页面路径"))
 	importKey := strings.TrimSpace(c.Input("importKey"))
 	fileID := util.ToUint64(c.Input("fileId", "required", "导入文件"))
+	fileHash := strings.TrimSpace(c.Input("fileHash", "required", "导入文件校验"))
 	sheetName := strings.TrimSpace(c.Input("sheetName"))
 	mappings := decodeTaskInput(c.Input("mappings")).Mappings
 	settings := importTaskInput{
@@ -102,11 +107,16 @@ func CreateTask(c *server.Context) error {
 		})
 	}
 
-	if _, err := resolveImportConfigForContext(c.Context(), pagePath, importKey); err != nil {
+	config, err := resolveImportConfigForContext(c.Context(), pagePath, importKey)
+	if err != nil {
 		return c.Error(err)
 	}
-	if _, _, err := resolveImportFilePath(c.Context(), fileID); err != nil {
+	fileRecord, _, err := resolveImportFilePath(c.Context(), fileID)
+	if err != nil {
 		return c.Error(err)
+	}
+	if err := ensureImportFileAccess(pagePath, config, fileRecord, fileHash); err != nil {
+		return c.Error(err, http.StatusForbidden)
 	}
 	if len(settings.Mappings) == 0 {
 		return c.Error("请至少映射一个导入字段")

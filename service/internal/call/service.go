@@ -8,6 +8,10 @@ import (
 )
 
 func Service(c *server.Context, serviceName string, payload any) (result any, err error) {
+	return ServiceWithArgs(serviceName, c, []any{payload})
+}
+
+func ServiceWithArgs(serviceName string, args ...any) (result any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if recovered, ok := r.(error); ok {
@@ -18,5 +22,5 @@ func Service(c *server.Context, serviceName string, payload any) (result any, er
 		}
 	}()
 
-	return load.Service(serviceName, c, []any{payload}), nil
+	return load.Service(serviceName, args...), nil
 }

@@ -37,5 +37,6 @@ func OpenPublicUpload(c *server.Context) error {
 	}
 
 	raw.Set("Cache-Control", "public, max-age=31536000")
+	setUploadResponseHeaders(raw)
 	return raw.SendFile(localPath)
 }

@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/shemic/dever/util"
 )
@@ -37,6 +39,7 @@ func FindUploadSession(ctx context.Context, sessionID uint64) (UploadSession, er
 		UploadedParts:    util.ToStringTrimmed(row["uploaded_parts"]),
 		ProviderUploadID: util.ToStringTrimmed(row["provider_upload_id"]),
 		Status:           util.ToStringTrimmed(row["status"]),
+		ExpiredAt:        parseUploadSessionTime(row["expired_at"]),
 	}
 	if record.BizID == 0 {
 		return record, nil
@@ -58,4 +61,32 @@ func UpdateUploadSession(ctx context.Context, sessionID uint64, updates map[stri
 	}
 	sessionModel.Update(ctx, map[string]any{"id": sessionID}, updates)
 	return nil
+}
+
+func parseUploadSessionTime(value any) time.Time {
+	switch current := value.(type) {
+	case time.Time:
+		return current
+	case *time.Time:
+		if current != nil {
+			return *current
+		}
+	case string:
+		text := strings.TrimSpace(current)
+		if text == "" {
+			return time.Time{}
+		}
+		for _, layout := range []string{
+			time.RFC3339Nano,
+			time.RFC3339,
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05",
+		} {
+			parsed, err := time.ParseInLocation(layout, text, time.Local)
+			if err == nil {
+				return parsed
+			}
+		}
+	}
+	return time.Time{}
 }
