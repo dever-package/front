@@ -43,13 +43,6 @@
         ],
         "auth": [
           {
-            "key": "tongyong",
-            "name": "通用",
-            "icon": "layout-dashboard",
-            "type": 1,
-            "sort": 1
-          },
-          {
             "key": "config",
             "name": "平台配置",
             "icon": "settings",
