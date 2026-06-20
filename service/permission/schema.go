@@ -435,7 +435,7 @@ func (filter pageSchemaPermissionFilter) canUseActionConfig(action map[string]an
 		if key == "" {
 			return true
 		}
-		return filter.canUseActionKey(key)
+		return filter.canUseActionKey(key, context)
 	default:
 		return true
 	}
@@ -625,7 +625,7 @@ func chainInheritedLookup(query map[string]string, fallback InputLookup) InputLo
 	}
 }
 
-func (filter pageSchemaPermissionFilter) canUseActionKey(actionKey string) bool {
+func (filter pageSchemaPermissionFilter) canUseActionKey(actionKey string, context pageSchemaPermissionContext) bool {
 	fullKey := filter.pagePath + "/" + normalizeActionPermissionKey(actionKey)
 	if allowed, ok := filter.actionCache[fullKey]; ok {
 		return allowed
@@ -635,9 +635,28 @@ func (filter pageSchemaPermissionFilter) canUseActionKey(actionKey string) bool 
 		filter.actionCache[fullKey] = false
 		return false
 	}
+	if query := authRowQuery(row); len(query) > 0 {
+		return matchAuthQuery(query, contextInputLookup(context, filter.lookup)) &&
+			canAccessAuthRow(filter.snapshot, row)
+	}
 	allowed := canAccessAuthRow(filter.snapshot, row)
 	filter.actionCache[fullKey] = allowed
 	return allowed
+}
+
+func contextInputLookup(context pageSchemaPermissionContext, fallback InputLookup) InputLookup {
+	return func(key string) string {
+		if value := strings.TrimSpace(lookupPayloadInput(context.patches, key)); value != "" {
+			return value
+		}
+		if value := strings.TrimSpace(lookupPayloadInput(context.row, key)); value != "" {
+			return value
+		}
+		if fallback != nil {
+			return fallback(key)
+		}
+		return ""
+	}
 }
 
 func collectActionPatch(raw any, patches map[string]any, context pageSchemaPermissionContext) bool {

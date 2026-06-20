@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/xuri/excelize/v2"
@@ -16,18 +16,27 @@ import (
 	"github.com/shemic/dever/util"
 )
 
-var exportWorkerStarted atomic.Bool
-
-func init() {
-	startExportWorker()
+var exportWorker struct {
+	mu   sync.Mutex
+	stop chan struct{}
+	done chan struct{}
 }
 
-func startExportWorker() {
-	if !exportWorkerStarted.CompareAndSwap(false, true) {
+func Start() {
+	exportWorker.mu.Lock()
+	defer exportWorker.mu.Unlock()
+
+	if exportWorker.stop != nil {
 		return
 	}
 
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	exportWorker.stop = stop
+	exportWorker.done = done
+
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 
@@ -35,9 +44,34 @@ func startExportWorker() {
 			if err := processPendingExportTask(context.Background()); err != nil {
 				time.Sleep(2 * time.Second)
 			}
-			<-ticker.C
+			select {
+			case <-ticker.C:
+			case <-stop:
+				return
+			}
 		}
 	}()
+}
+
+func Stop(ctx context.Context) error {
+	exportWorker.mu.Lock()
+	stop := exportWorker.stop
+	done := exportWorker.done
+	if stop == nil {
+		exportWorker.mu.Unlock()
+		return nil
+	}
+	exportWorker.stop = nil
+	exportWorker.done = nil
+	close(stop)
+	exportWorker.mu.Unlock()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func processPendingExportTask(ctx context.Context) error {

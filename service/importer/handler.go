@@ -28,7 +28,7 @@ func Analyze(c *server.Context) error {
 			"data":   nil,
 		})
 	}
-	if err := permissionservice.EnsureActionAccess(c.Context(), pagePath, importKey); err != nil {
+	if err := permissionservice.EnsureActionAccessWithInput(c.Context(), pagePath, importKey, importInputLookup(c)); err != nil {
 		return c.JSONPayload(http.StatusForbidden, map[string]any{
 			"code":   http.StatusForbidden,
 			"status": 2,
@@ -98,7 +98,7 @@ func CreateTask(c *server.Context) error {
 			"data":   nil,
 		})
 	}
-	if err := permissionservice.EnsureActionAccess(c.Context(), pagePath, importKey); err != nil {
+	if err := permissionservice.EnsureActionAccessWithInput(c.Context(), pagePath, importKey, importInputLookup(c)); err != nil {
 		return c.JSONPayload(http.StatusForbidden, map[string]any{
 			"code":   http.StatusForbidden,
 			"status": 2,
@@ -123,11 +123,20 @@ func CreateTask(c *server.Context) error {
 	}
 
 	accountID := uint64(authctx.OptionalUID(c.Context()))
+	if accountID == 0 {
+		return c.Error("请先登录", http.StatusUnauthorized)
+	}
 	task, err := createTask(c.Context(), accountID, pagePath, importKey, fileID, sheetName, settings)
 	if err != nil {
 		return c.Error(err)
 	}
 	return c.JSON(taskPayload(task))
+}
+
+func importInputLookup(c *server.Context) permissionservice.InputLookup {
+	return func(key string) string {
+		return c.Input(key)
+	}
 }
 
 func GetTaskInfo(c *server.Context) error {

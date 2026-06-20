@@ -37,7 +37,7 @@ func PostAction(c *server.Context) error {
 	pathValue := resolved.Path
 
 	if config.Type == "delete" {
-		if err := permissionservice.EnsureActionAccess(c.Context(), requestPath, resolved.Key); err != nil {
+		if err := permissionservice.EnsureActionAccessWithInput(c.Context(), requestPath, resolved.Key, actionInputLookup(c, request.Payload)); err != nil {
 			return respondPermissionDenied(c, err)
 		}
 	} else {
@@ -100,10 +100,14 @@ func ensurePageActionAccess(c *server.Context, pathValue string, payload any) er
 	return permissionservice.EnsurePageAccessWithInput(
 		c.Context(),
 		pathValue,
-		permissionservice.PayloadInputLookup(payload, func(key string) string {
-			return c.Input(key)
-		}),
+		actionInputLookup(c, payload),
 	)
+}
+
+func actionInputLookup(c *server.Context, payload any) permissionservice.InputLookup {
+	return permissionservice.PayloadInputLookup(payload, func(key string) string {
+		return c.Input(key)
+	})
 }
 
 func respondPermissionDenied(c *server.Context, err error) error {

@@ -2,22 +2,31 @@ package importer
 
 import (
 	"context"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
-var importWorkerStarted atomic.Bool
-
-func init() {
-	startImportWorker()
+var importWorker struct {
+	mu   sync.Mutex
+	stop chan struct{}
+	done chan struct{}
 }
 
-func startImportWorker() {
-	if !importWorkerStarted.CompareAndSwap(false, true) {
+func Start() {
+	importWorker.mu.Lock()
+	defer importWorker.mu.Unlock()
+
+	if importWorker.stop != nil {
 		return
 	}
 
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	importWorker.stop = stop
+	importWorker.done = done
+
 	go func() {
+		defer close(done)
 		ticker := time.NewTicker(2 * time.Second)
 		defer ticker.Stop()
 
@@ -25,9 +34,34 @@ func startImportWorker() {
 			if err := processPendingImportTask(context.Background()); err != nil {
 				time.Sleep(2 * time.Second)
 			}
-			<-ticker.C
+			select {
+			case <-ticker.C:
+			case <-stop:
+				return
+			}
 		}
 	}()
+}
+
+func Stop(ctx context.Context) error {
+	importWorker.mu.Lock()
+	stop := importWorker.stop
+	done := importWorker.done
+	if stop == nil {
+		importWorker.mu.Unlock()
+		return nil
+	}
+	importWorker.stop = nil
+	importWorker.done = nil
+	close(stop)
+	importWorker.mu.Unlock()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func processPendingImportTask(ctx context.Context) error {

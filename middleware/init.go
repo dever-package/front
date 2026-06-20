@@ -14,6 +14,8 @@ import (
 	"github.com/shemic/dever/server"
 
 	cronservice "github.com/dever-package/front/service/cron"
+	exportservice "github.com/dever-package/front/service/export"
+	importerservice "github.com/dever-package/front/service/importer"
 	permissionservice "github.com/dever-package/front/service/permission"
 	"github.com/dever-package/front/service/siteconfig"
 	uploadservice "github.com/dever-package/front/service/upload"
@@ -39,9 +41,17 @@ func Register() {
 			panic(err)
 		}
 		cronservice.Start()
+		exportservice.Start()
+		importerservice.Start()
 		uploadservice.StartSessionCleanup()
 		server.OnShutdown(func(ctx context.Context) error {
 			if err := cronservice.Stop(ctx); err != nil {
+				return err
+			}
+			if err := exportservice.Stop(ctx); err != nil {
+				return err
+			}
+			if err := importerservice.Stop(ctx); err != nil {
 				return err
 			}
 			return uploadservice.StopSessionCleanup(ctx)

@@ -102,7 +102,7 @@ func findTaskByOwner(ctx context.Context, taskID, accountID uint64) (taskSnapsho
 	if err != nil {
 		return taskSnapshot{}, err
 	}
-	if accountID != 0 && task.AccountID != 0 && task.AccountID != accountID {
+	if accountID == 0 || task.AccountID == 0 || task.AccountID != accountID {
 		return taskSnapshot{}, fmt.Errorf("暂无权限")
 	}
 	return task, nil

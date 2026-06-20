@@ -264,10 +264,14 @@ func filterAuthRowsForCurrentSite(ctx context.Context, rows []map[string]any) []
 }
 
 func EnsureActionAccess(ctx context.Context, pathValue string, actionKey string) error {
+	return EnsureActionAccessWithInput(ctx, pathValue, actionKey, nil)
+}
+
+func EnsureActionAccessWithInput(ctx context.Context, pathValue string, actionKey string, lookup InputLookup) error {
 	if site, ok := siteconfig.FromContext(ctx); ok && shouldBypassRBAC(site) {
 		return nil
 	}
-	protected, err := CheckActionAccess(ctx, pathValue, actionKey)
+	protected, err := CheckActionAccessWithInput(ctx, pathValue, actionKey, lookup)
 	if err != nil {
 		return err
 	}
@@ -278,6 +282,10 @@ func EnsureActionAccess(ctx context.Context, pathValue string, actionKey string)
 }
 
 func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) (bool, error) {
+	return CheckActionAccessWithInput(ctx, pathValue, actionKey, nil)
+}
+
+func CheckActionAccessWithInput(ctx context.Context, pathValue string, actionKey string, lookup InputLookup) (bool, error) {
 	pathValue = frontpagepath.NormalizePath(pathValue)
 	actionKey = strings.Trim(strings.TrimSpace(actionKey), "/")
 	if pathValue == "" || actionKey == "" {
@@ -303,6 +311,9 @@ func CheckActionAccess(ctx context.Context, pathValue string, actionKey string) 
 		return false, nil
 	}
 
+	if !matchAuthQuery(authRowQuery(authRow), lookup) {
+		return true, errNoPermission
+	}
 	if canAccessAuthRow(snapshot, authRow) {
 		return true, nil
 	}
