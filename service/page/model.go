@@ -119,7 +119,7 @@ func resolveModelListContainer(
 
 	modelValue := frontrecord.LoadSafe(modelName)
 	if modelValue == nil {
-		return nil, nil, true, fmt.Errorf("model 未注册")
+		return nil, nil, true, missingDataModelError(pathValue, key, modelName)
 	}
 	options := resolveModelFrontOption(c.Context(), modelName, modelValue)
 	queryConfig := util.CloneMap(current)
@@ -216,7 +216,7 @@ func resolveModelFormContainer(
 
 	modelValue := frontrecord.LoadSafe(modelName)
 	if modelValue == nil {
-		return nil, nil, true, fmt.Errorf("model 未注册")
+		return nil, nil, true, missingDataModelError(pathValue, key, modelName)
 	}
 	options := resolveModelFrontOption(c.Context(), modelName, modelValue)
 	form := syncFormQueryValues(c, util.CloneMap(current))
@@ -300,6 +300,15 @@ func resolveFormModelName(
 		return "", false
 	}
 	return modelName, true
+}
+
+func missingDataModelError(pathValue string, dataKey string, modelName string) error {
+	return fmt.Errorf(
+		"model 未注册: %s (path=%s, data=%s)",
+		strings.TrimSpace(modelName),
+		normalizePath(pathValue),
+		strings.TrimSpace(dataKey),
+	)
 }
 
 func explicitFormModelName(current map[string]any) string {

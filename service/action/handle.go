@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	dlog "github.com/shemic/dever/log"
+	"github.com/shemic/dever/observe"
 	"github.com/shemic/dever/server"
 
 	frontpagepath "github.com/dever-package/front/internal/pagepath"
@@ -31,6 +33,7 @@ func PostAction(c *server.Context) error {
 		Payload: request.Payload,
 	})
 	if err != nil {
+		logActionRuntimeError(c, requestPath, request.Key, "", "", "", err)
 		return c.Error(err)
 	}
 	config := resolved.Config
@@ -60,6 +63,7 @@ func PostAction(c *server.Context) error {
 
 		failures, err := actionvalidate.Form(c, content, pathValue, payload)
 		if err != nil {
+			logActionRuntimeError(c, requestPath, resolved.Key, config.Type, pathValue, modelName, err)
 			return c.Error(err)
 		}
 		if len(failures) > 0 {
@@ -71,6 +75,7 @@ func PostAction(c *server.Context) error {
 			if failures, ok := FieldFailures(err); ok {
 				return actionvalidate.RespondError(c, failures)
 			}
+			logActionRuntimeError(c, requestPath, resolved.Key, config.Type, pathValue, modelName, err)
 			return c.Error(err)
 		}
 		if resultMap, ok := result.(map[string]any); ok {
@@ -84,6 +89,7 @@ func PostAction(c *server.Context) error {
 			if failures, ok := FieldFailures(err); ok {
 				return actionvalidate.RespondError(c, failures)
 			}
+			logActionRuntimeError(c, requestPath, resolved.Key, config.Type, pathValue, modelName, err)
 			return c.Error(err)
 		}
 		if resultMap, ok := result.(map[string]any); ok {
@@ -92,8 +98,55 @@ func PostAction(c *server.Context) error {
 		runtimecache.Invalidate()
 		return c.JSON(result)
 	default:
-		return c.Error(fmt.Sprintf("action.type 不支持: %s", config.Type))
+		err := fmt.Errorf("action.type 不支持: %s", config.Type)
+		logActionRuntimeError(c, requestPath, resolved.Key, config.Type, pathValue, modelName, err)
+		return c.Error(err)
 	}
+}
+
+func logActionRuntimeError(
+	c *server.Context,
+	requestPath string,
+	actionKey string,
+	actionType string,
+	actionPath string,
+	modelName string,
+	err error,
+) {
+	if err == nil {
+		return
+	}
+
+	actionKey = strings.TrimSpace(actionKey)
+	if actionKey == "" {
+		actionKey = frontpage.DefaultSubmitActionKey
+	}
+	fields := dlog.Fields{
+		"request_path": requestPath,
+		"action_key":   actionKey,
+		"action_type":  strings.TrimSpace(actionType),
+		"action_path":  strings.TrimSpace(actionPath),
+		"model":        strings.TrimSpace(modelName),
+		"error":        dlog.ErrorValue(err),
+	}
+	if c != nil {
+		ctx := c.Context()
+		observe.RecordError(ctx, err)
+		fields["trace_id"] = observe.TraceID(ctx)
+		fields["span_id"] = observe.SpanID(ctx)
+		fields["method"] = c.Method()
+		fields["path"] = c.Path()
+		if origin := c.Header("Origin"); origin != "" {
+			fields["origin"] = origin
+		}
+		if referer := c.Header("Referer"); referer != "" {
+			fields["referer"] = referer
+		}
+		if clientPage := c.Header("X-Client-Page"); clientPage != "" {
+			fields["client_page"] = clientPage
+		}
+	}
+	dlog.ErrorFields("front.route.action_error", "front action runtime failed", fields)
 }
 
 func ensurePageActionAccess(c *server.Context, pathValue string, payload any) error {

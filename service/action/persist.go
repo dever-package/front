@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/shemic/dever/load"
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
@@ -24,7 +23,10 @@ func saveModelRecord(c *server.Context, modelName string, record map[string]any,
 		}
 	}()
 
-	modelValue := load.Model(modelName)
+	modelValue := frontrecord.LoadSafe(modelName)
+	if modelValue == nil {
+		return nil, fmt.Errorf("model 未注册: %s", strings.TrimSpace(modelName))
+	}
 	modelRef := reflect.ValueOf(modelValue)
 	insertMethod := modelRef.MethodByName("Insert")
 	updateMethod := modelRef.MethodByName("Update")
@@ -160,7 +162,10 @@ func deleteModelRecord(c *server.Context, modelName string, payload any, primary
 		}
 	}()
 
-	modelValue := load.Model(modelName)
+	modelValue := frontrecord.LoadSafe(modelName)
+	if modelValue == nil {
+		return nil, fmt.Errorf("model 未注册: %s", strings.TrimSpace(modelName))
+	}
 	modelRef := reflect.ValueOf(modelValue)
 	deleteMethod := modelRef.MethodByName("Delete")
 	if !deleteMethod.IsValid() {

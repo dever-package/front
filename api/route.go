@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strings"
 
+	dlog "github.com/shemic/dever/log"
+	"github.com/shemic/dever/observe"
 	"github.com/shemic/dever/server"
 
 	frontpagepath "github.com/dever-package/front/internal/pagepath"
@@ -53,6 +55,7 @@ func (Route) GetInfo(c *server.Context) error {
 		if permissionservice.IsPermissionDenied(err) {
 			return permissionDeniedPayload(c, err)
 		}
+		logRouteRuntimeError(c, "front.route.info_error", pathValue, err, nil)
 		return c.Error(err)
 	}
 
@@ -74,14 +77,52 @@ func (Route) GetData(c *server.Context) error {
 		if permissionservice.IsPermissionDenied(err) {
 			return permissionDeniedPayload(c, err)
 		}
+		logRouteRuntimeError(c, "front.route.data_error", pathValue, err, dlog.Fields{
+			"data_key": dataKey,
+		})
 		return c.Error(err)
 	}
 
 	payload, err := pageservice.ExtractDataContainer(currentSchema, dataKey)
 	if err != nil {
+		logRouteRuntimeError(c, "front.route.data_error", pathValue, err, dlog.Fields{
+			"data_key": dataKey,
+		})
 		return c.Error(err)
 	}
 	return c.JSON(payload)
+}
+
+func logRouteRuntimeError(c *server.Context, event string, routePath string, err error, extra dlog.Fields) {
+	if err == nil {
+		return
+	}
+
+	fields := dlog.Fields{
+		"route_path": routePath,
+		"error":      dlog.ErrorValue(err),
+	}
+	if c != nil {
+		ctx := c.Context()
+		observe.RecordError(ctx, err)
+		fields["trace_id"] = observe.TraceID(ctx)
+		fields["span_id"] = observe.SpanID(ctx)
+		fields["method"] = c.Method()
+		fields["path"] = c.Path()
+		if origin := c.Header("Origin"); origin != "" {
+			fields["origin"] = origin
+		}
+		if referer := c.Header("Referer"); referer != "" {
+			fields["referer"] = referer
+		}
+		if clientPage := c.Header("X-Client-Page"); clientPage != "" {
+			fields["client_page"] = clientPage
+		}
+	}
+	for key, value := range extra {
+		fields[key] = value
+	}
+	dlog.ErrorFields(event, "front route runtime failed", fields)
 }
 
 func permissionDeniedPayload(c *server.Context, err error) error {
