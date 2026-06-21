@@ -23,7 +23,10 @@ func saveModelRecord(c *server.Context, modelName string, record map[string]any,
 		}
 	}()
 
-	modelValue := frontrecord.LoadSafe(modelName)
+	modelValue, loadErr := frontrecord.LoadSafeWithError(modelName)
+	if loadErr != nil {
+		return nil, fmt.Errorf("model 加载失败: %s: %w", strings.TrimSpace(modelName), loadErr)
+	}
 	if modelValue == nil {
 		return nil, fmt.Errorf("model 未注册: %s", strings.TrimSpace(modelName))
 	}
@@ -162,7 +165,10 @@ func deleteModelRecord(c *server.Context, modelName string, payload any, primary
 		}
 	}()
 
-	modelValue := frontrecord.LoadSafe(modelName)
+	modelValue, loadErr := frontrecord.LoadSafeWithError(modelName)
+	if loadErr != nil {
+		return nil, fmt.Errorf("model 加载失败: %s: %w", strings.TrimSpace(modelName), loadErr)
+	}
 	if modelValue == nil {
 		return nil, fmt.Errorf("model 未注册: %s", strings.TrimSpace(modelName))
 	}

@@ -117,7 +117,10 @@ func resolveModelListContainer(
 		return nil, nil, false, nil
 	}
 
-	modelValue := frontrecord.LoadSafe(modelName)
+	modelValue, loadErr := frontrecord.LoadSafeWithError(modelName)
+	if loadErr != nil {
+		return nil, nil, true, dataModelLoadError(pathValue, key, modelName, loadErr)
+	}
 	if modelValue == nil {
 		return nil, nil, true, missingDataModelError(pathValue, key, modelName)
 	}
@@ -214,7 +217,10 @@ func resolveModelFormContainer(
 		return nil, nil, false, nil
 	}
 
-	modelValue := frontrecord.LoadSafe(modelName)
+	modelValue, loadErr := frontrecord.LoadSafeWithError(modelName)
+	if loadErr != nil {
+		return nil, nil, true, dataModelLoadError(pathValue, key, modelName, loadErr)
+	}
 	if modelValue == nil {
 		return nil, nil, true, missingDataModelError(pathValue, key, modelName)
 	}
@@ -308,6 +314,16 @@ func missingDataModelError(pathValue string, dataKey string, modelName string) e
 		strings.TrimSpace(modelName),
 		normalizePath(pathValue),
 		strings.TrimSpace(dataKey),
+	)
+}
+
+func dataModelLoadError(pathValue string, dataKey string, modelName string, err error) error {
+	return fmt.Errorf(
+		"model 加载失败: %s (path=%s, data=%s): %w",
+		strings.TrimSpace(modelName),
+		normalizePath(pathValue),
+		strings.TrimSpace(dataKey),
+		err,
 	)
 }
 

@@ -2,6 +2,7 @@ package record
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -99,23 +100,29 @@ func Wrap(value any) *Adapter {
 }
 
 func LoadSafe(modelName string) (result any) {
+	result, _ = LoadSafeWithError(modelName)
+	return result
+}
+
+func LoadSafeWithError(modelName string) (result any, err error) {
 	modelName = strings.TrimSpace(modelName)
 	if modelName == "" {
-		return nil
+		return nil, nil
 	}
 	if cached, ok := loadCache.Load(modelName); ok {
-		return cached
+		return cached, nil
 	}
 	defer func() {
-		if recover() != nil {
+		if recovered := recover(); recovered != nil {
 			result = nil
+			err = fmt.Errorf("%v", recovered)
 		}
 	}()
 	result = load.Model(modelName)
 	if result != nil {
 		loadCache.Store(modelName, result)
 	}
-	return result
+	return result, nil
 }
 
 func ResolveConfig(modelName string, modelValue any) orm.ModelConfig {
