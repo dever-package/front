@@ -20,6 +20,7 @@ const runtimeHTMLPlaceholder = "<!-- dever:runtime -->"
 type runtimePayload struct {
 	SiteKey     string                       `json:"siteKey"`
 	BasePath    string                       `json:"basePath"`
+	PagePrefix  string                       `json:"pagePrefix"`
 	APIPrefix   string                       `json:"apiPrefix"`
 	APIHost     string                       `json:"apiHost"`
 	SiteAPIHost string                       `json:"siteApiHost,omitempty"`
@@ -104,6 +105,7 @@ func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 	payload := runtimePayload{
 		SiteKey:     site.Key,
 		BasePath:    site.Path,
+		PagePrefix:  site.PageRoutePrefix(),
 		APIPrefix:   strings.Trim(site.APIPrefix(), "/"),
 		APIHost:     runtimeAPIHost(siteconfig.DefaultAPI),
 		SiteAPIHost: runtimeAPIHost(strings.Trim(site.APIPrefix(), "/")),

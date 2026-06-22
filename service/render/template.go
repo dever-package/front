@@ -114,7 +114,7 @@ func buildTemplateExecutor(pageName string, config templateConfig) (templateExec
 	}
 	layoutName := cleanRelativePath(config.Layout)
 
-	tpl := template.New(viewName)
+	tpl := template.New(viewName).Funcs(templateFuncs())
 
 	files := []string{viewName}
 	if layoutName != "" && layoutName != viewName {

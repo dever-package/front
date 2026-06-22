@@ -108,14 +108,34 @@ func FilterRowsForPage(pageName string, rows []map[string]any) []map[string]any 
 		return rows
 	}
 
+	parentIDs := make(map[uint64]struct{}, len(rows))
+	for _, row := range rows {
+		parentID := util.ToUint64(row["parent_id"])
+		if parentID > 0 {
+			parentIDs[parentID] = struct{}{}
+		}
+	}
+
 	result := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		if _, hidden := embeddedParents[normalizePath(util.ToStringTrimmed(row["path"]))]; hidden {
+		if _, hidden := embeddedParents[normalizePath(util.ToStringTrimmed(row["path"]))]; hidden && shouldHideEmbeddedRow(row, parentIDs) {
 			continue
 		}
 		result = append(result, row)
 	}
 	return result
+}
+
+func shouldHideEmbeddedRow(row map[string]any, parentIDs map[uint64]struct{}) bool {
+	if util.ToIntDefault(row["type"], 0) == 2 {
+		return false
+	}
+	id := util.ToUint64(row["id"])
+	if id == 0 {
+		return true
+	}
+	_, hasChild := parentIDs[id]
+	return !hasChild
 }
 
 func Parents() map[string]map[string]struct{} {

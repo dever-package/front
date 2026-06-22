@@ -85,6 +85,12 @@ func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot,
 	authRow, protected := resolveAccessAuthRow(snapshot.auth, pathValue, lookup)
 	pageName := siteconfig.PageFromContext(ctx)
 	if embedpageservice.HasPathForPage(pageName, pathValue) {
+		if protected && canAccessAuthRow(snapshot, authRow) {
+			return nil
+		}
+		if protected {
+			return errNoPermission
+		}
 		if canInheritPageAccess(ctx, snapshot, pathValue, lookup) {
 			return nil
 		}

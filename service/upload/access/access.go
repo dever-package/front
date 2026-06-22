@@ -23,6 +23,7 @@ const (
 	OperationRead   Operation = "read"
 	OperationSign   Operation = "sign"
 	OperationList   Operation = "list"
+	OperationCreate Operation = "create"
 	OperationManage Operation = "manage"
 )
 

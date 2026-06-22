@@ -30,6 +30,15 @@ func InitUpload(c *server.Context) error {
 		return c.Error("请求体格式错误")
 	}
 
+	kind := resolveUploadKind(input.Kind, input.Name, input.Mime)
+	if err := requireUploadCreateAccess(c, uploadCreateAccessInput{
+		BizKey:     input.BizKey,
+		Kind:       kind,
+		CategoryID: input.CategoryID,
+	}); err != nil {
+		return err
+	}
+
 	rule, err := uploadrepo.FindUploadRule(c.Context(), input.RuleID)
 	if err != nil {
 		return c.Error(err)
@@ -40,7 +49,6 @@ func InitUpload(c *server.Context) error {
 
 	hash := normalizeUploadHash(input.Hash)
 	ext := resolveUploadExt(input.Name, input.Mime)
-	kind := resolveUploadKind(input.Kind, input.Name, input.Mime)
 	bizRecord, err := uploadrepo.EnsureUploadBiz(c.Context(), input.BizKey, input.BizName)
 	if err != nil {
 		return c.Error(err)

@@ -25,6 +25,13 @@ func ImportURLUpload(c *server.Context) error {
 	if err := c.BindJSON(&input); err != nil {
 		return c.Error("请求体格式错误")
 	}
+	if err := requireUploadCreateAccess(c, uploadCreateAccessInput{
+		BizKey:     input.BizKey,
+		Kind:       input.Kind,
+		CategoryID: input.CategoryID,
+	}); err != nil {
+		return err
+	}
 	release, err := acquireImportURLSlot()
 	if err != nil {
 		return c.Error(err)

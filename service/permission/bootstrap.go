@@ -447,14 +447,10 @@ func loadPageAuthRecords(ctx context.Context) ([]authRecord, error) {
 	recordMap := make(map[string]authRecord)
 	recordPriorityMap := make(map[string]int)
 	pageName := siteconfig.PageFromContext(ctx)
-	embeddedPaths := embedpageservice.PathsForPage(pageName)
 
 	if err := pagecontent.WalkComponentPages(pageName, func(page pagecontent.ComponentPage) error {
 		meta, err := parsePageMeta(page.Content)
 		if err != nil {
-			return nil
-		}
-		if _, embedded := embeddedPaths[page.Path]; embedded {
 			return nil
 		}
 		savePageAuthRecords(recordMap, recordPriorityMap, page.Content, meta, page.Path, page.FileName, recordSource{

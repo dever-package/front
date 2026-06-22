@@ -49,6 +49,7 @@ type Config struct {
 
 type Site struct {
 	Key     string
+	Owner   string
 	Path    string
 	Page    string
 	API     string
@@ -412,14 +413,29 @@ func firstPathSegment(value string) string {
 
 func (site Site) SystemPagePath(pageName string) string {
 	pageName = cleanRelativePath(pageName)
-	apiPrefix := strings.Trim(site.APIPrefix(), "/")
-	if apiPrefix == "" {
-		apiPrefix = DefaultAPI
+	pagePrefix := site.PageRoutePrefix()
+	if pagePrefix == "" {
+		pagePrefix = DefaultAPI
 	}
 	if pageName == "" {
-		return apiPrefix
+		return pagePrefix
 	}
-	return path.Join(apiPrefix, pageName)
+	return path.Join(pagePrefix, pageName)
+}
+
+func (site Site) PageRoutePrefix() string {
+	owner := cleanRelativePath(site.Owner)
+	if owner != "" {
+		return owner
+	}
+	apiPrefix := strings.Trim(site.APIPrefix(), "/")
+	if apiPrefix == "" {
+		return DefaultAPI
+	}
+	if index := strings.Index(apiPrefix, "/"); index >= 0 {
+		return apiPrefix[:index]
+	}
+	return apiPrefix
 }
 
 func (site Site) AssetURL(value string) string {
@@ -710,6 +726,7 @@ func mergeComponentSite(site *Site, owners map[string]string, current component.
 			return err
 		}
 		owners[site.Key] = current.Name
+		site.Owner = current.Name
 		applySiteOwnerFields(site, contribution)
 	}
 
@@ -871,6 +888,7 @@ func applySiteOwnerFields(site *Site, contribution component.ManifestSite) {
 
 func normalizeSite(site Site) Site {
 	site.Key = normalizeSiteKey(site.Key)
+	site.Owner = cleanRelativePath(site.Owner)
 	site.Path = cleanSitePath(site.Key)
 	site.Page = cleanPage(site.Page, site.Key)
 	site.API = cleanAPI(site.API)

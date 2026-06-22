@@ -586,9 +586,6 @@ func (filter pageSchemaPermissionFilter) canUseRoute(route string, query map[str
 		return allowed
 	}
 	allowed := canAccessAuthRow(filter.snapshot, row)
-	if !allowed && filter.canUseInheritedRoute(pathValue, query) {
-		allowed = true
-	}
 	filter.routeCache[cacheKey] = allowed
 	return allowed
 }
