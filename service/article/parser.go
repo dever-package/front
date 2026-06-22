@@ -25,6 +25,10 @@ func parseArticlePage(page fetchedArticlePage, maxAssets int) (ImportedArticle, 
 		if article, err := parseBaijiahaoArticle(page, document, maxAssets); err == nil {
 			return article, nil
 		}
+	case isToutiaoHost(host):
+		if article, err := parseToutiaoArticle(page, document, maxAssets); err == nil {
+			return article, nil
+		}
 	}
 	return parseGenericArticle(page, document, maxAssets)
 }
