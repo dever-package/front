@@ -18,17 +18,22 @@ func parseArticlePage(page fetchedArticlePage, maxAssets int) (ImportedArticle, 
 	parsedURL, _ := url.Parse(page.URL)
 	host := strings.ToLower(parsedURL.Hostname())
 
-	switch {
-	case strings.Contains(host, "mp.weixin.qq.com"):
-		return parseWeChatArticle(page, document, maxAssets)
-	case strings.Contains(host, "baijiahao.baidu.com"):
-		if article, err := parseBaijiahaoArticle(page, document, maxAssets); err == nil {
+	for _, siteParser := range articleSiteParsers {
+		if !siteParser.Match(host) {
+			continue
+		}
+		article, err := siteParser.Parse(page, document, maxAssets)
+		if err == nil {
 			return article, nil
 		}
-	case isToutiaoHost(host):
-		if article, err := parseToutiaoArticle(page, document, maxAssets); err == nil {
-			return article, nil
+		if !siteParser.AllowFallback {
+			return ImportedArticle{}, err
 		}
+		break
+	}
+
+	if article, err := parseStructuredArticle(page, document, maxAssets, "structured"); err == nil {
+		return article, nil
 	}
 	return parseGenericArticle(page, document, maxAssets)
 }
