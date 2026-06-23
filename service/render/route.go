@@ -142,6 +142,9 @@ func compileTemplateRoutePattern(routePath string) (string, []string) {
 	if routePath == "" {
 		return "", nil
 	}
+	if routePath == "/" {
+		return "/", nil
+	}
 	parts := strings.Split(strings.Trim(routePath, "/"), "/")
 	params := []string{}
 	for index, part := range parts {
