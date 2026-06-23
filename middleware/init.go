@@ -246,6 +246,9 @@ func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) 
 				return frontConfig.FindBySiteKey(siteKey)
 			}
 		}
+		if site, ok := requestHostSite(frontConfig, c); ok {
+			return site, true
+		}
 	}
 	if site, ok := frontConfig.FindByAPIRequestPath(path); ok {
 		return site, true
@@ -254,9 +257,16 @@ func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) 
 		return site, true
 	}
 	if c != nil {
-		return frontConfig.FindByHost(siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host")))
+		return requestHostSite(frontConfig, c)
 	}
 	return siteconfig.Site{}, false
+}
+
+func requestHostSite(frontConfig siteconfig.Config, c *server.Context) (siteconfig.Site, bool) {
+	if c == nil {
+		return siteconfig.Site{}, false
+	}
+	return frontConfig.FindByHost(siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host")))
 }
 
 func requestSiteKey(c *server.Context) string {

@@ -83,15 +83,13 @@ func registerHostBoundSites(s server.Server, siteSettings settings, frontConfig 
 	if !frontConfig.HasHostBindings() {
 		return
 	}
+	registerHostBoundPluginAssets(s, siteSettings, frontConfig)
 	open := func(c *server.Context) error {
 		currentSite, ok := requestHostBoundSite(frontConfig, c)
 		if !ok {
 			return c.Error("资源不存在", http.StatusNotFound)
 		}
 		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
-		if served, err := openHostBoundPluginAsset(c, siteSettings.pluginDev); served || err != nil {
-			return err
-		}
 		return openFile(c, siteSettings, currentSite)
 	}
 	runtime := func(c *server.Context) error {
