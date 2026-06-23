@@ -60,10 +60,29 @@ func registerTemplateRoutes(s server.Server, site siteconfig.Site, routes []Temp
 }
 
 func RoutesForSite(site siteconfig.Site) ([]TemplateRoute, error) {
-	cacheKey := site.Key + ":" + site.Page + ":" + site.APIPrefix()
+	cacheKey := site.Key + ":" + site.Page + ":" + site.Path
 	return routeCache.GetOrSet(cacheKey, func() ([]TemplateRoute, error) {
 		return loadRoutesForSite(site)
 	})
+}
+
+func TryRenderRequest(c *server.Context, site siteconfig.Site) (bool, error) {
+	if c == nil {
+		return false, nil
+	}
+	routes, err := RoutesForSite(site)
+	if err != nil {
+		return false, err
+	}
+	requestPath := cleanAbsPath(c.Path())
+	for _, route := range routes {
+		routeValues, ok := matchTemplateRoute(requestPath, route)
+		if !ok {
+			continue
+		}
+		return true, renderWithRouteValues(c, site, route, routeValues)
+	}
+	return false, nil
 }
 
 func loadRoutesForSite(site siteconfig.Site) ([]TemplateRoute, error) {
@@ -103,7 +122,7 @@ func buildTemplateRoute(site siteconfig.Site, pagePath string, content []byte, e
 	if relativeRoute == "" {
 		return TemplateRoute{}
 	}
-	routePath := cleanAbsPath(path.Join(site.APIPrefix(), strings.Trim(relativeRoute, "/")))
+	routePath := cleanAbsPath(path.Join(site.Path, strings.Trim(relativeRoute, "/")))
 	pattern, params := compileTemplateRoutePattern(routePath)
 	return TemplateRoute{
 		SiteKey:  site.Key,
@@ -155,14 +174,19 @@ func routeSpecificity(route TemplateRoute) int {
 
 func isReservedTemplateRoute(routePath string, site siteconfig.Site) bool {
 	routePath = cleanAbsPath(routePath)
-	prefix := cleanAbsPath(site.APIPrefix())
+	prefix := cleanAbsPath(site.Path)
 	if routePath == prefix {
 		return false
 	}
-	if !strings.HasPrefix(routePath, prefix+"/") {
-		return false
+	rel := ""
+	if prefix == "/" {
+		rel = strings.Trim(routePath, "/")
+	} else {
+		if !strings.HasPrefix(routePath, prefix+"/") {
+			return false
+		}
+		rel = strings.Trim(strings.TrimPrefix(routePath, prefix+"/"), "/")
 	}
-	rel := strings.Trim(strings.TrimPrefix(routePath, prefix+"/"), "/")
 	if rel == "" {
 		return false
 	}
@@ -176,6 +200,39 @@ func isReservedTemplateRoute(routePath string, site siteconfig.Site) bool {
 	default:
 		return false
 	}
+}
+
+func matchTemplateRoute(requestPath string, route TemplateRoute) (map[string]any, bool) {
+	requestParts := routePathParts(requestPath)
+	routeParts := routePathParts(route.Route)
+	if len(requestParts) != len(routeParts) {
+		return nil, false
+	}
+
+	values := map[string]any{}
+	for index, routePart := range routeParts {
+		requestPart := requestParts[index]
+		if strings.HasPrefix(routePart, ":") {
+			name := strings.TrimSpace(strings.TrimPrefix(routePart, ":"))
+			if name == "" || requestPart == "" {
+				return nil, false
+			}
+			values[name] = requestPart
+			continue
+		}
+		if routePart != requestPart {
+			return nil, false
+		}
+	}
+	return values, true
+}
+
+func routePathParts(value string) []string {
+	value = strings.Trim(cleanAbsPath(value), "/")
+	if value == "" {
+		return nil
+	}
+	return strings.Split(value, "/")
 }
 
 func routeParams(c *server.Context, route TemplateRoute) map[string]any {

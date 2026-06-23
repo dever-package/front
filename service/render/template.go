@@ -41,6 +41,10 @@ func clearTemplateCache() {
 
 func Render(c *server.Context, site siteconfig.Site, route TemplateRoute) error {
 	routeValues := routeParams(c, route)
+	return renderWithRouteValues(c, site, route, routeValues)
+}
+
+func renderWithRouteValues(c *server.Context, site siteconfig.Site, route TemplateRoute, routeValues map[string]any) error {
 	data, seo, err := resolveRenderData(c, site, route, routeValues)
 	if err != nil {
 		if errors.Is(err, errNotFound) {

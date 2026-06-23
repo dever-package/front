@@ -90,6 +90,13 @@ func registerHostBoundSites(s server.Server, siteSettings settings, frontConfig 
 			return c.Error("资源不存在", http.StatusNotFound)
 		}
 		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
+		rendered, err := renderservice.TryRenderRequest(c, currentSite)
+		if err != nil {
+			return c.Error(err, http.StatusInternalServerError)
+		}
+		if rendered {
+			return nil
+		}
 		return openFile(c, siteSettings, currentSite)
 	}
 	runtime := func(c *server.Context) error {
