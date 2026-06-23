@@ -40,7 +40,8 @@ version: 0.1.0
 - 站点 API 前缀只通过 `front.sites.<site>.api` 合并和匹配；不要引入第二套别名字段。
 - runtime/cache 变更必须有统一失效路径；写操作成功后不能只依赖 TTL。
 - package/module front 插件加载走 `service/site` 和 Dever CLI 编译器，不在业务组件里复制插件静态服务。
-- 站点运行契约属于组件 `dever.json.front.sites`；项目 `config/front.json` 只覆盖展示配置。
+- 站点运行契约属于组件 `dever.json.front.sites`；项目 `config/front.json` 或 `config/front.jsonc` 只覆盖展示配置，二者同时存在时优先读取 `config/front.json`。
+- 站点展示配置里的 `url` 只接受字符串数组，用于 Host 根路径绑定；不要兼容字符串写法或带路径 URL。
 
 ## 允许改动的场景
 
@@ -57,4 +58,4 @@ version: 0.1.0
 - 保存异常：先查 `service/action` 的字段过滤、`action.submit.data`、`_partial` 和 update 页上下文。
 - option 异常：先查 `service/page` model 推导、Options、Relations 和嵌入页上下文。
 - 插件未加载：先查 `service/site`、插件 manifest/source 发现、页面 node type 和 dev proxy。
-- 站点配置异常：先查 `dever.json.front.sites` 与 `config/front.json` 的职责边界。
+- 站点配置异常：先查 `dever.json.front.sites` 与 `config/front.json` / `config/front.jsonc` 的职责边界。

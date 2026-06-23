@@ -113,7 +113,7 @@ func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 			Name:        site.Config.Name,
 			Subtitle:    site.Config.Subtitle,
 			Description: site.Config.Description,
-			URL:         site.Config.URL,
+			URL:         site.Config.PrimaryURL(),
 			Logo:        site.LogoURL(),
 			Favicon:     site.FaviconURL(),
 		},
@@ -168,11 +168,12 @@ func injectRuntimeUncached(content []byte, site siteconfig.Site, pluginDev bool)
 }
 
 func runtimeContentCacheKey(site siteconfig.Site, pluginDev bool) string {
-	return site.Key + ":" + strconv.FormatBool(pluginDev)
+	return site.Key + ":" + site.Path + ":" + strconv.FormatBool(pluginDev)
 }
 
 func runtimeHTMLCacheKey(content []byte, site siteconfig.Site, pluginDev bool) string {
 	return site.Key + ":" +
+		site.Path + ":" +
 		strconv.FormatBool(pluginDev) + ":" +
 		strconv.Itoa(len(content)) + ":" +
 		strconv.FormatUint(uint64(crc32.ChecksumIEEE(content)), 16)

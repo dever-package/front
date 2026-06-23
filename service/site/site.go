@@ -70,6 +70,40 @@ func register(s server.Server, siteSettings settings, frontConfig siteconfig.Con
 		s.Get(currentSite.Path+"/runtime.js", runtime)
 		s.Get(currentSite.Path+"/*", open)
 	}
+	registerHostBoundSites(s, siteSettings, frontConfig)
+}
+
+func registerHostBoundSites(s server.Server, siteSettings settings, frontConfig siteconfig.Config) {
+	if !frontConfig.HasHostBindings() {
+		return
+	}
+	open := func(c *server.Context) error {
+		currentSite, ok := requestHostBoundSite(frontConfig, c)
+		if !ok {
+			return c.Error("资源不存在", http.StatusNotFound)
+		}
+		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
+		return openFile(c, siteSettings, currentSite)
+	}
+	runtime := func(c *server.Context) error {
+		currentSite, ok := requestHostBoundSite(frontConfig, c)
+		if !ok {
+			return c.Error("资源不存在", http.StatusNotFound)
+		}
+		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
+		return writeRuntime(c, currentSite, siteSettings.pluginDev)
+	}
+	s.Get("/", open)
+	s.Get("/runtime.js", runtime)
+	s.Get("/assets/*", open)
+	s.Get("/*", open)
+}
+
+func requestHostBoundSite(frontConfig siteconfig.Config, c *server.Context) (siteconfig.Site, bool) {
+	if c == nil {
+		return siteconfig.Site{}, false
+	}
+	return frontConfig.FindByHost(siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host")))
 }
 
 func settingsFromConfig(cfg config.FrontSite) settings {
@@ -92,6 +126,10 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 	}
 
 	rel := cleanAssetPath(c.Input("*"))
+	requestPath := cleanRequestPath(c.Path())
+	if strings.HasPrefix(requestPath, "/"+siteAssetPrefix) && !strings.HasPrefix(rel, siteAssetPrefix) {
+		rel = cleanAssetPath(requestPath)
+	}
 	served, err := openSiteAsset(raw, currentSite, rel)
 	if err != nil {
 		return c.Error(err, http.StatusNotFound)

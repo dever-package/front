@@ -250,7 +250,13 @@ func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) 
 	if site, ok := frontConfig.FindByAPIRequestPath(path); ok {
 		return site, true
 	}
-	return frontConfig.FindBySitePath(path)
+	if site, ok := frontConfig.FindBySitePath(path); ok {
+		return site, true
+	}
+	if c != nil {
+		return frontConfig.FindByHost(siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host")))
+	}
+	return siteconfig.Site{}, false
 }
 
 func requestSiteKey(c *server.Context) string {
@@ -300,12 +306,31 @@ func isStaticSiteRequest(frontConfig siteconfig.Config, c *server.Context, path 
 	if hasSiteContextHeader(c) {
 		return false
 	}
-	_, ok := frontConfig.FindByStaticSitePath(path)
+	if _, ok := frontConfig.FindByStaticSitePath(path); ok {
+		return true
+	}
+	if c == nil || !isStaticSiteMethod(c.Method()) {
+		return false
+	}
+	if _, ok := frontConfig.FindByAPIRequestPath(path); ok {
+		return false
+	}
+	host := siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host"))
+	_, ok := frontConfig.FindByHost(host)
 	return ok
 }
 
 func hasSiteContextHeader(c *server.Context) bool {
 	return c != nil && strings.TrimSpace(c.Header(siteHeader)) != ""
+}
+
+func isStaticSiteMethod(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case "", http.MethodGet, http.MethodHead:
+		return true
+	default:
+		return false
+	}
 }
 
 func requestPathHasPrefix(requestPath, prefix string) bool {

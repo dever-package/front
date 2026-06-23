@@ -3,6 +3,7 @@ package siteconfig
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path"
@@ -15,28 +16,30 @@ import (
 )
 
 const (
-	DefaultSiteKey      = "admin"
-	DefaultPage         = "admin"
-	DefaultAPI          = "front"
-	DefaultAccessMode   = "rbac"
-	DefaultAuthProvider = "front"
-	DefaultTheme        = "light"
-	DefaultSidebar      = "floating"
-	DefaultLayout       = "compact"
-	DefaultDirection    = "ltr"
-	DefaultSkin         = "default"
-	DefaultRouterMode   = "history"
-	ShellModeApp        = "app"
-	ShellModeBlank      = "blank"
-	DefaultShell        = ShellModeApp
-	AccessModeRBAC      = "rbac"
-	AccessModeLogin     = "login"
-	AccessModePublic    = "public"
-	projectConfigPath   = "config/front.json"
+	DefaultSiteKey         = "admin"
+	DefaultPage            = "admin"
+	DefaultAPI             = "front"
+	DefaultAccessMode      = "rbac"
+	DefaultAuthProvider    = "front"
+	DefaultTheme           = "light"
+	DefaultSidebar         = "floating"
+	DefaultLayout          = "compact"
+	DefaultDirection       = "ltr"
+	DefaultSkin            = "default"
+	DefaultRouterMode      = "history"
+	ShellModeApp           = "app"
+	ShellModeBlank         = "blank"
+	DefaultShell           = ShellModeApp
+	AccessModeRBAC         = "rbac"
+	AccessModeLogin        = "login"
+	AccessModePublic       = "public"
+	projectConfigPath      = "config/front.json"
+	projectConfigJSONCPath = "config/front.jsonc"
 )
 
 var (
 	defaultSiteAPIRoots = []string{"main", "route", "upload", "resource", "import", "export"}
+	projectConfigPaths  = []string{projectConfigPath, projectConfigJSONCPath}
 	loadOnce            sync.Once
 	loadedConfig        Config
 	loadedErr           error
@@ -63,12 +66,12 @@ type Site struct {
 }
 
 type SiteConfig struct {
-	Name        string `json:"name"`
-	Subtitle    string `json:"subtitle"`
-	Description string `json:"description"`
-	URL         string `json:"url"`
-	Logo        string `json:"logo"`
-	Favicon     string `json:"favicon"`
+	Name        string   `json:"name"`
+	Subtitle    string   `json:"subtitle"`
+	Description string   `json:"description"`
+	URLs        []string `json:"url"`
+	Logo        string   `json:"logo"`
+	Favicon     string   `json:"favicon"`
 }
 
 type projectConfig struct {
@@ -115,7 +118,14 @@ func load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return applyProjectConfig(cfg)
+	cfg, err = applyProjectConfig(cfg)
+	if err != nil {
+		return Config{}, err
+	}
+	if err := validateUniqueSiteURLHosts(cfg); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
 }
 
 func MustLoad() Config {
@@ -246,6 +256,28 @@ func (cfg Config) FindBySitePath(requestPath string) (Site, bool) {
 	})
 }
 
+func (cfg Config) FindByHost(host string) (Site, bool) {
+	host = NormalizeRequestHost(host)
+	if host == "" {
+		return Site{}, false
+	}
+	for _, site := range cfg.Sites {
+		if site.Config.matchesHost(host) {
+			return site.WithPath("/"), true
+		}
+	}
+	return Site{}, false
+}
+
+func (cfg Config) HasHostBindings() bool {
+	for _, site := range cfg.Sites {
+		if len(site.Config.URLs) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (cfg Config) PageNames() map[string]struct{} {
 	names := make(map[string]struct{}, len(cfg.Sites))
 	for _, site := range cfg.Sites {
@@ -364,6 +396,14 @@ func (site Site) APIPrefixes() []string {
 	return items
 }
 
+func (site Site) WithPath(value string) Site {
+	site.Path = cleanAbsPath(value)
+	if site.Path == "" {
+		site.Path = "/"
+	}
+	return site
+}
+
 func (site Site) UsesDefaultAPI() bool {
 	return strings.EqualFold(site.APIPrefix(), cleanAbsPath(DefaultAPI))
 }
@@ -455,6 +495,13 @@ func (site Site) LogoURL() string {
 
 func (site Site) FaviconURL() string {
 	return site.AssetURL(site.Config.Favicon)
+}
+
+func (config SiteConfig) PrimaryURL() string {
+	if len(config.URLs) == 0 {
+		return ""
+	}
+	return config.URLs[0]
 }
 
 func (site Site) UsesRBAC() bool {
@@ -550,7 +597,7 @@ func loadFromComponents(components []component.Component) (Config, error) {
 }
 
 func applyProjectConfig(cfg Config) (Config, error) {
-	project, err := loadProjectConfig()
+	project, source, err := loadProjectConfig()
 	if err != nil {
 		return Config{}, err
 	}
@@ -575,51 +622,69 @@ func applyProjectConfig(cfg Config) (Config, error) {
 			break
 		}
 		if !found {
-			return Config{}, fmt.Errorf("%s 定义了未知站点 %q", projectConfigPath, siteKey)
+			return Config{}, fmt.Errorf("%s 定义了未知站点 %q", source, siteKey)
 		}
 	}
 	cfg.Sites = sites
 	return cfg, nil
 }
 
-func loadProjectConfig() (projectConfig, error) {
-	content, err := os.ReadFile(projectConfigPath)
+func loadProjectConfig() (projectConfig, string, error) {
+	content, source, err := readProjectConfigContent()
 	if err != nil {
-		if os.IsNotExist(err) {
-			return projectConfig{}, nil
-		}
-		return projectConfig{}, err
+		return projectConfig{}, source, err
 	}
-	if err := validateProjectConfig(content); err != nil {
-		return projectConfig{}, err
+	if source == "" {
+		return projectConfig{}, "", nil
+	}
+	if err := validateProjectConfig(source, content); err != nil {
+		return projectConfig{}, source, err
 	}
 	var config projectConfig
 	if err := util.UnmarshalJSONC(content, &config); err != nil {
-		return projectConfig{}, err
+		return projectConfig{}, source, err
 	}
 	config = normalizeProjectConfig(config)
-	if err := validateProjectSiteConfigs(config); err != nil {
-		return projectConfig{}, err
+	if err := validateProjectSiteConfigs(source, config); err != nil {
+		return projectConfig{}, source, err
 	}
-	return config, nil
+	return config, source, nil
 }
 
-func validateProjectConfig(content []byte) error {
+func readProjectConfigContent() ([]byte, string, error) {
+	for _, currentPath := range projectConfigPaths {
+		content, err := os.ReadFile(currentPath)
+		if err == nil {
+			return content, currentPath, nil
+		}
+		if !os.IsNotExist(err) {
+			return nil, currentPath, err
+		}
+	}
+	return nil, "", nil
+}
+
+func validateProjectConfig(source string, content []byte) error {
 	var root map[string]map[string]map[string]any
 	if err := util.UnmarshalJSONC(content, &root); err != nil {
 		return err
 	}
 	for key := range root {
 		if key != "sites" {
-			return fmt.Errorf("%s 只允许 sites 字段，不允许 %q", projectConfigPath, key)
+			return fmt.Errorf("%s 只允许 sites 字段，不允许 %q", source, key)
 		}
 	}
 	for siteKey, siteConfig := range root["sites"] {
-		for key := range siteConfig {
+		for key, value := range siteConfig {
 			switch key {
 			case "name", "subtitle", "description", "url", "logo", "favicon":
+				if key == "url" {
+					if err := validateURLListValue(value); err != nil {
+						return fmt.Errorf("%s sites.%s.url 不合法: %w", source, siteKey, err)
+					}
+				}
 			default:
-				return fmt.Errorf("%s sites.%s 只允许 name/subtitle/description/url/logo/favicon，不允许 %q", projectConfigPath, siteKey, key)
+				return fmt.Errorf("%s sites.%s 只允许 name/subtitle/description/url/logo/favicon，不允许 %q", source, siteKey, key)
 			}
 		}
 	}
@@ -641,9 +706,9 @@ func normalizeProjectConfig(config projectConfig) projectConfig {
 	return projectConfig{Sites: sites}
 }
 
-func validateProjectSiteConfigs(config projectConfig) error {
+func validateProjectSiteConfigs(source string, config projectConfig) error {
 	for siteKey, siteConfig := range config.Sites {
-		if err := validateSiteConfig(siteConfig, fmt.Sprintf("%s sites.%s", projectConfigPath, siteKey)); err != nil {
+		if err := validateSiteConfig(siteConfig, fmt.Sprintf("%s sites.%s", source, siteKey)); err != nil {
 			return err
 		}
 	}
@@ -660,8 +725,8 @@ func mergeSiteConfig(base SiteConfig, override SiteConfig) SiteConfig {
 	if override.Description != "" {
 		base.Description = override.Description
 	}
-	if override.URL != "" {
-		base.URL = override.URL
+	if len(override.URLs) > 0 {
+		base.URLs = override.URLs
 	}
 	if override.Logo != "" {
 		base.Logo = override.Logo
@@ -677,13 +742,16 @@ func manifestSiteConfig(config component.ManifestSiteConfig) SiteConfig {
 		Name:        config.Name,
 		Subtitle:    config.Subtitle,
 		Description: config.Description,
-		URL:         config.URL,
+		URLs:        config.URLs,
 		Logo:        config.Logo,
 		Favicon:     config.Favicon,
 	}
 }
 
 func validateSiteConfig(config SiteConfig, source string) error {
+	if err := validateSiteURLs(config.URLs); err != nil {
+		return fmt.Errorf("%s.url 不合法: %w", source, err)
+	}
 	if err := validateAssetRefValue(config.Logo); err != nil {
 		return fmt.Errorf("%s.logo 不合法: %w", source, err)
 	}
@@ -691,6 +759,200 @@ func validateSiteConfig(config SiteConfig, source string) error {
 		return fmt.Errorf("%s.favicon 不合法: %w", source, err)
 	}
 	return nil
+}
+
+func validateURLListValue(value any) error {
+	items, ok := value.([]any)
+	if !ok {
+		return fmt.Errorf("必须是字符串数组，例如 [\"https://a.com\"]")
+	}
+	for index, item := range items {
+		if _, ok := item.(string); !ok {
+			return fmt.Errorf("第 %d 项必须是字符串", index+1)
+		}
+	}
+	return nil
+}
+
+func validateSiteURLs(items []string) error {
+	seen := map[string]struct{}{}
+	for index, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		parsed, err := url.Parse(item)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return fmt.Errorf("第 %d 项必须是完整 http/https URL", index+1)
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			return fmt.Errorf("第 %d 项只支持 http/https", index+1)
+		}
+		if parsed.Path != "" && parsed.Path != "/" {
+			return fmt.Errorf("第 %d 项只支持域名根路径，不支持带路径", index+1)
+		}
+		if parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("第 %d 项不支持 query 或 fragment", index+1)
+		}
+		host := normalizeURLHost(parsed)
+		if host == "" {
+			return fmt.Errorf("第 %d 项缺少域名", index+1)
+		}
+		if _, ok := seen[host]; ok {
+			return fmt.Errorf("第 %d 项域名重复", index+1)
+		}
+		seen[host] = struct{}{}
+	}
+	return nil
+}
+
+func validateUniqueSiteURLHosts(cfg Config) error {
+	owners := map[string]string{}
+	for _, site := range cfg.Sites {
+		for _, item := range site.Config.URLs {
+			parsed, err := url.Parse(item)
+			if err != nil {
+				continue
+			}
+			host := normalizeURLHost(parsed)
+			if host == "" {
+				continue
+			}
+			if owner, ok := owners[host]; ok && owner != site.Key {
+				return fmt.Errorf("站点 %s 和 %s 绑定了相同域名 %s", owner, site.Key, host)
+			}
+			owners[host] = site.Key
+		}
+	}
+	return nil
+}
+
+func normalizeSiteURLs(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		result = append(result, item)
+	}
+	return result
+}
+
+func (config SiteConfig) matchesHost(host string) bool {
+	host = NormalizeRequestHost(host)
+	if host == "" {
+		return false
+	}
+	for _, item := range config.URLs {
+		parsed, err := url.Parse(item)
+		if err != nil {
+			continue
+		}
+		if normalizeURLHost(parsed) == host {
+			return true
+		}
+	}
+	return false
+}
+
+func RequestHost(forwardedHost string, host string) string {
+	if value := NormalizeRequestHost(forwardedHost); value != "" {
+		return value
+	}
+	return NormalizeRequestHost(host)
+}
+
+func NormalizeRequestHost(value string) string {
+	value = strings.TrimSpace(firstHeaderValue(value))
+	if value == "" {
+		return ""
+	}
+	if strings.Contains(value, "://") {
+		if parsed, err := url.Parse(value); err == nil {
+			value = parsed.Host
+		}
+	}
+	value = strings.TrimSpace(strings.SplitN(value, "/", 2)[0])
+	return normalizeHostValue(value, "")
+}
+
+func firstHeaderValue(value string) string {
+	if index := strings.Index(value, ","); index >= 0 {
+		return value[:index]
+	}
+	return value
+}
+
+func normalizeURLHost(parsed *url.URL) string {
+	if parsed == nil {
+		return ""
+	}
+	return normalizeHostValue(parsed.Host, parsed.Scheme)
+}
+
+func normalizeHostValue(value string, scheme string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if host, port, err := net.SplitHostPort(value); err == nil {
+		return normalizeHostPort(host, port, scheme)
+	}
+	if host, port, ok := splitSimpleHostPort(value); ok {
+		return normalizeHostPort(host, port, scheme)
+	}
+	return normalizeHostPort(value, "", scheme)
+}
+
+func splitSimpleHostPort(value string) (string, string, bool) {
+	if strings.HasPrefix(value, "[") {
+		return "", "", false
+	}
+	index := strings.LastIndex(value, ":")
+	if index <= 0 || index == len(value)-1 || strings.Contains(value[:index], ":") {
+		return "", "", false
+	}
+	port := value[index+1:]
+	for _, ch := range port {
+		if ch < '0' || ch > '9' {
+			return "", "", false
+		}
+	}
+	return value[:index], port, true
+}
+
+func normalizeHostPort(host string, port string, scheme string) string {
+	host = strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]"))
+	host = strings.TrimSuffix(host, ".")
+	port = strings.TrimSpace(port)
+	if host == "" {
+		return ""
+	}
+	if port == "" || isDefaultURLPort(scheme, port) ||
+		(scheme == "" && (port == "80" || port == "443")) {
+		return host
+	}
+	return host + ":" + port
+}
+
+func isDefaultURLPort(scheme string, port string) bool {
+	switch strings.ToLower(strings.TrimSpace(scheme)) {
+	case "http":
+		return port == "80"
+	case "https":
+		return port == "443"
+	default:
+		return false
+	}
 }
 
 func validateAssetRefValue(value string) error {
@@ -830,7 +1092,7 @@ func hasManifestSiteConfig(config component.ManifestSiteConfig) bool {
 	return strings.TrimSpace(config.Name) != "" ||
 		strings.TrimSpace(config.Subtitle) != "" ||
 		strings.TrimSpace(config.Description) != "" ||
-		strings.TrimSpace(config.URL) != "" ||
+		len(config.URLs) > 0 ||
 		strings.TrimSpace(config.Logo) != "" ||
 		strings.TrimSpace(config.Favicon) != ""
 }
@@ -861,7 +1123,7 @@ func applySiteOwnerFields(site *Site, contribution component.ManifestSite) {
 		Name:        contribution.Config.Name,
 		Subtitle:    contribution.Config.Subtitle,
 		Description: contribution.Config.Description,
-		URL:         contribution.Config.URL,
+		URLs:        contribution.Config.URLs,
 		Logo:        contribution.Config.Logo,
 		Favicon:     contribution.Config.Favicon,
 	})
@@ -909,7 +1171,7 @@ func normalizeSiteConfig(config SiteConfig) SiteConfig {
 		Name:        strings.TrimSpace(config.Name),
 		Subtitle:    strings.TrimSpace(config.Subtitle),
 		Description: strings.TrimSpace(config.Description),
-		URL:         strings.TrimSpace(config.URL),
+		URLs:        normalizeSiteURLs(config.URLs),
 		Logo:        cleanAssetValue(config.Logo),
 		Favicon:     cleanAssetValue(config.Favicon),
 	}
