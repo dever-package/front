@@ -467,6 +467,10 @@ func (site Site) SystemPagePath(pageName string) string {
 }
 
 func (site Site) PageRoutePrefix() string {
+	owner := strings.Trim(site.Owner, "/")
+	if owner != "" {
+		return owner
+	}
 	apiPrefix := strings.Trim(site.APIPrefix(), "/")
 	if apiPrefix == "" {
 		return DefaultAPI

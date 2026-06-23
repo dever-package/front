@@ -215,7 +215,7 @@ func isSitePagePath(site siteconfig.Site, pathValue string) bool {
 	if pathValue == "" {
 		return false
 	}
-	return requestPathHasPrefix(pathValue, strings.Trim(site.APIPrefix(), "/"))
+	return requestPathHasPrefix(pathValue, site.PageRoutePrefix())
 }
 
 func allowAPIKeyForSite(c *server.Context, site siteconfig.Site) bool {
