@@ -120,6 +120,9 @@ func isHostBoundLegacySitePath(frontConfig siteconfig.Config, c *server.Context)
 	if _, ok := requestHostBoundSite(frontConfig, c); !ok {
 		return false
 	}
+	if _, ok := frontConfig.FindByAPIRequestPath(c.Path()); ok {
+		return false
+	}
 	site, ok := frontConfig.FindBySitePath(c.Path())
 	return ok && cleanRequestPath(site.Path) != "/"
 }
