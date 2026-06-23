@@ -56,13 +56,19 @@ func register(s server.Server, siteSettings settings, frontConfig siteconfig.Con
 
 	for _, site := range frontConfig.Sites {
 		currentSite := site
-		registerPluginAssets(s, currentSite, siteSettings)
+		registerPluginAssets(s, currentSite, siteSettings, frontConfig)
 		renderservice.RegisterSite(s, currentSite)
 		open := func(c *server.Context) error {
+			if isHostBoundLegacySitePath(frontConfig, c) {
+				return c.Error("资源不存在", http.StatusNotFound)
+			}
 			c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
 			return openFile(c, siteSettings, currentSite)
 		}
 		runtime := func(c *server.Context) error {
+			if isHostBoundLegacySitePath(frontConfig, c) {
+				return c.Error("资源不存在", http.StatusNotFound)
+			}
 			c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
 			return writeRuntime(c, currentSite, siteSettings.pluginDev)
 		}
@@ -96,6 +102,7 @@ func registerHostBoundSites(s server.Server, siteSettings settings, frontConfig 
 	s.Get("/", open)
 	s.Get("/runtime.js", runtime)
 	s.Get("/assets/*", open)
+	registerHostBoundPluginAssets(s, siteSettings, frontConfig)
 	s.Get("/*", open)
 }
 
@@ -104,6 +111,17 @@ func requestHostBoundSite(frontConfig siteconfig.Config, c *server.Context) (sit
 		return siteconfig.Site{}, false
 	}
 	return frontConfig.FindByHost(siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host")))
+}
+
+func isHostBoundLegacySitePath(frontConfig siteconfig.Config, c *server.Context) bool {
+	if c == nil {
+		return false
+	}
+	if _, ok := requestHostBoundSite(frontConfig, c); !ok {
+		return false
+	}
+	site, ok := frontConfig.FindBySitePath(c.Path())
+	return ok && cleanRequestPath(site.Path) != "/"
 }
 
 func settingsFromConfig(cfg config.FrontSite) settings {
