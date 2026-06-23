@@ -155,16 +155,30 @@ func injectRuntimeUncached(content []byte, site siteconfig.Site, pluginDev bool)
 
 	script := []byte("<script>\n" + string(runtime) + "</script>")
 	placeholder := []byte(runtimeHTMLPlaceholder)
+	var result []byte
 	if bytes.Contains(content, placeholder) {
-		return bytes.Replace(content, placeholder, script, 1), nil
+		result = bytes.Replace(content, placeholder, script, 1)
+	} else {
+		headEnd := []byte("</head>")
+		if bytes.Contains(content, headEnd) {
+			result = bytes.Replace(content, headEnd, append(script, []byte("\n  </head>")...), 1)
+		} else {
+			result = append(script, content...)
+		}
 	}
 
-	headEnd := []byte("</head>")
-	if bytes.Contains(content, headEnd) {
-		return bytes.Replace(content, headEnd, append(script, []byte("\n  </head>")...), 1), nil
-	}
+	return rewriteHostBoundHTMLAssetBase(result, site), nil
+}
 
-	return append(script, content...), nil
+func rewriteHostBoundHTMLAssetBase(content []byte, site siteconfig.Site) []byte {
+	if strings.Trim(site.Path, "/") != "" {
+		return content
+	}
+	return bytes.ReplaceAll(
+		content,
+		[]byte("/"+siteconfig.DefaultSiteKey+"/assets/"),
+		[]byte("/assets/"),
+	)
 }
 
 func runtimeContentCacheKey(site siteconfig.Site, pluginDev bool) string {
