@@ -107,39 +107,17 @@ func registerPluginAssets(s server.Server, site siteconfig.Site, siteSettings se
 	s.Get(sourceMountPath+"/*", openSource)
 }
 
-func registerHostBoundPluginAssets(s server.Server, siteSettings settings, frontConfig siteconfig.Config) {
-	open := func(c *server.Context) error {
-		currentSite, ok := requestHostBoundSite(frontConfig, c)
-		if !ok {
-			return c.Error("资源不存在", http.StatusNotFound)
-		}
-		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
-		return openPluginAsset(c)
-	}
-	s.Get(cleanRequestPath(pluginMountDir)+"/*", open)
-
-	if !siteSettings.pluginDev {
-		return
-	}
-
-	openSource := func(c *server.Context) error {
-		currentSite, ok := requestHostBoundSite(frontConfig, c)
-		if !ok {
-			return c.Error("资源不存在", http.StatusNotFound)
-		}
-		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
-		return openSourcePluginAsset(c)
-	}
-	s.Get(cleanRequestPath(pluginSourceMountDir)+"/*", openSource)
+func openPluginAsset(c *server.Context) error {
+	return openPluginAssetPath(c, c.Input("*"))
 }
 
-func openPluginAsset(c *server.Context) error {
+func openPluginAssetPath(c *server.Context, value string) error {
 	raw, ok := c.Raw.(*fiber.Ctx)
 	if !ok {
 		return c.Error("当前环境不支持前端插件输出")
 	}
 
-	pluginName, rel, ok := splitPluginAssetPath(c.Input("*"))
+	pluginName, rel, ok := splitPluginAssetPath(value)
 	if !ok {
 		return c.Error("前端插件路径不合法", 404)
 	}
@@ -167,12 +145,16 @@ func openPluginAsset(c *server.Context) error {
 }
 
 func openSourcePluginAsset(c *server.Context) error {
+	return openSourcePluginAssetPath(c, c.Input("*"))
+}
+
+func openSourcePluginAssetPath(c *server.Context, value string) error {
 	raw, ok := c.Raw.(*fiber.Ctx)
 	if !ok {
 		return c.Error("当前环境不支持前端插件源码输出")
 	}
 
-	pluginName, rel, ok := splitPluginAssetPath(c.Input("*"))
+	pluginName, rel, ok := splitPluginAssetPath(value)
 	if !ok {
 		return c.Error("前端插件源码路径不合法", 404)
 	}
@@ -197,6 +179,27 @@ func openSourcePluginAsset(c *server.Context) error {
 	default:
 		return c.Error("前端插件源码文件不存在", 404)
 	}
+}
+
+func openHostBoundPluginAsset(c *server.Context, pluginDev bool) (bool, error) {
+	requestPath := cleanRequestPath(c.Path())
+	if rel, ok := hostBoundPluginRel(requestPath, pluginMountDir); ok {
+		return true, openPluginAssetPath(c, rel)
+	}
+	if pluginDev {
+		if rel, ok := hostBoundPluginRel(requestPath, pluginSourceMountDir); ok {
+			return true, openSourcePluginAssetPath(c, rel)
+		}
+	}
+	return false, nil
+}
+
+func hostBoundPluginRel(requestPath string, mountDir string) (string, bool) {
+	prefix := cleanRequestPath(mountDir)
+	if !strings.HasPrefix(requestPath, prefix+"/") {
+		return "", false
+	}
+	return strings.TrimPrefix(requestPath, prefix+"/"), true
 }
 
 func sendSourcePluginManifest(raw *fiber.Ctx, pluginName string, sourceRoot string) error {

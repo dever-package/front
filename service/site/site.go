@@ -89,6 +89,9 @@ func registerHostBoundSites(s server.Server, siteSettings settings, frontConfig 
 			return c.Error("资源不存在", http.StatusNotFound)
 		}
 		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
+		if served, err := openHostBoundPluginAsset(c, siteSettings.pluginDev); served || err != nil {
+			return err
+		}
 		return openFile(c, siteSettings, currentSite)
 	}
 	runtime := func(c *server.Context) error {
@@ -102,7 +105,6 @@ func registerHostBoundSites(s server.Server, siteSettings settings, frontConfig 
 	s.Get("/", open)
 	s.Get("/runtime.js", runtime)
 	s.Get("/assets/*", open)
-	registerHostBoundPluginAssets(s, siteSettings, frontConfig)
 	s.Get("/*", open)
 }
 
