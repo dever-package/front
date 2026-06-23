@@ -44,6 +44,9 @@ func LoadMainInfo(c *server.Context, includePermissions bool) (map[string]any, e
 func buildMainInfoPayload(c *server.Context, includePermissions bool) (map[string]any, error) {
 	if site, ok := siteconfig.FromContext(c.Context()); ok && shouldBypassRBAC(site) {
 		menu, entry := buildLoginSiteMenu(c.Context())
+		if entry == "" && site.UsesPublic() {
+			entry = strings.TrimSpace(site.Entry)
+		}
 		payload := map[string]any{
 			"menu":  menu,
 			"entry": entry,

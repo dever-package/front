@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"strings"
 
 	"github.com/shemic/dever/server"
 
@@ -50,6 +51,9 @@ func (Main) PostSync(c *server.Context) error {
 
 func mainSchemaPath(ctx context.Context) string {
 	if site, ok := siteconfig.FromContext(ctx); ok {
+		if site.UsesPublic() && strings.TrimSpace(site.Entry) != "" {
+			return site.SystemPagePath(site.Entry)
+		}
 		return site.SystemPagePath("main")
 	}
 	return siteconfig.Site{API: siteconfig.DefaultAPI}.SystemPagePath("main")

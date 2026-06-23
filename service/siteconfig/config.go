@@ -460,20 +460,16 @@ func (site Site) SystemPagePath(pageName string) string {
 	if pageName == "" {
 		return pagePrefix
 	}
+	if pageName == pagePrefix || strings.HasPrefix(pageName, pagePrefix+"/") {
+		return pageName
+	}
 	return path.Join(pagePrefix, pageName)
 }
 
 func (site Site) PageRoutePrefix() string {
-	owner := cleanRelativePath(site.Owner)
-	if owner != "" {
-		return owner
-	}
 	apiPrefix := strings.Trim(site.APIPrefix(), "/")
 	if apiPrefix == "" {
 		return DefaultAPI
-	}
-	if index := strings.Index(apiPrefix, "/"); index >= 0 {
-		return apiPrefix[:index]
 	}
 	return apiPrefix
 }

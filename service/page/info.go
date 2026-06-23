@@ -58,6 +58,7 @@ func GetInfo(c *server.Context, pathValue string) error {
 }
 
 func BuildInfo(c *server.Context, pathValue string) (Schema, error) {
+	pathValue = resolveRuntimePagePath(c, pathValue)
 	pageName := siteconfig.PageFromContext(c.Context())
 	content, err := ReadContentForPage(pageName, pathValue)
 	if err != nil {
@@ -81,6 +82,23 @@ func BuildInfo(c *server.Context, pathValue string) (Schema, error) {
 	currentSchema.Data = resolvedData
 
 	return currentSchema, nil
+}
+
+func resolveRuntimePagePath(c *server.Context, pathValue string) string {
+	if c == nil {
+		return pathValue
+	}
+
+	site, ok := siteconfig.FromContext(c.Context())
+	if !ok || !site.UsesPublic() || strings.TrimSpace(site.Entry) == "" {
+		return pathValue
+	}
+
+	normalizedPath := strings.Trim(strings.TrimSpace(pathValue), "/")
+	if normalizedPath != site.SystemPagePath("main") {
+		return pathValue
+	}
+	return site.SystemPagePath(site.Entry)
 }
 
 func parseSchema(pageName, pathValue string, content []byte) (Schema, error) {
