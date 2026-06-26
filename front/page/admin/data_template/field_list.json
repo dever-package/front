@@ -1,0 +1,325 @@
+{
+  "page": {
+    "name": "模板字段",
+    "parent": "front/data_template/list",
+    "type": 2,
+    "sort": 11
+  },
+  "layout": {
+    "type": "container",
+    "className": "rounded-md border bg-background",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4 border-b px-4 py-3",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "table-row": {
+        "type": "container",
+        "className": "overflow-hidden"
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "name": "模板字段",
+        "info": "维护当前模板的可扩展字段。",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "添加字段",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "icon": "plus"
+        },
+        "action": {
+          "click": [
+            {
+              "type": "state",
+              "key": "fieldIndex",
+              "value": -1
+            },
+            {
+              "type": "state",
+              "key": "fieldForm",
+              "value": {
+                "name": "",
+                "field_key": "",
+                "field_type": "text",
+                "default_value": "",
+                "placeholder": "",
+                "help_text": "",
+                "max_count": 0,
+                "required": true,
+                "options": [],
+                "status": 1,
+                "sort": 100
+              }
+            },
+            {
+              "type": "modal",
+              "key": "dialog.field",
+              "value": true
+            }
+          ]
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "parent.data.form.fields",
+        "meta": {
+          "rowKey": "id",
+          "savePath": "front/data_field/update",
+          "columns": [
+            {
+              "name": "字段名称",
+              "value": "name",
+              "type": "show-base"
+            },
+            {
+              "name": "字段Key",
+              "value": "field_key",
+              "type": "show-base"
+            },
+            {
+              "name": "字段类型",
+              "value": "field_type",
+              "type": "show-tag"
+            },
+            {
+              "name": "状态",
+              "value": "status",
+              "type": "form-switch",
+              "action": {
+                "change": {
+                  "type": "array",
+                  "key": "parent.data.form.fields",
+                  "op": "patch",
+                  "index": "$rowIndex",
+                  "value": {
+                    "status": "$value"
+                  }
+                }
+              },
+              "meta": {
+                "trueValue": 1,
+                "falseValue": 0
+              }
+            },
+            {
+              "name": "排序",
+              "value": "sort",
+              "type": "show-base",
+              "editor": "form-number",
+              "trigger": "doubleClick"
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "square-pen",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "编辑字段",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "state",
+                          "key": "fieldIndex",
+                          "value": "$rowIndex"
+                        },
+                        {
+                          "type": "state",
+                          "key": "fieldForm",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.field",
+                          "value": true
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "icon": "trash-2",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "删除字段",
+                    "className": "text-destructive hover:text-destructive",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "state",
+                          "key": "deleteFieldIndex",
+                          "value": "$rowIndex"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.deleteField",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.field",
+          "pageRoute": "/front/data_field/update",
+          "title": "模板字段",
+          "size": "xl",
+          "width": "52rem",
+          "footer": {
+            "confirm": true,
+            "confirmText": "确定"
+          },
+          "pageDataPatches": {
+            "form": "state.fieldForm"
+          }
+        },
+        "action": {
+          "submit": {
+            "type": "array",
+            "key": "parent.data.form.fields",
+            "op": "upsert",
+            "index": "state.fieldIndex",
+            "value": "$modalForm"
+          }
+        }
+      },
+      {
+        "type": "feedback-confirm",
+        "name": "删除字段",
+        "info": "确认删除这一条字段吗？删除后当前行内容将被移除。",
+        "meta": {
+          "stateKey": "dialog.deleteField",
+          "successMessage": "字段已删除"
+        },
+        "action": {
+          "confirm": {
+            "type": "array",
+            "key": "parent.data.form.fields",
+            "op": "remove",
+            "index": "state.deleteFieldIndex"
+          }
+        }
+      }
+    ]
+  },
+  "data": {
+    "option": {
+      "field_type": [
+        {
+          "id": "text",
+          "value": "单行文本",
+          "icon": "type"
+        },
+        {
+          "id": "textarea",
+          "value": "多行文本",
+          "icon": "align-left"
+        },
+        {
+          "id": "editor",
+          "value": "富文本编辑器",
+          "icon": "file-text"
+        },
+        {
+          "id": "date",
+          "value": "日期",
+          "icon": "calendar"
+        },
+        {
+          "id": "datetime",
+          "value": "日期时间",
+          "icon": "calendar-clock"
+        },
+        {
+          "id": "boolean",
+          "value": "开关",
+          "icon": "toggle-left"
+        },
+        {
+          "id": "radio",
+          "value": "单选",
+          "icon": "circle-dot"
+        },
+        {
+          "id": "checkbox",
+          "value": "多选",
+          "icon": "list-checks"
+        },
+        {
+          "id": "select",
+          "value": "下拉",
+          "icon": "list-filter"
+        },
+        {
+          "id": "multi_select",
+          "value": "多选下拉",
+          "icon": "list-checks"
+        },
+        {
+          "id": "image",
+          "value": "上传图片",
+          "icon": "image"
+        },
+        {
+          "id": "video",
+          "value": "上传视频",
+          "icon": "video"
+        },
+        {
+          "id": "audio",
+          "value": "上传音频",
+          "icon": "audio-lines"
+        }
+      ]
+    }
+  },
+  "state": {
+    "fieldIndex": -1,
+    "deleteFieldIndex": -1,
+    "fieldForm": {
+      "name": "",
+      "field_key": "",
+      "field_type": "text",
+      "default_value": "",
+      "placeholder": "",
+      "help_text": "",
+      "max_count": 0,
+      "required": true,
+      "options": [],
+      "status": 1,
+      "sort": 100
+    },
+    "dialog": {
+      "field": false,
+      "deleteField": false
+    }
+  },
+  "action": {}
+}

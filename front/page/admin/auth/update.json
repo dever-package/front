@@ -54,7 +54,8 @@
       },
       {
         "type": "form-input",
-        "placeholder": "例如：user/list 或 user_edit",
+        "placeholder": "例如：business_manage",
+        "info": "唯一权限编码，不作为菜单跳转地址；数据模板复制出来的填写页地址请填到下面的路径。",
         "value": "form.key",
         "mode": "form",
         "validate": [
@@ -83,23 +84,12 @@
       },
       {
         "type": "form-input",
-        "placeholder": "例如：user/list",
+        "placeholder": "例如：front/data_record/set?cate_id=1",
+        "info": "左侧菜单跳转使用这里；菜单权限只有填写路径，或下面存在可见子菜单时，才会出现在左侧菜单。",
         "value": "form.path",
         "mode": "form",
         "meta": {
-          "formLayout": "horizontal",
-          "showWhen": [
-            {
-              "path": "form.parent_id",
-              "operator": "notEmpty"
-            },
-            {
-              "path": "form.parent_id",
-              "operator": "notEquals",
-              "value": 0
-            }
-          ],
-          "showCondition": "all"
+          "formLayout": "horizontal"
         }
       },
       {

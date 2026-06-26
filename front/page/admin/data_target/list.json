@@ -1,0 +1,314 @@
+{
+  "page": {
+    "name": "扩展数据表设置",
+    "parent": "front/data_template/list",
+    "type": 2,
+    "sort": 2
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "toolbar-row": {
+            "type": "row",
+            "className": "flex-wrap items-center gap-3"
+          },
+          "table-row": {
+            "type": "container",
+            "className": "overflow-hidden rounded-md border bg-background"
+          },
+          "feedback-shell": {
+            "type": "container"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "value": "page",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "返回数据模板",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/data_template/list"
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "新增扩展数据表",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "icon": "plus"
+        },
+        "action": {
+          "click": {
+            "type": "modal",
+            "key": "dialog.create",
+            "value": true
+          }
+        }
+      }
+    ],
+    "toolbar-row": [
+      {
+        "type": "form-input",
+        "placeholder": "搜索名称、Model 或表标识...",
+        "value": "search.keyword",
+        "mode": "search"
+      },
+      {
+        "type": "form-select",
+        "placeholder": "状态",
+        "value": "search.status",
+        "mode": "search"
+      },
+      {
+        "type": "show-button",
+        "name": "搜索",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "searchSubmit": true,
+          "loadingText": "搜索中..."
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "重置",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "searchReset": true
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "table.list",
+        "meta": {
+          "pagePath": "data.table.page",
+          "pageSizePath": "data.table.pageSize",
+          "totalPath": "data.table.total",
+          "remote": true,
+          "externalPagination": true,
+          "savePath": "front/data_target/update",
+          "rowKey": "id",
+          "columns": [
+            {
+              "name": "ID",
+              "value": "id",
+              "type": "show-base"
+            },
+            {
+              "name": "名称",
+              "value": "name",
+              "type": "show-base"
+            },
+            {
+              "name": "Model",
+              "value": "model_name",
+              "type": "show-base"
+            },
+            {
+              "name": "表标识",
+              "value": "table_key",
+              "type": "show-base"
+            },
+            {
+              "name": "主键字段",
+              "value": "primary_key",
+              "type": "show-base"
+            },
+            {
+              "name": "展示字段",
+              "value": "label_field",
+              "type": "show-base"
+            },
+            {
+              "name": "状态",
+              "value": "status",
+              "type": "show-select"
+            },
+            {
+              "name": "排序",
+              "value": "sort",
+              "type": "show-base",
+              "editor": "form-number",
+              "trigger": "doubleClick"
+            },
+            {
+              "name": "创建时间",
+              "value": "created_at",
+              "type": "show-date"
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "square-pen",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "编辑",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.editDataTargetId",
+                          "value": "$row.id"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.edit",
+                          "value": true
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "icon": "trash-2",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "删除",
+                    "className": "text-destructive hover:text-destructive",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.deleteDataTarget",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "confirm.delete",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-page"
+      }
+    ],
+    "feedback-shell": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.edit",
+          "pageRoute": "/front/data_target/update",
+          "title": "编辑扩展数据表",
+          "size": "lg",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "id": "data.actionTarget.editDataTargetId"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.create",
+          "pageRoute": "/front/data_target/update",
+          "title": "新增扩展数据表",
+          "size": "lg",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-confirm",
+        "name": "删除扩展数据表",
+        "info": "确认删除当前扩展数据表吗？如果已被模板分类或模板数据使用，会阻止删除。",
+        "meta": {
+          "stateKey": "confirm.delete"
+        },
+        "action": {
+          "confirm": {
+            "type": "delete",
+            "path": "front/data_target/update",
+            "params": "actionTarget.deleteDataTarget",
+            "before": {
+              "service": "front.datatemplate.DataTemplateHook.BeforeDeleteDataTarget"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "title": "扩展数据表设置",
+      "description": "登记可被数据模板扩展的业务表信息，只作为模板关联和记录定位使用。"
+    },
+    "search": {
+      "keyword": "",
+      "status": ""
+    },
+    "table": {
+      "pageSize": 20,
+      "searchFields": [
+        "name",
+        "model_name",
+        "table_key"
+      ],
+      "filterFields": [
+        "status"
+      ]
+    },
+    "actionTarget": {
+      "editDataTargetId": "",
+      "deleteDataTarget": {}
+    }
+  },
+  "state": {
+    "dialog": {
+      "edit": false,
+      "create": false
+    },
+    "confirm": {
+      "delete": false
+    }
+  },
+  "action": {}
+}

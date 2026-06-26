@@ -1,0 +1,341 @@
+{
+  "page": {
+    "name": "数据模板",
+    "icon": "database",
+    "parent": "system-settings",
+    "sort": 4
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "content-shell": {
+            "type": "container",
+            "className": "front-two-pane-layout",
+            "children": {
+              "category-column": {
+                "type": "container",
+                "className": "min-w-0",
+                "path": "/front/data_template_cate/list",
+                "meta": {
+                  "updateDocumentTitle": false
+                }
+              },
+              "template-column": {
+                "type": "container",
+                "className": "flex min-w-0 flex-col gap-4",
+                "children": {
+                  "toolbar-row": {
+                    "type": "row",
+                    "className": "flex-wrap items-center gap-3"
+                  },
+                  "table-row": {
+                    "type": "container",
+                    "className": "overflow-hidden rounded-md border bg-background"
+                  }
+                }
+              }
+            }
+          },
+          "feedback-shell": {
+            "type": "container"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "value": "page",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "扩展数据表设置",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "to": "/front/data_target/list",
+          "withBack": true
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "新增模板",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "icon": "plus"
+        },
+        "action": {
+          "click": {
+            "type": "modal",
+            "key": "dialog.create",
+            "value": true
+          }
+        }
+      }
+    ],
+    "toolbar-row": [
+      {
+        "type": "form-input",
+        "placeholder": "搜索模板名称或Key...",
+        "value": "search.keyword",
+        "mode": "search"
+      },
+      {
+        "type": "form-select",
+        "placeholder": "状态",
+        "value": "search.status",
+        "mode": "search"
+      },
+      {
+        "type": "show-button",
+        "name": "搜索",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "searchSubmit": true,
+          "loadingText": "搜索中..."
+        }
+      },
+      {
+        "type": "show-button",
+        "name": "重置",
+        "meta": {
+          "variant": "outline",
+          "size": "sm",
+          "searchReset": true
+        }
+      }
+    ],
+    "table-row": [
+      {
+        "type": "show-table",
+        "value": "table.list",
+        "meta": {
+          "pagePath": "data.table.page",
+          "pageSizePath": "data.table.pageSize",
+          "totalPath": "data.table.total",
+          "remote": true,
+          "externalPagination": true,
+          "savePath": "front/data_template/update",
+          "rowKey": "id",
+          "columns": [
+            {
+              "name": "模板ID",
+              "value": "id",
+              "type": "show-base"
+            },
+            {
+              "name": "模板名称",
+              "value": "name",
+              "type": "show-base"
+            },
+            {
+              "name": "模板Key",
+              "value": "template_key",
+              "type": "show-base"
+            },
+            {
+              "name": "分类",
+              "value": "cate.name",
+              "type": "show-base"
+            },
+            {
+              "name": "字段数量",
+              "value": "fields",
+              "type": "show-base",
+              "meta": {
+                "format": "count",
+                "countUnit": "个字段"
+              }
+            },
+            {
+              "name": "状态",
+              "value": "status",
+              "type": "show-select"
+            },
+            {
+              "name": "排序",
+              "value": "sort",
+              "type": "show-base",
+              "editor": "form-number",
+              "trigger": "doubleClick"
+            },
+            {
+              "name": "创建时间",
+              "value": "created_at",
+              "type": "show-date"
+            },
+            {
+              "name": "操作",
+              "type": "show-button",
+              "className": "w-[1%] whitespace-nowrap px-3 text-center",
+              "meta": {
+                "buttons": [
+                  {
+                    "icon": "square-pen",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "编辑模板",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.editDataTemplateId",
+                          "value": "$row.id"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "dialog.edit",
+                          "value": true
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "icon": "trash-2",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "删除模板",
+                    "className": "text-destructive hover:text-destructive",
+                    "action": {
+                      "click": [
+                        {
+                          "type": "data",
+                          "key": "actionTarget.deleteDataTemplate",
+                          "value": "$row"
+                        },
+                        {
+                          "type": "modal",
+                          "key": "confirm.delete",
+                          "value": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "show-page"
+      }
+    ],
+    "feedback-shell": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.edit",
+          "pageRoute": "/front/data_template/update",
+          "title": "编辑数据模板",
+          "size": "3xl",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "id": "data.actionTarget.editDataTemplateId"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.create",
+          "pageRoute": "/front/data_template/update",
+          "title": "新增数据模板",
+          "size": "3xl",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "cate_id": "data.search.cate_id"
+          },
+          "bodyClassName": "px-6 py-2"
+        }
+      },
+      {
+        "type": "feedback-confirm",
+        "name": "删除数据模板",
+        "info": "确认删除当前模板吗？如果模板已有填写数据，会阻止删除。",
+        "meta": {
+          "stateKey": "confirm.delete"
+        },
+        "action": {
+          "confirm": {
+            "type": "delete",
+            "path": "front/data_template/update",
+            "params": "actionTarget.deleteDataTemplate",
+            "before": {
+              "service": "front.datatemplate.DataTemplateHook.BeforeDeleteDataTemplate"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "title": "数据模板",
+      "description": "点击左侧分类的复制按钮获取填写页路径，在权限管理新增菜单时粘贴到路径字段，并给对应角色授权。"
+    },
+    "search": {
+      "cate_id": "",
+      "keyword": "",
+      "status": ""
+    },
+    "table": {
+      "pageSize": 20,
+      "searchFields": [
+        "name",
+        "template_key"
+      ],
+      "filterFields": [
+        "cate_id",
+        "status"
+      ]
+    },
+    "templateMeta": {
+      "categoryVersion": 0
+    },
+    "actionTarget": {
+      "editDataTemplateId": "",
+      "deleteDataTemplate": {}
+    }
+  },
+  "state": {
+    "dialog": {
+      "edit": false,
+      "create": false
+    },
+    "confirm": {
+      "delete": false
+    }
+  },
+  "action": {}
+}

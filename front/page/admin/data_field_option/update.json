@@ -1,0 +1,75 @@
+{
+  "page": {
+    "name": "字段选项",
+    "parent": "front/data_template/list",
+    "type": 2,
+    "sort": 11
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "name": "选项名",
+        "value": "form.name",
+        "mode": "form",
+        "info": "给配置人员和业务人员看的显示名称，例如 已通过、需补充资料。",
+        "validate": [
+          {
+            "type": "required",
+            "message": "选项名不能为空。"
+          }
+        ],
+        "meta": {
+          "controlClassName": "min-w-[10rem]"
+        }
+      },
+      {
+        "type": "form-input",
+        "name": "选项值",
+        "value": "form.value",
+        "mode": "form",
+        "info": "系统保存和判断使用的真实值；建议使用稳定编码，例如 approved、need_more_info。",
+        "validate": [
+          {
+            "type": "required",
+            "message": "选项值不能为空。"
+          }
+        ],
+        "meta": {
+          "controlClassName": "min-w-[10rem]"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "name": "",
+      "value": ""
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form",
+      "before": {
+        "service": "front.datatemplate.DataTemplateHook.BeforeSaveDataFieldOption"
+      }
+    }
+  }
+}

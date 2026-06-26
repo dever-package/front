@@ -1,0 +1,112 @@
+{
+  "page": {
+    "name": "数据模板分类编辑",
+    "parent": "front/data_template/list",
+    "type": 2,
+    "auth": [
+      {
+        "key": "front/data_template_cate/create",
+        "name": "数据模板分类新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/data_template_cate/update",
+        "name": "数据模板分类编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "例如：关于页配置",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "分类名称不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-textarea",
+        "name": "分类介绍",
+        "placeholder": "请输入分类介绍",
+        "value": "form.description",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal",
+          "rows": 4
+        }
+      },
+      {
+        "type": "form-select",
+        "name": "扩展数据表",
+        "placeholder": "不关联扩展数据表",
+        "value": "form.target_id",
+        "mode": "form",
+        "option": {
+          "model": "front.NewDataTargetModel",
+          "labelField": "name",
+          "order": "sort asc,id asc",
+          "pageSize": 200,
+          "searchFields": [
+            "name",
+            "model_name",
+            "table_key"
+          ],
+          "filters": {
+            "status": "1"
+          }
+        },
+        "info": "关联后，这个分类下的模板可以作为对应业务表记录的扩展字段配置。",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[320px]"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "id": "",
+      "name": "",
+      "description": "",
+      "target_id": ""
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form",
+      "before": {
+        "service": "front.datatemplate.DataTemplateHook.BeforeSaveDataTemplateCate"
+      }
+    }
+  }
+}

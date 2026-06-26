@@ -203,10 +203,17 @@
                         {
                           "type": "data",
                           "key": "actionTarget.createAuth",
-                          "value": {
-                            "parent_id": "$row.id",
-                            "type": 2
-                          }
+                          "value": {}
+                        },
+                        {
+                          "type": "data",
+                          "key": "actionTarget.createAuth.parent_id",
+                          "value": "$row.id"
+                        },
+                        {
+                          "type": "data",
+                          "key": "actionTarget.createAuth.type",
+                          "value": 2
                         },
                         {
                           "type": "data",

@@ -158,7 +158,7 @@ func prepareAuthRows(rows []map[string]any) []map[string]any {
 	prepared := util.CloneMapSlice(rows)
 	for _, row := range prepared {
 		if len(row) > 0 {
-			row["query"] = parseAuthQuery(row["query"])
+			row["query"] = mergeAuthQueryFromPath(parseAuthQuery(row["query"]), authRowPath(row))
 		}
 	}
 	return prepared

@@ -1,0 +1,202 @@
+{
+  "page": {
+    "name": "数据模板分类列表",
+    "parent": "front/data_template/list",
+    "type": 2,
+    "sort": 1
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "category-shell": {
+        "type": "container",
+        "className": "min-w-0"
+      },
+      "feedback-shell": {
+        "type": "container"
+      }
+    }
+  },
+  "nodes": {
+    "category-shell": [
+      {
+        "type": "show-category-list",
+        "id": "data-template-category",
+        "value": "parent.data.search.cate_id",
+        "option": {
+          "key": "data_template_category",
+          "model": "front.NewDataTemplateCateModel",
+          "labelField": "name",
+          "order": "sort asc,id asc",
+          "pageSize": 200,
+          "extraFields": [
+            "target_id",
+            "target.name",
+            "description",
+            "status",
+            "sort"
+          ]
+        },
+        "meta": {
+          "title": "模板分类",
+          "description": "左侧选择分类，右侧维护该分类下的数据模板。",
+          "remote": true,
+          "optionReloadPaths": [
+            "parent.data.templateMeta.categoryVersion"
+          ],
+          "defaultFirst": true,
+          "sortable": true,
+          "sortField": "sort",
+          "sortChangeAction": {
+            "type": "save",
+            "path": "front/data_template_cate/update",
+            "params": {
+              "_partial": true,
+              "id": "$row.id",
+              "sort": "$value"
+            },
+            "then": [
+              "refresh-parent-template-category"
+            ]
+          },
+          "statusField": "status",
+          "statusDisplay": "select",
+          "statusChangeAction": {
+            "type": "save",
+            "path": "front/data_template_cate/update",
+            "params": {
+              "_partial": true,
+              "id": "$row.id",
+              "status": "$value"
+            },
+            "then": [
+              "refresh-parent-template-category"
+            ]
+          },
+          "statusCases": [
+            {
+              "value": 1,
+              "text": "启用",
+              "tone": "success"
+            },
+            {
+              "value": 0,
+              "text": "停用",
+              "tone": "muted"
+            }
+          ],
+          "createButton": {
+            "name": "新增分类",
+            "icon": "plus",
+            "variant": "outline",
+            "size": "sm",
+            "action": {
+              "click": {
+                "type": "modal",
+                "key": "dialog.categoryCreate",
+                "value": true
+              }
+            }
+          },
+          "buttons": [
+            {
+              "icon": "square-pen",
+              "variant": "ghost",
+              "size": "sm",
+              "description": "编辑当前分类",
+              "action": {
+                "click": [
+                  {
+                    "type": "data",
+                    "key": "actionTarget.editCategoryId",
+                    "value": "$row.id"
+                  },
+                  {
+                    "type": "modal",
+                    "key": "dialog.categoryEdit",
+                    "value": true
+                  }
+                ]
+              }
+            },
+            {
+              "icon": "copy",
+              "variant": "ghost",
+              "size": "sm",
+              "description": "复制填写页路径",
+              "successMessage": "填写页路径已复制",
+              "action": {
+                "click": {
+                  "type": "copy",
+                  "value": "front/data_record/set?cate_id=$row.id"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "feedback-shell": [
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.categoryCreate",
+          "pageRoute": "/front/data_template_cate/update",
+          "title": "新增模板分类",
+          "description": "分类可以关联一个扩展数据表，也可以只作为普通模板分类使用。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "size": "md",
+          "bodyClassName": "py-2"
+        },
+        "action": {
+          "success": [
+            "refresh-parent-template-category"
+          ]
+        }
+      },
+      {
+        "type": "feedback-modal",
+        "meta": {
+          "stateKey": "dialog.categoryEdit",
+          "pageRoute": "/front/data_template_cate/update",
+          "title": "编辑模板分类",
+          "description": "修改分类名称、分类介绍和关联扩展数据表。",
+          "footer": {
+            "confirm": true,
+            "confirmText": "保存"
+          },
+          "pageRouteQuery": {
+            "id": "data.actionTarget.editCategoryId"
+          },
+          "size": "md",
+          "bodyClassName": "py-2"
+        },
+        "action": {
+          "success": [
+            "refresh-parent-template-category"
+          ]
+        }
+      }
+    ]
+  },
+  "data": {
+    "actionTarget": {
+      "editCategoryId": ""
+    }
+  },
+  "state": {
+    "dialog": {
+      "categoryCreate": false,
+      "categoryEdit": false
+    }
+  },
+  "action": {
+    "refresh-parent-template-category": {
+      "type": "increment",
+      "key": "parent.data.templateMeta.categoryVersion"
+    }
+  }
+}

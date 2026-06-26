@@ -1,0 +1,276 @@
+{
+  "page": {
+    "name": "数据字段编辑",
+    "parent": "front/data_template/list",
+    "type": 2,
+    "auth": [
+      {
+        "key": "front/data_field/create",
+        "name": "数据字段新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/data_field/update",
+        "name": "数据字段编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "字段名称不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "name": "字段Key",
+        "value": "form.field_key",
+        "mode": "form",
+        "placeholder": "例如 title、banner.image、team_intro",
+        "info": "字段的稳定调用编码，GetInfo 返回的 values 会用这个Key作为字段名；已有填写数据后不允许修改。",
+        "validate": [
+          {
+            "type": "required",
+            "message": "字段Key不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-radio",
+        "value": "form.field_type",
+        "mode": "form",
+        "option": "option.field_type",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[420px]"
+        }
+      },
+      {
+        "type": "form-input",
+        "value": "form.default_value",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "value": "form.placeholder",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-textarea",
+        "value": "form.help_text",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-number",
+        "value": "form.max_count",
+        "mode": "form",
+        "info": "仅上传图片、上传视频、上传音频字段生效。",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[220px]",
+          "hiddenCondition": "all",
+          "hiddenWhen": [
+            {
+              "path": "form.field_type",
+              "operator": "notEquals",
+              "value": "image"
+            },
+            {
+              "path": "form.field_type",
+              "operator": "notEquals",
+              "value": "video"
+            },
+            {
+              "path": "form.field_type",
+              "operator": "notEquals",
+              "value": "audio"
+            }
+          ]
+        }
+      },
+      {
+        "type": "form-switch",
+        "name": "是否必填",
+        "value": "form.required",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal",
+          "trueValue": true,
+          "falseValue": false,
+          "controlClassName": "min-w-[6rem]"
+        }
+      },
+      {
+        "type": "form-array",
+        "name": "可选项",
+        "value": "form.options",
+        "mode": "form",
+        "info": "维护单选、多选、下拉、多选下拉字段的可选项。选项值建议使用稳定编码，例如 approved、need_more_info。",
+        "meta": {
+          "formLayout": "horizontal",
+          "pageRoute": "/front/data_field_option/update",
+          "addText": "添加选项",
+          "drag": "sort",
+          "hiddenCondition": "all",
+          "hiddenWhen": [
+            {
+              "path": "form.field_type",
+              "operator": "notEquals",
+              "value": "radio"
+            },
+            {
+              "path": "form.field_type",
+              "operator": "notEquals",
+              "value": "checkbox"
+            },
+            {
+              "path": "form.field_type",
+              "operator": "notEquals",
+              "value": "select"
+            },
+            {
+              "path": "form.field_type",
+              "operator": "notEquals",
+              "value": "multi_select"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "data": {
+      "form": {
+        "id": "",
+        "name": "",
+        "field_key": "",
+        "field_type": "text",
+      "default_value": "",
+      "placeholder": "",
+      "help_text": "",
+      "max_count": 0,
+      "required": false,
+      "options": []
+    },
+    "option": {
+      "field_type": [
+        {
+          "id": "text",
+          "value": "单行文本",
+          "icon": "type"
+        },
+        {
+          "id": "textarea",
+          "value": "多行文本",
+          "icon": "align-left"
+        },
+        {
+          "id": "editor",
+          "value": "富文本编辑器",
+          "icon": "file-text"
+        },
+        {
+          "id": "date",
+          "value": "日期",
+          "icon": "calendar"
+        },
+        {
+          "id": "datetime",
+          "value": "日期时间",
+          "icon": "calendar-clock"
+        },
+        {
+          "id": "boolean",
+          "value": "开关",
+          "icon": "toggle-left"
+        },
+        {
+          "id": "radio",
+          "value": "单选",
+          "icon": "circle-dot"
+        },
+        {
+          "id": "checkbox",
+          "value": "多选",
+          "icon": "list-checks"
+        },
+        {
+          "id": "select",
+          "value": "下拉",
+          "icon": "list-filter"
+        },
+        {
+          "id": "multi_select",
+          "value": "多选下拉",
+          "icon": "list-checks"
+        },
+        {
+          "id": "image",
+          "value": "上传图片",
+          "icon": "image"
+        },
+        {
+          "id": "video",
+          "value": "上传视频",
+          "icon": "video"
+        },
+        {
+          "id": "audio",
+          "value": "上传音频",
+          "icon": "audio-lines"
+        }
+      ]
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form",
+      "before": {
+        "service": "front.datatemplate.DataTemplateHook.BeforeSaveDataField"
+      }
+    }
+  }
+}

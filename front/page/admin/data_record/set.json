@@ -1,0 +1,97 @@
+{
+  "page": {
+    "name": "数据填写",
+    "parent": "system-settings",
+    "type": 2,
+    "auth": [
+      {
+        "key": "front/data_record/set",
+        "name": "数据填写",
+        "query": {
+          "cate_id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-header": {
+        "type": "header",
+        "className": "gap-4",
+        "children": {
+          "header-actions": {
+            "type": "row",
+            "className": "ms-auto shrink-0 flex-nowrap items-center gap-2"
+          }
+        }
+      },
+      "page-main": {
+        "type": "main",
+        "className": "flex flex-1 flex-col gap-5 sm:gap-6",
+        "children": {
+          "record-editor": {
+            "type": "container",
+            "className": "min-w-0"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "page-header": [
+      {
+        "type": "show-title",
+        "value": "page",
+        "className": "min-w-0 flex-1"
+      }
+    ],
+    "header-actions": [
+      {
+        "type": "show-button",
+        "name": "保存配置",
+        "icon": "save",
+        "className": "shrink-0",
+        "meta": {
+          "variant": "default",
+          "size": "sm",
+          "validateForm": true,
+          "loadingText": "保存中...",
+          "successMessage": "配置已保存"
+        },
+        "action": {
+          "click": "save-record"
+        }
+      }
+    ],
+    "record-editor": [
+      {
+        "type": "front-data-record-editor",
+        "value": "data.editor"
+      }
+    ]
+  },
+  "data": {
+    "page": {
+      "service": "front.datarecord.Editor.BuildPageMeta"
+    },
+    "editor": {
+      "service": "front.datarecord.Editor.BuildRecordEditor"
+    },
+    "form": {
+      "data_template_id": "",
+      "values": {}
+    }
+  },
+  "state": {},
+  "action": {
+    "save-record": {
+      "type": "save",
+      "model": "front.NewDataRecordModel",
+      "params": "form",
+      "before": {
+        "service": "front.datarecord.Editor.BeforeSaveRecord"
+      }
+    }
+  }
+}

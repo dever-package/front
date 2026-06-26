@@ -1,0 +1,126 @@
+{
+  "page": {
+    "name": "扩展数据表编辑",
+    "parent": "front/data_target/list",
+    "type": 2,
+    "auth": [
+      {
+        "key": "front/data_target/create",
+        "name": "扩展数据表新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/data_target/update",
+        "name": "扩展数据表编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full"
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-input",
+        "placeholder": "例如：客户、团队成员、招聘职位",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "名称不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "name": "Model",
+        "placeholder": "例如：crm.NewCustomerModel",
+        "value": "form.model_name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "Model不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "name": "表标识",
+        "placeholder": "例如：customer",
+        "value": "form.table_key",
+        "mode": "form",
+        "info": "用于展示和后续记录定位的稳定标识，不会创建物理表。",
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "name": "主键字段",
+        "placeholder": "默认 id",
+        "value": "form.primary_key",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[220px]"
+        }
+      },
+      {
+        "type": "form-input",
+        "name": "展示字段",
+        "placeholder": "默认 name",
+        "value": "form.label_field",
+        "mode": "form",
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[220px]"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "id": "",
+      "name": "",
+      "model_name": "",
+      "table_key": "",
+      "primary_key": "id",
+      "label_field": "name"
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form",
+      "before": {
+        "service": "front.datatemplate.DataTemplateHook.BeforeSaveDataTarget"
+      }
+    }
+  }
+}

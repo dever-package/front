@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 
 	"github.com/shemic/dever/util"
@@ -82,7 +83,7 @@ func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot,
 		return nil
 	}
 
-	authRow, protected := resolveAccessAuthRow(snapshot.auth, pathValue, lookup)
+	authRow, protected := resolveAccessAuthRowForSnapshot(snapshot, pathValue, lookup)
 	pageName := siteconfig.PageFromContext(ctx)
 	if embedpageservice.HasPathForPage(pageName, pathValue) {
 		if protected && canAccessAuthRow(snapshot, authRow) {
@@ -125,29 +126,97 @@ func resolveAccessAuthRow(
 	pathValue string,
 	lookup InputLookup,
 ) (map[string]any, bool) {
+	return resolveAccessAuthRowWithAccess(graph, pathValue, lookup, nil)
+}
+
+func resolveAccessAuthRowForSnapshot(
+	snapshot *accessSnapshot,
+	pathValue string,
+	lookup InputLookup,
+) (map[string]any, bool) {
+	if snapshot == nil {
+		return nil, false
+	}
+	return resolveAccessAuthRowWithAccess(
+		snapshot.auth,
+		pathValue,
+		lookup,
+		func(row map[string]any) bool {
+			return canAccessAuthRow(snapshot, row)
+		},
+	)
+}
+
+func resolveAccessAuthRowWithAccess(
+	graph authGraph,
+	pathValue string,
+	lookup InputLookup,
+	canAccess func(map[string]any) bool,
+) (map[string]any, bool) {
 	rows := graph.rowByPath[pathValue]
 	if len(rows) == 0 {
 		return nil, false
 	}
 
 	var fallback map[string]any
+	var accessFallback map[string]any
+	var matched map[string]any
+	var accessMatched map[string]any
+	matchedScore := -1
+	accessMatchedScore := -1
 	for _, row := range rows {
 		query := authRowQuery(row)
 		if len(query) == 0 {
 			if fallback == nil || authRowKey(row) == pathValue {
 				fallback = row
 			}
+			if canAccess != nil && canAccess(row) && (accessFallback == nil || authRowKey(row) == pathValue) {
+				accessFallback = row
+			}
 			continue
 		}
 		if matchAuthQuery(query, lookup) {
-			return row, true
+			score := authQuerySpecificity(query)
+			if score > matchedScore {
+				matched = row
+				matchedScore = score
+			}
+			if canAccess != nil && canAccess(row) && score > accessMatchedScore {
+				accessMatched = row
+				accessMatchedScore = score
+			}
 		}
 	}
 
+	if accessMatched != nil {
+		return accessMatched, true
+	}
+	if matched != nil {
+		return matched, true
+	}
+	if accessFallback != nil {
+		return accessFallback, true
+	}
 	if fallback != nil {
 		return fallback, true
 	}
 	return nil, true
+}
+
+func authQuerySpecificity(query authQuery) int {
+	if len(query) == 0 {
+		return 0
+	}
+	score := len(query)
+	for _, rule := range query {
+		switch strings.ToLower(strings.TrimSpace(rule)) {
+		case "required", "notempty", "not_empty", "empty":
+			continue
+		default:
+			score += 10
+		}
+	}
+	return score
 }
 
 func authRowQuery(row map[string]any) authQuery {
@@ -225,7 +294,7 @@ func loadAuthGraphUncached(ctx context.Context) (authGraph, error) {
 		if key := authRowKey(row); key != "" {
 			graph.rowByKey[key] = row
 		}
-		if path := authRowPath(row); path != "" {
+		if path := authRowRoutePath(row); path != "" {
 			graph.rowByPath[path] = append(graph.rowByPath[path], row)
 		}
 	}
@@ -249,7 +318,7 @@ func filterAuthRowsForCurrentSite(ctx context.Context, rows []map[string]any) []
 			validKeys[key] = struct{}{}
 		}
 		if pathValue := strings.TrimSpace(record.Path); pathValue != "" {
-			validPaths[pathValue] = struct{}{}
+			validPaths[normalizeAuthRoutePath(pathValue)] = struct{}{}
 		}
 	}
 	if len(validKeys) == 0 && len(validPaths) == 0 {
@@ -262,7 +331,7 @@ func filterAuthRowsForCurrentSite(ctx context.Context, rows []map[string]any) []
 			filtered = append(filtered, row)
 			continue
 		}
-		if _, ok := validPaths[authRowPath(row)]; ok {
+		if _, ok := validPaths[authRowRoutePath(row)]; ok {
 			filtered = append(filtered, row)
 		}
 	}
@@ -380,6 +449,58 @@ func authRowKey(row map[string]any) string {
 
 func authRowPath(row map[string]any) string {
 	return util.ToStringTrimmed(row["path"])
+}
+
+func authRowRoutePath(row map[string]any) string {
+	return normalizeAuthRoutePath(authRowPath(row))
+}
+
+func normalizeAuthRoutePath(pathValue string) string {
+	pathValue, _, _ = strings.Cut(strings.TrimSpace(pathValue), "?")
+	return frontpagepath.NormalizePath(pathValue)
+}
+
+func mergeAuthQueryFromPath(query authQuery, pathValue string) authQuery {
+	routeQuery := parseAuthRouteQuery(pathValue)
+	if len(routeQuery) == 0 {
+		return query
+	}
+	if len(query) == 0 {
+		return routeQuery
+	}
+
+	merged := make(authQuery, len(query)+len(routeQuery))
+	for key, rule := range query {
+		merged[key] = rule
+	}
+	for key, rule := range routeQuery {
+		merged[key] = rule
+	}
+	return normalizeAuthQuery(merged)
+}
+
+func parseAuthRouteQuery(pathValue string) authQuery {
+	_, rawQuery, ok := strings.Cut(strings.TrimSpace(pathValue), "?")
+	if !ok || strings.TrimSpace(rawQuery) == "" {
+		return nil
+	}
+
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil || len(values) == 0 {
+		return nil
+	}
+
+	query := make(authQuery, len(values))
+	for key, items := range values {
+		key = strings.TrimSpace(key)
+		if key == "" || len(items) == 0 {
+			continue
+		}
+		if value := strings.TrimSpace(items[0]); value != "" {
+			query[key] = value
+		}
+	}
+	return normalizeAuthQuery(query)
 }
 
 func matchAuthQuery(query authQuery, lookup InputLookup) bool {

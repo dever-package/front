@@ -577,7 +577,7 @@ func (filter pageSchemaPermissionFilter) canUseRoute(route string, query map[str
 	if allowed, ok := filter.routeCache[cacheKey]; ok {
 		return allowed
 	}
-	row, protected := resolveAccessAuthRow(filter.snapshot.auth, pathValue, func(key string) string {
+	row, protected := resolveAccessAuthRowForSnapshot(filter.snapshot, pathValue, func(key string) string {
 		return query[key]
 	})
 	if !protected {

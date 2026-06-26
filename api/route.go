@@ -45,12 +45,11 @@ type batchResult struct {
 }
 
 func (Route) GetInfo(c *server.Context) error {
-	pathValue := frontpagepath.NormalizePath(c.Input("path", "required", "页面路径"))
-	query := collectRequestQuery(c)
+	rawPath := c.Input("path", "required", "页面路径")
+	pathValue, pathQuery := normalizeOptionPathInput(rawPath)
+	query := mergeRouteQuery(pathQuery, collectRequestQuery(c))
 	var accessScope *permissionservice.AccessScope
-	currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, func(key string) string {
-		return c.Input(key)
-	}, query)
+	currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, requestInputLookup(pathQuery, c.Input), query)
 	if err != nil {
 		if permissionservice.IsPermissionDenied(err) {
 			return permissionDeniedPayload(c, err)
@@ -63,16 +62,15 @@ func (Route) GetInfo(c *server.Context) error {
 }
 
 func (Route) GetData(c *server.Context) error {
-	pathValue := frontpagepath.NormalizePath(c.Input("__route", "required", "页面路径"))
+	rawPath := c.Input("__route", "required", "页面路径")
+	pathValue, pathQuery := normalizeOptionPathInput(rawPath)
 	dataKey := strings.TrimSpace(c.Input("__dataKey", "required", "数据键"))
-	query := collectRequestQuery(c)
+	query := mergeRouteQuery(pathQuery, collectRequestQuery(c))
 	delete(query, "__route")
 	delete(query, "__dataKey")
 
 	var accessScope *permissionservice.AccessScope
-	currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, func(key string) string {
-		return c.Input(key)
-	}, query)
+	currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, requestInputLookup(pathQuery, c.Input), query)
 	if err != nil {
 		if permissionservice.IsPermissionDenied(err) {
 			return permissionDeniedPayload(c, err)
@@ -330,6 +328,24 @@ func collectRequestQuery(c *server.Context) map[string]string {
 		return nil
 	}
 	return parseQueryFromURL(routeOriginalURL(c))
+}
+
+func mergeRouteQuery(pathQuery, requestQuery map[string]string) map[string]string {
+	if len(pathQuery) == 0 {
+		return requestQuery
+	}
+	if len(requestQuery) == 0 {
+		return pathQuery
+	}
+
+	result := make(map[string]string, len(pathQuery)+len(requestQuery))
+	for key, value := range pathQuery {
+		result[key] = value
+	}
+	for key, value := range requestQuery {
+		result[key] = value
+	}
+	return result
 }
 
 func routeOriginalURL(c *server.Context) string {

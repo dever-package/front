@@ -1,0 +1,133 @@
+{
+  "page": {
+    "name": "数据模板编辑",
+    "parent": "front/data_template/list",
+    "type": 2,
+    "auth": [
+      {
+        "key": "front/data_template/create",
+        "name": "数据模板新增",
+        "query": {
+          "id": "empty"
+        }
+      },
+      {
+        "key": "front/data_template/update",
+        "name": "数据模板编辑",
+        "query": {
+          "id": "required"
+        }
+      }
+    ]
+  },
+  "layout": {
+    "type": "container",
+    "children": {
+      "page-main": {
+        "type": "main",
+        "className": "p-0",
+        "children": {
+          "dialog-shell": {
+            "type": "container",
+            "className": "w-full",
+            "children": {
+              "field-page": {
+                "type": "container",
+                "path": "/front/data_template/field_list",
+                "className": "mt-5"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "nodes": {
+    "dialog-shell": [
+      {
+        "type": "form-select",
+        "value": "form.cate_id",
+        "mode": "form",
+        "option": {
+          "model": "front.NewDataTemplateCateModel",
+          "labelField": "name",
+          "order": "sort asc,id asc",
+          "pageSize": 200,
+          "searchFields": [
+            "name"
+          ],
+          "filters": {
+            "status": "1"
+          }
+        },
+        "validate": [
+          {
+            "type": "required",
+            "message": "模板分类不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal",
+          "controlClassName": "max-w-[320px]"
+        }
+      },
+      {
+        "type": "form-input",
+        "value": "form.name",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "模板名称不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      },
+      {
+        "type": "form-input",
+        "name": "模板Key",
+        "value": "form.template_key",
+        "mode": "form",
+        "placeholder": "例如 company.about",
+        "info": "模板的稳定调用编码，开发调用 GetInfo 时传这个值；已有填写数据后不允许修改。",
+        "validate": [
+          {
+            "type": "required",
+            "message": "模板Key不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal"
+        }
+      }
+    ]
+  },
+  "data": {
+    "form": {
+      "_fields": [
+        "cate_id",
+        "name",
+        "template_key",
+        "fields"
+      ],
+      "service": "front.datatemplate.DataTemplateHook.BuildDataTemplateForm",
+      "id": "",
+      "cate_id": "",
+      "name": "",
+      "template_key": "",
+      "fields": []
+    }
+  },
+  "state": {},
+  "action": {
+    "submit": {
+      "type": "save",
+      "params": "form",
+      "before": {
+        "service": "front.datatemplate.DataTemplateHook.BeforeSaveDataTemplate"
+      }
+    }
+  }
+}
