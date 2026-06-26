@@ -60,7 +60,7 @@
                 "default_value": "",
                 "placeholder": "",
                 "help_text": "",
-                "max_count": 0,
+                "max_count": 1,
                 "required": true,
                 "options": [],
                 "status": 1,
@@ -82,6 +82,7 @@
         "value": "parent.data.form.fields",
         "meta": {
           "rowKey": "id",
+          "drag": "sort",
           "savePath": "front/data_field/update",
           "columns": [
             {
@@ -124,7 +125,21 @@
               "value": "sort",
               "type": "show-base",
               "editor": "form-number",
-              "trigger": "doubleClick"
+              "trigger": "doubleClick",
+              "action": {
+                "change": {
+                  "type": "array",
+                  "key": "parent.data.form.fields",
+                  "op": "patch",
+                  "index": "$rowIndex",
+                  "value": {
+                    "sort": "$value"
+                  }
+                }
+              },
+              "meta": {
+                "controlClassName": "w-24"
+              }
             },
             {
               "name": "操作",
@@ -310,7 +325,7 @@
       "default_value": "",
       "placeholder": "",
       "help_text": "",
-      "max_count": 0,
+      "max_count": 1,
       "required": true,
       "options": [],
       "status": 1,

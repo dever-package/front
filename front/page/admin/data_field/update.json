@@ -110,6 +110,7 @@
         "meta": {
           "formLayout": "horizontal",
           "controlClassName": "max-w-[220px]",
+          "min": 1,
           "hiddenCondition": "all",
           "hiddenWhen": [
             {
@@ -189,7 +190,7 @@
       "default_value": "",
       "placeholder": "",
       "help_text": "",
-      "max_count": 0,
+      "max_count": 1,
       "required": false,
       "options": []
     },
