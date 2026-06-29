@@ -93,6 +93,9 @@ func queryModelListWithLookup(
 	if order != "" {
 		options["order"] = order
 	}
+	if field := util.ToStringTrimmed(current["field"]); field != "" {
+		options["field"] = field
+	}
 	if treeMode {
 		delete(options, "page")
 		delete(options, "pageSize")

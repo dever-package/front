@@ -28,6 +28,7 @@ type cronRuntime struct {
 
 func Start() {
 	startOnce.Do(func() {
+		runBootstraps(context.Background())
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan struct{})
 		runtime.mu.Lock()

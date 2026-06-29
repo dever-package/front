@@ -98,17 +98,16 @@ func executeRun(parent context.Context, item cronSnapshot, runID uint64, request
 func callProvider(ctx context.Context, serviceName string, payload map[string]any) (result any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			if recovered, ok := r.(error); ok {
-				err = recovered
-				return
-			}
-			err = fmt.Errorf("%v", r)
+			err = providerPanicError(r)
 		}
 	}()
 
 	serviceName = strings.TrimSpace(serviceName)
 	if serviceName == "" {
 		return nil, fmt.Errorf("内部业务不能为空")
+	}
+	if result, ok, err := callRegisteredProvider(ctx, serviceName, payload); ok {
+		return result, err
 	}
 	return load.Service(serviceName, payload, ctx), nil
 }

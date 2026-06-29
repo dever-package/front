@@ -123,6 +123,9 @@ func resolveModelContainer(c *server.Context, key string, modelName string, cont
 	if order != "" {
 		options["order"] = order
 	}
+	if field := util.ToStringTrimmed(container["field"]); field != "" {
+		options["field"] = field
+	}
 
 	if util.ToBool(container["one"]) {
 		row := model.FindMap(c.Context(), filters, options)
@@ -224,7 +227,7 @@ func buildFilters(container map[string]any) any {
 
 func isDataMetaField(key string) bool {
 	switch strings.TrimSpace(key) {
-	case "model", "one", "required", "defaultFilters", "filterFields", "searchFields", "order", "service":
+	case "model", "one", "required", "defaultFilters", "filterFields", "searchFields", "order", "field", "service":
 		return true
 	default:
 		return false
