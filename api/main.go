@@ -29,6 +29,9 @@ func (Main) GetBootstrap(c *server.Context) error {
 	if err != nil {
 		return c.Error(err)
 	}
+	if err := pageservice.ExternalizeSchemaRoutes(c.Context(), &schema); err != nil {
+		return c.Error(err)
+	}
 
 	return c.JSON(map[string]any{
 		"main":   mainInfo,

@@ -134,7 +134,7 @@ func richTextHasVisibleContent(node richTextNode) bool {
 		return richTextAttr(node.Attrs, "src") != ""
 	case richTextExternalMediaNodeName:
 		return richTextAttr(node.Attrs, "src") != "" || richTextAttr(node.Attrs, "href") != ""
-	case "agentAbilityPlaceholder", "agentTaskPlaceholder":
+	case "agentAsyncPlaceholder":
 		return true
 	case "text":
 		return strings.TrimSpace(node.Text) != ""
@@ -183,7 +183,7 @@ func renderRichTextNode(node richTextNode) string {
 		return renderRichTextElement("ol", nil, children)
 	case "paragraph":
 		return renderRichTextElement("p", map[string]string{"style": richTextBlockStyle(node.Attrs)}, children)
-	case "agentAbilityPlaceholder", "agentTaskPlaceholder":
+	case "agentAsyncPlaceholder":
 		return renderRichTextPlaceholder(node)
 	case "table":
 		return renderRichTextElement("table", nil, children)

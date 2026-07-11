@@ -56,6 +56,7 @@ type Site struct {
 	Path    string
 	Page    string
 	API     string
+	Route   string
 	APIs    []string
 	Public  []string
 	Config  SiteConfig
@@ -467,6 +468,14 @@ func (site Site) SystemPagePath(pageName string) string {
 }
 
 func (site Site) PageRoutePrefix() string {
+	route := cleanRelativePath(site.Route)
+	if route != "" {
+		return route
+	}
+	return site.InternalPageRoutePrefix()
+}
+
+func (site Site) InternalPageRoutePrefix() string {
 	owner := strings.Trim(site.Owner, "/")
 	if owner != "" {
 		return owner
@@ -476,6 +485,57 @@ func (site Site) PageRoutePrefix() string {
 		return DefaultAPI
 	}
 	return apiPrefix
+}
+
+func (site Site) InternalPagePath(pathValue string) string {
+	return replacePageRoutePrefix(pathValue, site.PageRoutePrefix(), site.InternalPageRoutePrefix())
+}
+
+func (site Site) ExternalPagePath(pathValue string) string {
+	return replacePageRoutePrefix(pathValue, site.InternalPageRoutePrefix(), site.PageRoutePrefix())
+}
+
+func (site Site) HasRouteAlias() bool {
+	return cleanRelativePath(site.Route) != "" && site.PageRoutePrefix() != site.InternalPageRoutePrefix()
+}
+
+func replacePageRoutePrefix(pathValue string, fromPrefix string, toPrefix string) string {
+	pathValue = strings.TrimSpace(pathValue)
+	fromPrefix = cleanRelativePath(fromPrefix)
+	toPrefix = cleanRelativePath(toPrefix)
+	if pathValue == "" || fromPrefix == "" || toPrefix == "" || fromPrefix == toPrefix {
+		return pathValue
+	}
+
+	leadingSlash := strings.HasPrefix(pathValue, "/")
+	pathPart, suffix := splitPathReference(pathValue)
+	normalized := cleanRelativePath(pathPart)
+	if normalized == "" {
+		return pathValue
+	}
+	if normalized != fromPrefix && !strings.HasPrefix(normalized, fromPrefix+"/") {
+		return pathValue
+	}
+
+	rest := strings.TrimPrefix(normalized, fromPrefix)
+	rest = strings.TrimPrefix(rest, "/")
+	replaced := toPrefix
+	if rest != "" {
+		replaced = path.Join(toPrefix, rest)
+	}
+	if leadingSlash {
+		replaced = "/" + replaced
+	}
+	return replaced + suffix
+}
+
+func splitPathReference(value string) (string, string) {
+	for index, char := range value {
+		if char == '?' || char == '#' {
+			return value[:index], value[index:]
+		}
+	}
+	return value, ""
 }
 
 func (site Site) AssetURL(value string) string {
@@ -1083,6 +1143,7 @@ func defaultAPIForSite(siteKey string) string {
 func hasSiteOwnerFields(site component.ManifestSite) bool {
 	return strings.TrimSpace(site.Page) != "" ||
 		strings.TrimSpace(site.Entry) != "" ||
+		strings.TrimSpace(site.Route) != "" ||
 		hasManifestSiteConfig(site.Config) ||
 		hasSiteSetting(site.Setting) ||
 		hasSiteAccess(site.Access)
@@ -1116,6 +1177,7 @@ func hasSiteAccess(access component.ManifestSiteAccess) bool {
 func applySiteOwnerFields(site *Site, contribution component.ManifestSite) {
 	site.Page = cleanPage(contribution.Page, site.Key)
 	site.API = cleanAPI(contribution.API)
+	site.Route = cleanRoute(contribution.Route)
 	if site.API == "" {
 		site.API = defaultAPIForSite(site.Key)
 	}
@@ -1154,6 +1216,7 @@ func normalizeSite(site Site) Site {
 	site.Path = cleanSitePath(site.Key)
 	site.Page = cleanPage(site.Page, site.Key)
 	site.API = cleanAPI(site.API)
+	site.Route = cleanRoute(site.Route)
 	if site.API == "" {
 		site.API = defaultAPIForSite(site.Key)
 	}
@@ -1316,6 +1379,10 @@ func cleanSitePath(siteKey string) string {
 
 func cleanAPI(value string) string {
 	return strings.Trim(strings.TrimSpace(value), "/")
+}
+
+func cleanRoute(value string) string {
+	return cleanRelativePath(value)
 }
 
 func cleanPage(value string, siteKey string) string {

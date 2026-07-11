@@ -470,19 +470,22 @@ func loadPageAuthRecords(ctx context.Context) ([]authRecord, error) {
 }
 
 func FilterAssignableAuthRows(rows []map[string]any) []map[string]any {
-	return embedpageservice.FilterRows(rows)
+	return filterSelfServiceAuthRowsForSite(
+		siteconfig.Site{API: siteconfig.DefaultAPI},
+		embedpageservice.FilterRows(rows),
+	)
 }
 
 func FilterAssignableAuthRowsForSite(siteKey string, rows []map[string]any) []map[string]any {
 	cfg, err := siteconfig.Load(context.Background())
 	if err != nil {
-		return rows
+		return filterSelfServiceAuthRowsForSite(siteconfig.Site{API: siteconfig.DefaultAPI}, rows)
 	}
 	site, ok := cfg.FindBySiteKey(siteKey)
 	if !ok {
-		return rows
+		return filterSelfServiceAuthRowsForSite(siteconfig.Site{API: siteconfig.DefaultAPI}, rows)
 	}
-	return embedpageservice.FilterRowsForPage(site.Page, rows)
+	return filterSelfServiceAuthRowsForSite(site, embedpageservice.FilterRowsForPage(site.Page, rows))
 }
 
 func buildPageAuthRecords(meta pageMeta, routePath string) []authRecord {

@@ -59,6 +59,7 @@ func GetInfo(c *server.Context, pathValue string) error {
 
 func BuildInfo(c *server.Context, pathValue string) (Schema, error) {
 	pathValue = resolveRuntimePagePath(c, pathValue)
+	pathValue = internalPagePathForContext(c.Context(), pathValue)
 	pageName := siteconfig.PageFromContext(c.Context())
 	content, err := ReadContentForPage(pageName, pathValue)
 	if err != nil {
@@ -95,7 +96,8 @@ func resolveRuntimePagePath(c *server.Context, pathValue string) string {
 	}
 
 	normalizedPath := strings.Trim(strings.TrimSpace(pathValue), "/")
-	if normalizedPath != site.SystemPagePath("main") {
+	mainPath := site.SystemPagePath("main")
+	if normalizedPath != mainPath && normalizedPath != site.InternalPagePath(mainPath) {
 		return pathValue
 	}
 	return site.SystemPagePath(site.Entry)

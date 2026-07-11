@@ -15,6 +15,7 @@
       "admin": {
         "api": "front",
         "page": "admin",
+        "route": "manage",
         "config": {
           "name": "管理后台",
           "subtitle": "平台配置",

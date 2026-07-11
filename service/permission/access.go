@@ -63,6 +63,9 @@ func EnsurePageAccessWithInput(ctx context.Context, pathValue string, lookup Inp
 	if pathValue == "" {
 		return nil
 	}
+	if canAccessSelfServicePage(ctx, pathValue) {
+		return nil
+	}
 	if site, ok := siteconfig.FromContext(ctx); ok && shouldBypassRBAC(site) {
 		return nil
 	}
@@ -77,6 +80,9 @@ func EnsurePageAccessWithInput(ctx context.Context, pathValue string, lookup Inp
 func ensurePageAccessWithSnapshot(ctx context.Context, snapshot *accessSnapshot, pathValue string, lookup InputLookup) error {
 	pathValue = frontpagepath.NormalizePath(pathValue)
 	if pathValue == "" {
+		return nil
+	}
+	if canAccessSelfServicePage(ctx, pathValue) {
 		return nil
 	}
 	if snapshot == nil {
@@ -415,7 +421,7 @@ func canInheritPageAccess(ctx context.Context, snapshot *accessSnapshot, pathVal
 		return false
 	}
 
-	parentPath := frontpagepath.NormalizePath(lookup(inheritParentPathKey))
+	parentPath := frontpagepath.NormalizePath(internalPagePath(ctx, lookup(inheritParentPathKey)))
 	pageName := siteconfig.PageFromContext(ctx)
 	if parentPath == "" || parentPath == pathValue || !embedpageservice.IsChildForPage(pageName, parentPath, pathValue) {
 		return false
@@ -437,6 +443,13 @@ func parentAccessLookup(lookup InputLookup) InputLookup {
 	return func(key string) string {
 		return lookup(inheritParentInputPrefix + strings.TrimSpace(key))
 	}
+}
+
+func internalPagePath(ctx context.Context, pathValue string) string {
+	if site, ok := siteconfig.FromContext(ctx); ok {
+		return site.InternalPagePath(pathValue)
+	}
+	return pathValue
 }
 
 func authRowID(row map[string]any) uint64 {

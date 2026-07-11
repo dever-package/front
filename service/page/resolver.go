@@ -9,6 +9,7 @@ import (
 	"github.com/shemic/dever/util"
 
 	frontmeta "github.com/dever-package/front/service/meta"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const (
@@ -75,6 +76,7 @@ type rawPageConfig struct {
 
 func ResolveAction(input ResolveActionInput) (ResolvedAction, error) {
 	requestPath := normalizePath(input.Path)
+	requestPath = internalPagePathForContext(input.Context, requestPath)
 	if requestPath == "" {
 		return ResolvedAction{}, fmt.Errorf("页面路径不能为空")
 	}
@@ -183,8 +185,16 @@ func looksLikeDeleteActionKey(key string) bool {
 		strings.Contains(key, "_delete")
 }
 
+func internalPagePathForContext(ctx context.Context, pathValue string) string {
+	if site, ok := siteconfig.FromContext(ctx); ok {
+		return site.InternalPagePath(pathValue)
+	}
+	return pathValue
+}
+
 func ResolveOption(input ResolveOptionInput) (ResolvedOption, error) {
 	pathValue := normalizePath(input.Path)
+	pathValue = internalPagePathForContext(input.Context, pathValue)
 	if pathValue == "" {
 		return ResolvedOption{}, fmt.Errorf("页面路径不能为空")
 	}

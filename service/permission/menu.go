@@ -54,7 +54,7 @@ func buildMainInfoPayload(c *server.Context, includePermissions bool) (map[strin
 		if includePermissions {
 			payload["permissions"] = []map[string]any{}
 		}
-		return payload, nil
+		return externalizeMainInfoPayload(c.Context(), payload), nil
 	}
 
 	snapshot, err := loadAccessSnapshot(c.Context())
@@ -74,7 +74,7 @@ func buildMainInfoPayload(c *server.Context, includePermissions bool) (map[strin
 		payload["permissions"] = buildPermissionContext(snapshot)
 	}
 
-	return payload, nil
+	return externalizeMainInfoPayload(c.Context(), payload), nil
 }
 
 func SyncMainInfo(c *server.Context) error {
@@ -392,4 +392,67 @@ func defaultEntryFromMenu(menu []map[string]any) string {
 	}
 
 	return ""
+}
+
+func externalizeMainInfoPayload(ctx context.Context, payload map[string]any) map[string]any {
+	site, ok := siteconfig.FromContext(ctx)
+	if !ok || !site.HasRouteAlias() || payload == nil {
+		return payload
+	}
+
+	if entry := util.ToString(payload["entry"]); entry != "" {
+		payload["entry"] = site.ExternalPagePath(entry)
+	}
+	if menu, ok := payload["menu"].([]map[string]any); ok {
+		externalizeMenuRoutes(site, menu)
+	}
+	if permissions, ok := payload["permissions"].([]map[string]any); ok {
+		externalizePermissionRoutes(site, permissions)
+	}
+	return payload
+}
+
+func externalizeMenuRoutes(site siteconfig.Site, menu []map[string]any) {
+	for _, item := range menu {
+		if pathValue := util.ToString(item["path"]); pathValue != "" {
+			item["path"] = site.ExternalPagePath(pathValue)
+		}
+		if activePaths, ok := item["active_paths"]; ok {
+			item["active_paths"] = externalizeRouteList(site, activePaths)
+		}
+		if children, ok := item["children"].([]map[string]any); ok {
+			externalizeMenuRoutes(site, children)
+		}
+	}
+}
+
+func externalizePermissionRoutes(site siteconfig.Site, permissions []map[string]any) {
+	for _, item := range permissions {
+		if pathValue := util.ToString(item["path"]); pathValue != "" {
+			item["path"] = site.ExternalPagePath(pathValue)
+		}
+	}
+}
+
+func externalizeRouteList(site siteconfig.Site, value any) any {
+	switch current := value.(type) {
+	case []string:
+		result := make([]string, 0, len(current))
+		for _, item := range current {
+			result = append(result, site.ExternalPagePath(item))
+		}
+		return result
+	case []any:
+		result := make([]any, 0, len(current))
+		for _, item := range current {
+			if pathValue, ok := item.(string); ok {
+				result = append(result, site.ExternalPagePath(pathValue))
+				continue
+			}
+			result = append(result, item)
+		}
+		return result
+	default:
+		return value
+	}
 }

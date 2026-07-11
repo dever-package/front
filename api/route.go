@@ -47,6 +47,7 @@ type batchResult struct {
 func (Route) GetInfo(c *server.Context) error {
 	rawPath := c.Input("path", "required", "页面路径")
 	pathValue, pathQuery := normalizeOptionPathInput(rawPath)
+	pathValue = internalPagePath(c.Context(), pathValue)
 	query := mergeRouteQuery(pathQuery, collectRequestQuery(c))
 	var accessScope *permissionservice.AccessScope
 	currentSchema, err := buildRouteInfo(c, pathValue, &accessScope, requestInputLookup(pathQuery, c.Input), query)
@@ -64,6 +65,7 @@ func (Route) GetInfo(c *server.Context) error {
 func (Route) GetData(c *server.Context) error {
 	rawPath := c.Input("__route", "required", "页面路径")
 	pathValue, pathQuery := normalizeOptionPathInput(rawPath)
+	pathValue = internalPagePath(c.Context(), pathValue)
 	dataKey := strings.TrimSpace(c.Input("__dataKey", "required", "数据键"))
 	query := mergeRouteQuery(pathQuery, collectRequestQuery(c))
 	delete(query, "__route")
@@ -147,7 +149,8 @@ func (Route) PostBatchInfo(c *server.Context) error {
 	results := make([]batchResult, 0, len(request.Paths))
 	var accessScope *permissionservice.AccessScope
 	for _, item := range request.Paths {
-		pathValue := frontpagepath.NormalizePath(item.Path)
+		externalPath := frontpagepath.NormalizePath(item.Path)
+		pathValue := internalPagePath(c.Context(), externalPath)
 		if pathValue == "" {
 			results = append(results, batchResult{Code: 400, Message: "页面路径不能为空"})
 			continue
@@ -155,7 +158,7 @@ func (Route) PostBatchInfo(c *server.Context) error {
 		if len(item.Query) > 0 {
 			results = append(results, batchResult{
 				Code:    400,
-				Path:    pathValue,
+				Path:    externalPath,
 				Message: "批量页面配置暂不支持独立查询参数",
 			})
 			continue
@@ -165,14 +168,14 @@ func (Route) PostBatchInfo(c *server.Context) error {
 		if err != nil {
 			results = append(results, batchResult{
 				Code:    routeInfoErrorCode(err),
-				Path:    pathValue,
+				Path:    externalPath,
 				Message: err.Error(),
 			})
 			continue
 		}
 		results = append(results, batchResult{
 			Code: 0,
-			Path: pathValue,
+			Path: externalPath,
 			Data: currentSchema,
 		})
 	}
@@ -202,11 +205,14 @@ func isSystemPageInfoPath(ctx context.Context, pathValue string) bool {
 
 func isSiteSystemPagePath(site siteconfig.Site, pathValue string) bool {
 	return pathValue == site.SystemPagePath("login") ||
-		pathValue == site.SystemPagePath("main")
+		pathValue == site.SystemPagePath("main") ||
+		pathValue == site.InternalPagePath(site.SystemPagePath("login")) ||
+		pathValue == site.InternalPagePath(site.SystemPagePath("main"))
 }
 
 func (Route) GetOption(c *server.Context) error {
 	pathValue, pathQuery := normalizeOptionPathInput(c.Input("path"))
+	pathValue = internalPagePath(c.Context(), pathValue)
 	if pathValue == "" {
 		return c.Error("option.path 不能为空")
 	}
@@ -219,7 +225,11 @@ func (Route) GetOption(c *server.Context) error {
 		return permissionDeniedPayload(c, err)
 	}
 
-	return optionservice.Get(c)
+	items, err := optionservice.GetByInput(c, routeOptionInputLookup(c, pathValue, pathQuery))
+	if err != nil {
+		return c.Error(err)
+	}
+	return c.JSON(items)
 }
 
 func (Route) PostBatchOption(c *server.Context) error {
@@ -238,15 +248,18 @@ func (Route) PostBatchOption(c *server.Context) error {
 	var accessScope *permissionservice.AccessScope
 	for _, params := range request.Options {
 		pathValue, optionParams := normalizeOptionParams(params)
+		externalPath := frontpagepath.NormalizePath(pathValue)
+		pathValue = internalPagePath(c.Context(), pathValue)
+		optionParams = withOptionPath(optionParams, pathValue)
 		lookup := mapStringLookup(optionParams)
 		if pathValue == "" || strings.TrimSpace(optionParams["key"]) == "" {
-			results = append(results, batchResult{Code: 400, Path: pathValue, Message: "option.path 和 option.key 不能为空"})
+			results = append(results, batchResult{Code: 400, Path: externalPath, Message: "option.path 和 option.key 不能为空"})
 			continue
 		}
 		if err := ensureRouteOptionAccess(c, &accessScope, pathValue, lookup); err != nil {
 			results = append(results, batchResult{
 				Code:    403,
-				Path:    pathValue,
+				Path:    externalPath,
 				Message: err.Error(),
 			})
 			continue
@@ -256,14 +269,14 @@ func (Route) PostBatchOption(c *server.Context) error {
 		if err != nil {
 			results = append(results, batchResult{
 				Code:    routeInfoErrorCode(err),
-				Path:    pathValue,
+				Path:    externalPath,
 				Message: err.Error(),
 			})
 			continue
 		}
 		results = append(results, batchResult{
 			Code: 0,
-			Path: pathValue,
+			Path: externalPath,
 			Data: items,
 		})
 	}
@@ -299,7 +312,14 @@ func buildRouteInfo(
 	query map[string]string,
 ) (pageservice.Schema, error) {
 	if isSystemPageInfoPath(c.Context(), pathValue) {
-		return pageservice.BuildInfo(c, pathValue)
+		currentSchema, err := pageservice.BuildInfo(c, pathValue)
+		if err != nil {
+			return pageservice.Schema{}, err
+		}
+		if err := pageservice.ExternalizeSchemaRoutes(c.Context(), &currentSchema); err != nil {
+			return pageservice.Schema{}, err
+		}
+		return currentSchema, nil
 	}
 
 	if *accessScope == nil {
@@ -318,6 +338,9 @@ func buildRouteInfo(
 		return pageservice.Schema{}, err
 	}
 	if err := (*accessScope).FilterPageSchema(c.Context(), pathValue, &currentSchema, lookup, query); err != nil {
+		return pageservice.Schema{}, err
+	}
+	if err := pageservice.ExternalizeSchemaRoutes(c.Context(), &currentSchema); err != nil {
 		return pageservice.Schema{}, err
 	}
 	return currentSchema, nil
@@ -418,6 +441,50 @@ func requestInputLookup(pathQuery map[string]string, fallback func(string, ...st
 		}
 		return pathQuery[key]
 	}
+}
+
+func internalPagePath(ctx context.Context, pathValue string) string {
+	if site, ok := siteconfig.FromContext(ctx); ok {
+		return site.InternalPagePath(pathValue)
+	}
+	return pathValue
+}
+
+func routeOptionInputLookup(c *server.Context, pathValue string, pathQuery map[string]string) func(string) string {
+	return func(key string) string {
+		if key == "path" {
+			return optionPathWithQuery(pathValue, pathQuery)
+		}
+		if c == nil {
+			return ""
+		}
+		return c.Input(key)
+	}
+}
+
+func withOptionPath(params map[string]string, pathValue string) map[string]string {
+	result := make(map[string]string, len(params)+1)
+	for key, value := range params {
+		result[key] = value
+	}
+	result["path"] = pathValue
+	return result
+}
+
+func optionPathWithQuery(pathValue string, pathQuery map[string]string) string {
+	if len(pathQuery) == 0 {
+		return pathValue
+	}
+	values := url.Values{}
+	for key, value := range pathQuery {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+			values.Set(key, value)
+		}
+	}
+	if encoded := values.Encode(); encoded != "" {
+		return pathValue + "?" + encoded
+	}
+	return pathValue
 }
 
 func normalizeOptionParams(params map[string]string) (string, map[string]string) {

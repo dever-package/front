@@ -36,6 +36,7 @@ func PostAction(c *server.Context) error {
 		logActionRuntimeError(c, requestPath, request.Key, "", "", "", err)
 		return c.Error(err)
 	}
+	requestPath = resolved.RequestPath
 	config := resolved.Config
 	pathValue := resolved.Path
 

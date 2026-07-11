@@ -573,6 +573,9 @@ func (filter pageSchemaPermissionFilter) canUseRoute(route string, query map[str
 	if pathValue == "" {
 		return true
 	}
+	if canAccessSelfServicePage(filter.ctx, pathValue) {
+		return true
+	}
 	cacheKey := routeAccessCacheKey(pathValue, query)
 	if allowed, ok := filter.routeCache[cacheKey]; ok {
 		return allowed
@@ -595,7 +598,7 @@ func (filter pageSchemaPermissionFilter) canUseInheritedRoute(childPath string, 
 		return false
 	}
 	parentPath := filter.pagePath
-	parentPath = frontpagepath.NormalizePath(util.FirstNonEmpty(query[inheritParentPathKey], parentPath))
+	parentPath = frontpagepath.NormalizePath(internalPagePath(filter.ctx, util.FirstNonEmpty(query[inheritParentPathKey], parentPath)))
 	childPath = frontpagepath.NormalizePath(childPath)
 	if parentPath == "" || childPath == "" || parentPath == childPath {
 		return false
