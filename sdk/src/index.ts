@@ -110,6 +110,7 @@ export const buildRuntimeRequestHeaders =
   getCompatModule("@/lib/request").buildRuntimeRequestHeaders;
 export const loadMainInfo = getCompatModule("@/lib/request").loadMainInfo;
 export const request = getCompatModule("@/lib/request").request;
+export const requestRaw = getCompatModule("@/lib/request").requestRaw;
 export const resetFrontRuntimeCache =
   getCompatModule("@/lib/request").resetFrontRuntimeCache;
 export const useAuthStore = getCompatModule("@/stores/auth-store").useAuthStore;

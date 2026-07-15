@@ -44,5 +44,6 @@ export const joinSiteApi: any;
 export const buildRuntimeRequestHeaders: any;
 export const loadMainInfo: any;
 export const request: any;
+export const requestRaw: any;
 export const resetFrontRuntimeCache: any;
 export const useAuthStore: any;
