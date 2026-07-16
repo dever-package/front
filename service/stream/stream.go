@@ -3,6 +3,7 @@ package stream
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -15,17 +16,19 @@ import (
 )
 
 const (
-	defaultMaxLen = int64(2000)
-	defaultTTL    = 24 * time.Hour
+	defaultMaxLen          = int64(2000)
+	defaultTTL             = 24 * time.Hour
+	defaultRedisRetryDelay = 5 * time.Second
+	maxMemoryCleanupDelay  = time.Minute
 )
 
 type Service struct {
-	namespace     string
-	client        *redis.Client
-	maxLen        int64
-	ttl           time.Duration
-	memory        *memoryStreamStore
-	redisDisabled *atomic.Bool
+	namespace    string
+	client       *redis.Client
+	maxLen       int64
+	ttl          time.Duration
+	memory       *memoryStreamStore
+	redisCircuit *redisCircuit
 }
 
 type Entry struct {
@@ -39,14 +42,19 @@ func New(namespace string) Service {
 		namespace = "default"
 	}
 	envPrefix := strings.ToUpper(strings.ReplaceAll(namespace, "-", "_"))
-	return Service{
-		namespace:     namespace,
-		client:        newRedisClientFromEnv(envPrefix),
-		maxLen:        envInt64(envPrefix+"_STREAM_MAXLEN", envInt64("STREAM_MAXLEN", defaultMaxLen)),
-		ttl:           envDuration(envPrefix+"_STREAM_TTL", envDuration("STREAM_TTL", defaultTTL)),
-		memory:        newMemoryStreamStore(envInt64(envPrefix+"_STREAM_MAXLEN", envInt64("STREAM_MAXLEN", defaultMaxLen)), envDuration(envPrefix+"_STREAM_TTL", envDuration("STREAM_TTL", defaultTTL))),
-		redisDisabled: &atomic.Bool{},
+	maxLen := envInt64(envPrefix+"_STREAM_MAXLEN", envInt64("STREAM_MAXLEN", defaultMaxLen))
+	ttl := envDuration(envPrefix+"_STREAM_TTL", envDuration("STREAM_TTL", defaultTTL))
+	service := Service{
+		namespace:    namespace,
+		client:       newRedisClientFromEnv(envPrefix),
+		maxLen:       maxLen,
+		ttl:          ttl,
+		redisCircuit: newRedisCircuit(envDuration(envPrefix+"_STREAM_REDIS_RETRY", envDuration("STREAM_REDIS_RETRY", defaultRedisRetryDelay))),
 	}
+	if service.client == nil {
+		service.memory = newMemoryStreamStore(maxLen, ttl)
+	}
+	return service
 }
 
 func (s Service) WritePayload(ctx context.Context, requestID string, payload map[string]any) (string, error) {
@@ -66,27 +74,23 @@ func (s Service) WritePayload(ctx context.Context, requestID string, payload map
 		return "", err
 	}
 	streamKey := s.Key(requestID)
-	if s.canUseRedis() {
-		id, err := s.client.XAdd(ctx, &redis.XAddArgs{
-			Stream: streamKey,
-			MaxLen: s.maxLen,
-			Approx: true,
-			Values: map[string]any{
-				"request_id": requestID,
-				"type":       strings.TrimSpace(InputText(payload["type"])),
-				"status":     payload["status"],
-				"payload":    string(rawPayload),
-			},
-		}).Result()
-		if err == nil {
-			if s.ttl > 0 {
-				_ = s.client.Expire(ctx, streamKey, s.ttl).Err()
-			}
-			return id, nil
-		}
-		s.disableRedis()
+	if s.client == nil {
+		return s.memory.Write(ctx, streamKey, payload)
 	}
-	return s.memory.Write(ctx, streamKey, payload)
+	if !s.canUseRedis() {
+		return "", redisCoolingDownError(s.namespace)
+	}
+	id, err := s.writeRedis(ctx, streamKey, requestID, payload, rawPayload)
+	if err == nil {
+		s.redisSuccess()
+		return id, nil
+	}
+	if contextOperationError(ctx, err) {
+		s.redisAbort()
+		return "", err
+	}
+	s.redisFailure()
+	return "", fmt.Errorf("写入 Redis stream 失败: %w", err)
 }
 
 func (s Service) Read(ctx context.Context, requestID string, lastID string, count int64, block time.Duration) ([]Entry, error) {
@@ -102,31 +106,68 @@ func (s Service) Read(ctx context.Context, requestID string, lastID string, coun
 		count = 100
 	}
 
-	if s.canUseRedis() {
-		streams, err := s.client.XRead(ctx, &redis.XReadArgs{
-			Streams: []string{s.Key(requestID), lastID},
-			Count:   count,
-			Block:   block,
-		}).Result()
-		if err == redis.Nil {
-			return []Entry{}, nil
-		}
-		if err == nil {
-			entries := make([]Entry, 0)
-			for _, currentStream := range streams {
-				for _, message := range currentStream.Messages {
-					entries = append(entries, Entry{
-						ID:      message.ID,
-						Payload: DecodePayload(message.Values["payload"]),
-					})
-				}
-			}
-			return entries, nil
-		}
-		s.disableRedis()
+	if s.client == nil {
+		return s.memory.Read(ctx, s.Key(requestID), lastID, count, block)
 	}
+	if !s.canUseRedis() {
+		return nil, redisCoolingDownError(s.namespace)
+	}
+	streams, err := s.client.XRead(ctx, &redis.XReadArgs{
+		Streams: []string{s.Key(requestID), lastID},
+		Count:   count,
+		Block:   block,
+	}).Result()
+	if err == redis.Nil {
+		s.redisSuccess()
+		return []Entry{}, nil
+	}
+	if err != nil {
+		if contextOperationError(ctx, err) {
+			s.redisAbort()
+			return nil, err
+		}
+		s.redisFailure()
+		return nil, fmt.Errorf("读取 Redis stream 失败: %w", err)
+	}
+	s.redisSuccess()
+	entries := make([]Entry, 0)
+	for _, currentStream := range streams {
+		for _, message := range currentStream.Messages {
+			entries = append(entries, Entry{
+				ID:      message.ID,
+				Payload: DecodePayload(message.Values["payload"]),
+			})
+		}
+	}
+	return entries, nil
+}
 
-	return s.memory.Read(ctx, s.Key(requestID), lastID, count, block)
+func (s Service) writeRedis(ctx context.Context, streamKey string, requestID string, payload map[string]any, rawPayload []byte) (string, error) {
+	pipe := s.client.Pipeline()
+	defer pipe.Close()
+	add := pipe.XAdd(ctx, &redis.XAddArgs{
+		Stream: streamKey,
+		MaxLen: s.maxLen,
+		Approx: true,
+		Values: map[string]any{
+			"request_id": requestID,
+			"type":       strings.TrimSpace(InputText(payload["type"])),
+			"status":     payload["status"],
+			"payload":    string(rawPayload),
+		},
+	})
+	if s.ttl > 0 {
+		pipe.Expire(ctx, streamKey, s.ttl)
+	}
+	_, execErr := pipe.Exec(ctx)
+	id, addErr := add.Result()
+	if addErr != nil {
+		return "", addErr
+	}
+	if id == "" && execErr != nil {
+		return "", execErr
+	}
+	return id, nil
 }
 
 func (s Service) Key(requestID string) string {
@@ -244,25 +285,98 @@ func (s Service) canUseRedis() bool {
 	if s.client == nil {
 		return false
 	}
-	if s.redisDisabled == nil {
+	if s.redisCircuit == nil {
 		return true
 	}
-	return !s.redisDisabled.Load()
+	return s.redisCircuit.Allow(time.Now())
 }
 
-func (s Service) disableRedis() {
-	if s.redisDisabled != nil {
-		s.redisDisabled.Store(true)
+func (s Service) redisSuccess() {
+	if s.redisCircuit != nil {
+		s.redisCircuit.Success()
 	}
+}
+
+func (s Service) redisFailure() {
+	if s.redisCircuit != nil {
+		s.redisCircuit.Failure(time.Now())
+	}
+}
+
+func (s Service) redisAbort() {
+	if s.redisCircuit != nil {
+		s.redisCircuit.Abort()
+	}
+}
+
+type redisCircuit struct {
+	retryAt atomic.Int64
+	probing atomic.Bool
+	delay   time.Duration
+}
+
+func newRedisCircuit(delay time.Duration) *redisCircuit {
+	if delay <= 0 {
+		delay = defaultRedisRetryDelay
+	}
+	return &redisCircuit{delay: delay}
+}
+
+func (circuit *redisCircuit) Allow(now time.Time) bool {
+	if circuit == nil {
+		return true
+	}
+	retryAt := circuit.retryAt.Load()
+	if retryAt == 0 {
+		return true
+	}
+	if now.UnixNano() < retryAt {
+		return false
+	}
+	return circuit.probing.CompareAndSwap(false, true)
+}
+
+func (circuit *redisCircuit) Success() {
+	if circuit == nil {
+		return
+	}
+	circuit.retryAt.Store(0)
+	circuit.probing.Store(false)
+}
+
+func (circuit *redisCircuit) Failure(now time.Time) {
+	if circuit == nil {
+		return
+	}
+	circuit.retryAt.Store(now.Add(circuit.delay).UnixNano())
+	circuit.probing.Store(false)
+}
+
+func (circuit *redisCircuit) Abort() {
+	if circuit == nil {
+		return
+	}
+	// A canceled caller says nothing about Redis health. Keep an open circuit
+	// and release only the half-open probe for a later request.
+	circuit.probing.Store(false)
+}
+
+func contextOperationError(ctx context.Context, err error) bool {
+	return ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+func redisCoolingDownError(namespace string) error {
+	return fmt.Errorf("Redis stream %s 暂时不可用，等待自动恢复", strings.TrimSpace(namespace))
 }
 
 type memoryStreamStore struct {
-	mu     sync.Mutex
-	notify chan struct{}
-	items  map[string][]memoryEntry
-	seq    int64
-	maxLen int64
-	ttl    time.Duration
+	mu          sync.Mutex
+	notify      chan struct{}
+	items       map[string][]memoryEntry
+	seq         int64
+	maxLen      int64
+	ttl         time.Duration
+	nextCleanup time.Time
 }
 
 type memoryEntry struct {
@@ -275,11 +389,13 @@ func newMemoryStreamStore(maxLen int64, ttl time.Duration) *memoryStreamStore {
 	if maxLen <= 0 {
 		maxLen = defaultMaxLen
 	}
+	now := time.Now()
 	return &memoryStreamStore{
-		notify: make(chan struct{}),
-		items:  map[string][]memoryEntry{},
-		maxLen: maxLen,
-		ttl:    ttl,
+		notify:      make(chan struct{}),
+		items:       map[string][]memoryEntry{},
+		maxLen:      maxLen,
+		ttl:         ttl,
+		nextCleanup: now.Add(memoryCleanupDelay(ttl)),
 	}
 }
 
@@ -371,6 +487,10 @@ func (s *memoryStreamStore) cleanupLocked(now time.Time) {
 	if s.ttl <= 0 {
 		return
 	}
+	if !s.nextCleanup.IsZero() && now.Before(s.nextCleanup) {
+		return
+	}
+	s.nextCleanup = now.Add(memoryCleanupDelay(s.ttl))
 	cutoff := now.Add(-s.ttl)
 	for key, rows := range s.items {
 		index := 0
@@ -385,6 +505,20 @@ func (s *memoryStreamStore) cleanupLocked(now time.Time) {
 			s.items[key] = rows[index:]
 		}
 	}
+}
+
+func memoryCleanupDelay(ttl time.Duration) time.Duration {
+	if ttl <= 0 {
+		return maxMemoryCleanupDelay
+	}
+	delay := ttl / 4
+	if delay > maxMemoryCleanupDelay {
+		return maxMemoryCleanupDelay
+	}
+	if delay < time.Second {
+		return time.Second
+	}
+	return delay
 }
 
 func (s *memoryStreamStore) notifyWaitersLocked() {
