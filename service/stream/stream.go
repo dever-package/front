@@ -144,7 +144,6 @@ func (s Service) Read(ctx context.Context, requestID string, lastID string, coun
 
 func (s Service) writeRedis(ctx context.Context, streamKey string, requestID string, payload map[string]any, rawPayload []byte) (string, error) {
 	pipe := s.client.Pipeline()
-	defer pipe.Close()
 	add := pipe.XAdd(ctx, &redis.XAddArgs{
 		Stream: streamKey,
 		MaxLen: s.maxLen,
