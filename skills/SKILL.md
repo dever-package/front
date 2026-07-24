@@ -8,7 +8,7 @@ version: 0.1.0
 
 本组件 skill 必须和 `shemic-dever` 一起使用。先遵守 Dever 框架规则，再按这里的 front runtime 边界修改。
 
-普通业务 page JSON 开发不要以本 skill 为主；先按 `shemic-dever` 的 `references/front-page-quick.md` 和 `references/front-page.md` 写。只有维护 `package/front` runtime 本身时，才使用下面的约束。
+普通业务 page JSON 开发不要以本 skill 为主；先按 `shemic-dever` 的 `references/decide.md` 与 `references/front-page.md` 写。只有维护 `package/front` runtime 本身时，才使用下面的约束。
 
 ## 事实来源
 
@@ -51,6 +51,12 @@ version: 0.1.0
 - 维护插件 SDK 的公开 API，并保持组件插件不直接依赖主 front 源码。
 
 普通业务页面、业务校验、业务状态流转和业务前台交互不要放到 `package/front`。
+
+## 删除契约
+
+- 改 page 协议、action/option 语义、站点配置键时，**同一次改动删除**旧解析分支与旧文档词条；不为单页面保留双路径兼容。
+- 推导失败、权限不足应显式失败，不要静默 fallback 到另一 model 或旧协议字段。
+- 业务私有逻辑发现误放进本包时，迁回业务组件并删掉本包中的特殊分支。
 
 ## 常见检查
 

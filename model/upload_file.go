@@ -7,19 +7,20 @@ import (
 )
 
 type UploadFile struct {
-	ID         uint64    `dorm:"primaryKey;autoIncrement;comment:文件ID"`
-	RuleID     uint64    `dorm:"type:bigint;not null;comment:上传规则"`
-	StorageID  uint64    `dorm:"type:bigint;not null;default:0;comment:存储方式"`
-	Kind       string    `dorm:"type:varchar(32);comment:资源类型"`
-	BizID      uint64    `dorm:"type:bigint;not null;default:0;comment:业务来源"`
-	CategoryID uint64    `dorm:"type:bigint;not null;default:0;comment:分类"`
-	Name       string    `dorm:"type:varchar(255);comment:文件名称"`
-	Ext        string    `dorm:"type:varchar(32);comment:文件后缀"`
-	Mime       string    `dorm:"type:varchar(128);comment:MIME类型"`
-	Size       int64     `dorm:"type:bigint;not null;default:0;comment:文件大小"`
-	Hash       string    `dorm:"type:varchar(64);comment:文件哈希"`
-	Path       string    `dorm:"type:varchar(255);comment:存储路径"`
-	CreatedAt  time.Time `dorm:"comment:创建时间"`
+	ID          uint64    `dorm:"primaryKey;autoIncrement;comment:文件ID"`
+	RuleID      uint64    `dorm:"type:bigint;not null;comment:上传规则"`
+	StorageID   uint64    `dorm:"type:bigint;not null;default:0;comment:存储方式"`
+	Kind        string    `dorm:"type:varchar(32);comment:资源类型"`
+	BizID       uint64    `dorm:"type:bigint;not null;default:0;comment:业务来源"`
+	CategoryID  uint64    `dorm:"type:bigint;not null;default:0;comment:分类"`
+	Name        string    `dorm:"type:varchar(255);comment:文件名称"`
+	Ext         string    `dorm:"type:varchar(32);comment:文件后缀"`
+	Mime        string    `dorm:"type:varchar(128);comment:MIME类型"`
+	Size        int64     `dorm:"type:bigint;not null;default:0;comment:文件大小"`
+	Hash        string    `dorm:"type:varchar(64);comment:文件哈希"`
+	Path        string    `dorm:"type:varchar(255);comment:存储路径"`
+	ProviderKey string    `dorm:"type:varchar(255);not null;default:'';comment:存储侧文件标识"`
+	CreatedAt   time.Time `dorm:"comment:创建时间"`
 }
 
 type UploadFileIndex struct {
@@ -35,5 +36,8 @@ func NewUploadFileModel() *orm.Model[UploadFile] {
 		Index:    UploadFileIndex{},
 		Order:    "id desc",
 		Database: "default",
+		Fields: map[string]orm.FieldConfig{
+			"provider_key": {Type: orm.FieldTypeHidden},
+		},
 	})
 }

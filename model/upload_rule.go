@@ -94,8 +94,9 @@ var (
 )
 
 var uploadRuleStorageRelation = orm.Relation{
-	Field:  "storage_id",
-	Option: "front.NewUploadStorageModel",
+	Field:      "storage_id",
+	Option:     "front.NewUploadStorageModel",
+	OptionKeys: []string{},
 }
 
 var uploadRuleAcceptTypeRelation = orm.Relation{

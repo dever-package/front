@@ -51,20 +51,21 @@ type UploadSession struct {
 }
 
 type UploadFile struct {
-	ID         uint64
-	RuleID     uint64
-	StorageID  uint64
-	Kind       string
-	BizID      uint64
-	BizKey     string
-	BizName    string
-	CategoryID uint64
-	Name       string
-	Ext        string
-	Mime       string
-	Size       int64
-	Hash       string
-	Path       string
-	CreatedAt  string
-	Storage    UploadStorage
+	ID          uint64
+	RuleID      uint64
+	StorageID   uint64
+	Kind        string
+	BizID       uint64
+	BizKey      string
+	BizName     string
+	CategoryID  uint64
+	Name        string
+	Ext         string
+	Mime        string
+	Size        int64
+	Hash        string
+	Path        string
+	ProviderKey string
+	CreatedAt   string
+	Storage     UploadStorage
 }

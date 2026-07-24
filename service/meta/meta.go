@@ -62,11 +62,15 @@ func addOptionKey(keys map[string]struct{}, key string) {
 
 func ResolveModelOptions(ctx context.Context, modelName string) map[string]any {
 	config := ResolveModelConfig(modelName)
-	result := config.Options
+	result := MergeOptionMap(nil, config.Options)
 	for _, relation := range config.Relations {
 		result = MergeOptionMap(result, BuildRelationOptions(ctx, normalizeRelation(modelName, relation)))
 	}
 	return result
+}
+
+func ResolveModelDirectOptions(modelName string) map[string]any {
+	return MergeOptionMap(nil, ResolveModelConfig(modelName).Options)
 }
 
 func ResolveModelRelations(modelName string) []Relation {
@@ -87,16 +91,61 @@ func ResolveModelFieldsByType(modelName, fieldType string) []string {
 }
 
 func AttachRelations(ctx context.Context, modelName string, rows []map[string]any) []map[string]any {
-	relations := ResolveModelRelations(modelName)
-	if len(relations) == 0 {
+	return attachRelations(ctx, modelName, rows, nil, false)
+}
+
+func AttachRelationsByFields(
+	ctx context.Context,
+	modelName string,
+	rows []map[string]any,
+	fields []string,
+) []map[string]any {
+	selected := normalizeSelectedFields(fields)
+	return attachRelations(ctx, modelName, rows, selected, true)
+}
+
+func attachRelations(
+	ctx context.Context,
+	modelName string,
+	rows []map[string]any,
+	selected map[string]struct{},
+	limited bool,
+) []map[string]any {
+	if limited && len(selected) == 0 {
 		return rows
 	}
 
 	result := rows
-	for _, relation := range relations {
+	for _, relation := range ResolveModelRelations(modelName) {
+		if limited && !relationMatchesSelectedFields(relation, selected) {
+			continue
+		}
 		result = AttachRelation(ctx, result, relation)
 	}
 	return result
+}
+
+func normalizeSelectedFields(fields []string) map[string]struct{} {
+	result := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if normalized := normalizeSelectedField(field); normalized != "" {
+			result[normalized] = struct{}{}
+		}
+	}
+	return result
+}
+
+func normalizeSelectedField(field string) string {
+	return normalizeLabelField(strings.SplitN(strings.TrimSpace(field), ".", 2)[0])
+}
+
+func relationMatchesSelectedFields(relation Relation, selected map[string]struct{}) bool {
+	for field := range selected {
+		if relationMatchesField(relation, field) {
+			return true
+		}
+	}
+	return false
 }
 
 func HideFields(modelName string, rows []map[string]any) []map[string]any {

@@ -96,7 +96,7 @@ func importFileWithRule(ctx context.Context, input ImportFileInput, rule resolve
 		return resolvedUploadFile{}, err
 	}
 	notifyImportProgress(input.Progress, "正在保存到存储", 50)
-	if err = provider.Save(ctx, uploadprovider.SaveInput{
+	saveResult, err := uploadprovider.Save(ctx, provider, uploadprovider.SaveInput{
 		Rule: uploadprovider.Rule{
 			Storage:      rule.Storage,
 			Accept:       rule.Accept,
@@ -117,7 +117,8 @@ func importFileWithRule(ctx context.Context, input ImportFileInput, rule resolve
 				notifyImportProgress(input.Progress, "正在保存到存储", progress)
 			}
 		},
-	}); err != nil {
+	})
+	if err != nil {
 		return resolvedUploadFile{}, err
 	}
 	notifyImportProgress(input.Progress, "正在写入资源记录", 98)
@@ -137,7 +138,7 @@ func importFileWithRule(ctx context.Context, input ImportFileInput, rule resolve
 		Hash:       hash,
 		ObjectKey:  objectKey,
 		Status:     uploadSessionComplete,
-	}, hash, objectKey)
+	}, hash, objectKey, resolveSavedProviderKey(saveResult, objectKey))
 }
 
 func notifyImportProgress(progress func(text string, progress int), text string, percent int) {

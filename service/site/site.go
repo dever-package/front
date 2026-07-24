@@ -171,7 +171,7 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 			if err != nil {
 				return c.Error(err, http.StatusNotFound)
 			}
-			content, err = injectRuntime(content, currentSite, site.pluginDev)
+			content, err = injectRuntime(c.Context(), content, currentSite, site.pluginDev)
 			if err != nil {
 				return c.Error(err, http.StatusInternalServerError)
 			}
@@ -191,7 +191,7 @@ func openFile(c *server.Context, site settings, currentSite siteconfig.Site) err
 	raw.Set("Cache-Control", cache)
 	setContentType(raw, servedRel)
 	if servedRel == indexFile {
-		content, err = injectRuntime(content, currentSite, site.pluginDev)
+		content, err = injectRuntime(c.Context(), content, currentSite, site.pluginDev)
 		if err != nil {
 			return c.Error(err, http.StatusInternalServerError)
 		}

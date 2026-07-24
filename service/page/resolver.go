@@ -632,10 +632,10 @@ func mergeNodeOptionMeta(config optionConfig, item map[string]any, input Resolve
 		config.Service = childOptionMetaValue(meta, childLevel, "Service", "service")
 	}
 	if config.ValueField == "" {
-		config.ValueField = toString(meta["valueField"])
+		config.ValueField = childOptionMetaValue(meta, childLevel, "ValueField", "valueField")
 	}
 	if config.LabelField == "" {
-		config.LabelField = toString(meta["labelField"])
+		config.LabelField = childOptionMetaValue(meta, childLevel, "LabelField", "labelField")
 	}
 	if len(config.ExtraFields) == 0 {
 		config.ExtraFields = splitCSV(childOptionMetaValue(meta, childLevel, "ExtraFields", "extraFields"))

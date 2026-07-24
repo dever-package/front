@@ -85,7 +85,7 @@ func auth(settings middlewareSettings) coremiddleware.ContextFunc {
 		panic(fmt.Errorf("初始化 JWT 认证失败: %w", err))
 	}
 
-	return deverjwt.UseConfigured(deverjwt.Options{
+	jwtAuth := deverjwt.UseConfigured(deverjwt.Options{
 		Allow: func(c *server.Context) bool {
 			path := strings.TrimSpace(c.Path())
 			return isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
@@ -104,6 +104,12 @@ func auth(settings middlewareSettings) coremiddleware.ContextFunc {
 			return abortUnauthorized(c, msg)
 		},
 	})
+	return func(ctx any) error {
+		if c, ok := ctx.(*server.Context); ok {
+			attachUploadOpenCookieAuthorization(settings.frontConfig, c)
+		}
+		return jwtAuth(ctx)
+	}
 }
 
 func frontBootstrap(settings middlewareSettings) coremiddleware.ContextFunc {

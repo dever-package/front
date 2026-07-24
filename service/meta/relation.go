@@ -13,9 +13,12 @@ import (
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
+	frontmodel "github.com/dever-package/front/model"
 	optionseed "github.com/dever-package/front/service/internal/optionseed"
 	frontrecord "github.com/dever-package/front/service/record"
 	"github.com/dever-package/front/service/siteconfig"
+	"github.com/dever-package/front/service/upload/openurl"
+	uploadprovider "github.com/dever-package/front/service/upload/provider"
 )
 
 type OptionModel interface {
@@ -761,10 +764,23 @@ func loadRelationTargets(ctx context.Context, config Relation, targetIDs []any) 
 
 func normalizeRelationTarget(ctx context.Context, config Relation, row map[string]any) map[string]any {
 	cloned := util.CloneMap(row)
-	if strings.TrimSpace(config.Option) != "front.NewUploadFileModel" {
+	normalizer, exists := relationTargetNormalizers[strings.TrimSpace(config.Option)]
+	if !exists {
 		return cloned
 	}
-	return buildUploadRelationPayload(ctx, cloned)
+	return normalizer(ctx, cloned)
+}
+
+type relationTargetNormalizer func(context.Context, map[string]any) map[string]any
+
+var relationTargetNormalizers = map[string]relationTargetNormalizer{
+	"front.NewUploadFileModel":    buildUploadRelationPayload,
+	"front.NewUploadStorageModel": hideUploadStorageRelationSecret,
+}
+
+func hideUploadStorageRelationSecret(_ context.Context, row map[string]any) map[string]any {
+	delete(row, "secret_key")
+	return row
 }
 
 func buildUploadRelationPayload(ctx context.Context, row map[string]any) map[string]any {
@@ -776,73 +792,60 @@ func buildUploadRelationPayload(ctx context.Context, row map[string]any) map[str
 		openURL = siteconfig.FrontRuntimeAPIURL("upload/open", query)
 	}
 
-	publicURL := resolveUploadRelationPublicURL(ctx, row)
-	if strings.TrimSpace(publicURL) == "" {
-		publicURL = openURL
-	}
+	providerURL, useSignedPublicOpen := resolveUploadRelationPublicURL(ctx, row)
+	publicURL, openTargetURL := openurl.ResolveAssetURLs(
+		fileID,
+		providerURL,
+		openURL,
+		useSignedPublicOpen,
+	)
 
 	result := util.CloneMap(row)
+	delete(result, "provider_key")
 	result["url"] = publicURL
 	result["thumbnail"] = publicURL
-	result["open_url"] = openURL
+	result["open_url"] = openTargetURL
 	result["download"] = openURL
 	return result
 }
 
-func resolveUploadRelationPublicURL(ctx context.Context, row map[string]any) string {
+func resolveUploadRelationPublicURL(ctx context.Context, row map[string]any) (string, bool) {
 	pathValue := strings.TrimSpace(util.ToString(row["path"]))
 	if pathValue == "" {
-		return ""
+		return "", false
 	}
 
 	storageID := util.ToUint64(row["storage_id"])
 	if storageID == 0 {
-		return resolveLocalUploadRelationURL("", pathValue)
+		return uploadprovider.ResolveLocalPublicURL("", pathValue), false
 	}
 
 	storageModel := frontrecord.Resolve("front.NewUploadStorageModel")
 	if storageModel == nil {
-		return resolveLocalUploadRelationURL("", pathValue)
+		return uploadprovider.ResolveLocalPublicURL("", pathValue), false
 	}
 	storageRow := storageModel.FindMap(ctx, map[string]any{"id": storageID})
 	if len(storageRow) == 0 {
-		return resolveLocalUploadRelationURL("", pathValue)
+		return uploadprovider.ResolveLocalPublicURL("", pathValue), false
 	}
 
-	storageType := strings.ToLower(strings.TrimSpace(util.ToString(storageRow["type"])))
-	storageDomain := strings.TrimSpace(util.ToString(storageRow["domain"]))
-
-	switch storageType {
-	case "qiniu":
-		return joinRelationPublicURL(storageDomain, pathValue)
-	case "local", "":
-		return resolveLocalUploadRelationURL(storageDomain, pathValue)
-	default:
-		return joinRelationPublicURL(storageDomain, pathValue)
+	storage := frontmodel.UploadStorage{
+		ID:     storageID,
+		Type:   strings.ToLower(strings.TrimSpace(util.ToString(storageRow["type"]))),
+		Domain: strings.TrimSpace(util.ToString(storageRow["domain"])),
 	}
-}
-
-func resolveLocalUploadRelationURL(domain, objectPath string) string {
-	if url := joinRelationPublicURL(domain, objectPath); strings.TrimSpace(url) != "" {
-		return url
+	if storage.Type == "" {
+		storage.Type = "local"
 	}
-	normalizedPath := strings.TrimLeft(strings.TrimSpace(objectPath), "/")
-	if normalizedPath == "" {
-		return ""
+	driver, err := uploadprovider.Resolve(storage.Type)
+	if err != nil {
+		return "", false
 	}
-	return "/" + normalizedPath
-}
-
-func joinRelationPublicURL(domain, objectPath string) string {
-	domain = strings.TrimRight(strings.TrimSpace(domain), "/")
-	objectPath = strings.TrimLeft(strings.TrimSpace(objectPath), "/")
-	if domain == "" || objectPath == "" {
-		return ""
-	}
-	if !strings.HasPrefix(domain, "http://") && !strings.HasPrefix(domain, "https://") {
-		domain = "https://" + domain
-	}
-	return domain + "/" + objectPath
+	publicURL := strings.TrimSpace(driver.ResolvePublicURL(uploadprovider.File{
+		Path:    pathValue,
+		Storage: storage,
+	}))
+	return publicURL, uploadprovider.UsesSignedPublicOpen(driver)
 }
 
 func relationOptionBaseKey(config Relation) string {

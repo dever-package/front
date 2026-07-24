@@ -39,7 +39,8 @@
     "dialog-shell": [
       {
         "type": "form-input",
-        "placeholder": "例如：本地存储 / 七牛云华东",
+        "name": "存储方式名称",
+        "placeholder": "例如：本地存储 / 七牛云华东 / 飞书云盘",
         "value": "form.name",
         "mode": "form",
         "validate": [
@@ -55,6 +56,7 @@
       {
         "id": "upload-storage-type",
         "type": "form-select",
+        "name": "存储类型",
         "placeholder": "请选择存储类型",
         "value": "form.type",
         "mode": "form",
@@ -67,24 +69,13 @@
         ],
         "meta": {
           "formLayout": "horizontal",
-          "controlClassName": "max-w-[240px]",
-          "control": [
-            {
-              "value": "local",
-              "hide": [
-                "upload-storage-access-key",
-                "upload-storage-secret-key",
-                "upload-storage-bucket",
-                "upload-storage-upload-host",
-                "upload-storage-token-ttl"
-              ]
-            }
-          ]
+          "controlClassName": "max-w-[240px]"
         }
       },
       {
-        "id": "upload-storage-access-key",
+        "id": "upload-storage-qiniu-access-key",
         "type": "form-input",
+        "name": "AccessKey",
         "placeholder": "输入七牛云 AccessKey",
         "value": "form.access_key",
         "mode": "form",
@@ -102,12 +93,20 @@
           }
         ],
         "meta": {
-          "formLayout": "horizontal"
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "qiniu"
+            }
+          ]
         }
       },
       {
-        "id": "upload-storage-secret-key",
+        "id": "upload-storage-qiniu-secret-key",
         "type": "form-password",
+        "name": "SecretKey",
         "placeholder": "输入七牛云 SecretKey",
         "value": "form.secret_key",
         "mode": "form",
@@ -125,12 +124,20 @@
           }
         ],
         "meta": {
-          "formLayout": "horizontal"
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "qiniu"
+            }
+          ]
         }
       },
       {
-        "id": "upload-storage-bucket",
+        "id": "upload-storage-qiniu-bucket",
         "type": "form-input",
+        "name": "Bucket",
         "placeholder": "输入七牛云 Bucket",
         "value": "form.bucket",
         "mode": "form",
@@ -148,12 +155,120 @@
           }
         ],
         "meta": {
-          "formLayout": "horizontal"
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "qiniu"
+            }
+          ]
+        }
+      },
+      {
+        "id": "upload-storage-feishu-app-id",
+        "type": "form-input",
+        "name": "App ID",
+        "placeholder": "输入飞书自建应用 App ID",
+        "value": "form.access_key",
+        "mode": "form",
+        "info": "使用企业自建应用，应用需已发布并开通云空间文件读写权限。",
+        "validate": [
+          {
+            "type": "required",
+            "message": "App ID 不能为空。",
+            "when": [
+              {
+                "path": "form.type",
+                "operator": "equals",
+                "value": "feishu"
+              }
+            ]
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "feishu"
+            }
+          ]
+        }
+      },
+      {
+        "id": "upload-storage-feishu-app-secret",
+        "type": "form-password",
+        "name": "App Secret",
+        "placeholder": "编辑时留空表示保留已有 App Secret",
+        "value": "form.secret_key",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "App Secret 不能为空。",
+            "when": [
+              {
+                "path": "form.type",
+                "operator": "equals",
+                "value": "feishu"
+              },
+              {
+                "path": "form.id",
+                "operator": "empty"
+              }
+            ]
+          }
+        ],
+        "info": "App Secret 不会在编辑页面回显，留空会保留原值。",
+        "meta": {
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "feishu"
+            }
+          ]
+        }
+      },
+      {
+        "id": "upload-storage-feishu-folder-token",
+        "type": "form-input",
+        "name": "目标文件夹 Token",
+        "placeholder": "例如：fldbcO1UuPz8VwnpPx5a92...",
+        "value": "form.bucket",
+        "mode": "form",
+        "validate": [
+          {
+            "type": "required",
+            "message": "目标文件夹 Token 不能为空。",
+            "when": [
+              {
+                "path": "form.type",
+                "operator": "equals",
+                "value": "feishu"
+              }
+            ]
+          }
+        ],
+        "info": "请使用专用共享文件夹，并确保应用拥有读取、上传、创建子文件夹权限。",
+        "meta": {
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "feishu"
+            }
+          ]
         }
       },
       {
         "id": "upload-storage-domain",
         "type": "form-input",
+        "name": "访问域名",
         "placeholder": "例如：https://cdn.example.com 或 http://127.0.0.1:8085",
         "value": "form.domain",
         "mode": "form",
@@ -172,36 +287,66 @@
         ],
         "info": "七牛云必须填写访问域名；本地存储可留空，留空时会默认使用当前服务的 /upload/... 直链。",
         "meta": {
-          "formLayout": "horizontal"
+          "formLayout": "horizontal",
+          "showCondition": "any",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "local"
+            },
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "qiniu"
+            }
+          ]
         }
       },
       {
         "id": "upload-storage-upload-host",
         "type": "form-input",
+        "name": "上传域名",
         "placeholder": "例如：https://upload.qiniup.com",
         "value": "form.upload_host",
         "mode": "form",
         "info": "留空时会使用七牛默认上传域名。",
         "meta": {
-          "formLayout": "horizontal"
+          "formLayout": "horizontal",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "qiniu"
+            }
+          ]
         }
       },
       {
         "id": "upload-storage-token-ttl",
         "type": "form-number",
+        "name": "直传凭证有效期",
         "placeholder": "例如：3600",
         "value": "form.token_ttl",
         "mode": "form",
         "info": "仅七牛前端直传使用，默认 3600 秒。",
         "meta": {
           "formLayout": "horizontal",
-          "controlClassName": "max-w-[240px]"
+          "controlClassName": "max-w-[240px]",
+          "showWhen": [
+            {
+              "path": "form.type",
+              "operator": "equals",
+              "value": "qiniu"
+            }
+          ]
         }
       }
     ]
   },
   "data": {
     "form": {
+      "service": "front.upload.UploadStorageHook.AttachUploadStorageForm",
       "id": "",
       "name": "",
       "type": "local",
@@ -217,7 +362,10 @@
   "action": {
     "submit": {
       "type": "save",
-      "params": "form"
+      "params": "form",
+      "before": {
+        "service": "front.upload.UploadStorageHook.BeforeSaveUploadStorage"
+      }
     }
   }
 }

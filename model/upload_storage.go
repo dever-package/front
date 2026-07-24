@@ -43,11 +43,23 @@ var (
 			"upload_host": "",
 			"token_ttl":   3600,
 		},
+		{
+			"id":          3,
+			"name":        "飞书云盘",
+			"type":        "feishu",
+			"access_key":  "",
+			"secret_key":  "",
+			"bucket":      "",
+			"domain":      "",
+			"upload_host": "",
+			"token_ttl":   3600,
+		},
 	}
 
 	uploadStorageTypeOptions = []map[string]any{
 		{"id": "local", "value": "本地"},
 		{"id": "qiniu", "value": "七牛云"},
+		{"id": "feishu", "value": "飞书云盘"},
 	}
 )
 

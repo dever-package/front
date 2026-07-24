@@ -102,11 +102,17 @@
                     "field": "type",
                     "value": "qiniu",
                     "text": "七牛云"
+                  },
+                  {
+                    "field": "type",
+                    "value": "feishu",
+                    "text": "飞书云盘"
                   }
                 ]
               }
             },
             {
+              "name": "存储容器",
               "value": "bucket",
               "type": "show-base"
             },
@@ -138,6 +144,32 @@
                           "value": true
                         }
                       ]
+                    }
+                  },
+                  {
+                    "icon": "plug-zap",
+                    "variant": "outline",
+                    "size": "sm",
+                    "description": "检测飞书应用认证及目标文件夹读取权限",
+                    "successMessage": "飞书认证和目录读取正常",
+                    "meta": {
+                      "showWhen": [
+                        {
+                          "path": "type",
+                          "operator": "equals",
+                          "value": "feishu"
+                        }
+                      ]
+                    },
+                    "action": {
+                      "click": {
+                        "type": "request",
+                        "api": "/front/admin/upload_storage/check",
+                        "method": "post",
+                        "params": {
+                          "id": "$row.id"
+                        }
+                      }
                     }
                   },
                   {
@@ -177,7 +209,7 @@
           "stateKey": "dialog.open",
           "pageRoute": "/front/upload_storage/update",
           "title": "编辑存储方式",
-          "description": "统一维护本地、七牛云等存储配置，上传规则只引用这里的记录。",
+          "description": "统一维护本地、七牛云和飞书云盘配置，上传规则只引用这里的记录。",
           "footer": {
             "confirm": true,
             "confirmText": "保存"
@@ -221,9 +253,11 @@
   "data": {
     "page": {
       "title": "存储方式",
-      "description": "把本地、七牛云等存储配置单独维护起来，上传规则只关心引用哪一种存储方式。"
+      "description": "把本地、七牛云和飞书云盘配置单独维护起来，上传规则只关心引用哪一种存储方式。"
     },
-    "table": {},
+    "table": {
+      "service": "front.upload.UploadStorageHook.AttachUploadStorageList"
+    },
     "actionTarget": {
       "editStorageId": "",
       "deleteStorage": {}

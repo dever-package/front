@@ -260,6 +260,9 @@ func bizPagePrefix(bizKey string) string {
 
 func clientPagePath(c *server.Context) string {
 	raw := strings.TrimSpace(c.Header("X-Client-Page"))
+	if raw == "" && siteconfig.IsFrontRuntimeAPIEndpoint(c.Path(), "upload/open") {
+		raw = strings.TrimSpace(c.Header("Referer"))
+	}
 	if raw == "" {
 		return ""
 	}

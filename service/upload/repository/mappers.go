@@ -34,18 +34,19 @@ func mapUploadAcceptType(row map[string]any) UploadAcceptType {
 
 func NormalizeUploadFileRow(row map[string]any) UploadFile {
 	return UploadFile{
-		ID:         util.ToUint64(row["id"]),
-		RuleID:     util.ToUint64(row["rule_id"]),
-		StorageID:  util.ToUint64(row["storage_id"]),
-		Kind:       ResolveKind(util.ToStringTrimmed(row["kind"]), util.ToStringTrimmed(row["name"]), util.ToStringTrimmed(row["mime"])),
-		BizID:      util.ToUint64(row["biz_id"]),
-		CategoryID: util.ToUint64(row["category_id"]),
-		Name:       util.ToStringTrimmed(row["name"]),
-		Ext:        util.ToStringTrimmed(row["ext"]),
-		Mime:       util.ToStringTrimmed(row["mime"]),
-		Size:       util.ToInt64(row["size"]),
-		Hash:       NormalizeHash(row["hash"]),
-		Path:       util.ToStringTrimmed(row["path"]),
-		CreatedAt:  util.ToStringTrimmed(row["created_at"]),
+		ID:          util.ToUint64(row["id"]),
+		RuleID:      util.ToUint64(row["rule_id"]),
+		StorageID:   util.ToUint64(row["storage_id"]),
+		Kind:        ResolveKind(util.ToStringTrimmed(row["kind"]), util.ToStringTrimmed(row["name"]), util.ToStringTrimmed(row["mime"])),
+		BizID:       util.ToUint64(row["biz_id"]),
+		CategoryID:  util.ToUint64(row["category_id"]),
+		Name:        util.ToStringTrimmed(row["name"]),
+		Ext:         util.ToStringTrimmed(row["ext"]),
+		Mime:        util.ToStringTrimmed(row["mime"]),
+		Size:        util.ToInt64(row["size"]),
+		Hash:        NormalizeHash(row["hash"]),
+		Path:        util.ToStringTrimmed(row["path"]),
+		ProviderKey: util.ToStringTrimmed(row["provider_key"]),
+		CreatedAt:   util.ToStringTrimmed(row["created_at"]),
 	}
 }

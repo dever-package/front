@@ -22,7 +22,17 @@ import (
 	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
-var uploadSessionPartLocks [64]sync.Mutex
+type uploadSessionMutex struct {
+	mutex sync.Mutex
+	refs  int
+}
+
+var uploadSessionMutexes = struct {
+	sync.Mutex
+	items map[uint64]*uploadSessionMutex
+}{
+	items: make(map[uint64]*uploadSessionMutex),
+}
 
 func InitUpload(c *server.Context) error {
 	var input uploadInitInput
@@ -174,6 +184,16 @@ func UploadPart(c *server.Context) error {
 	if err := ensureUploadSessionToken(session, c.Input("token")); err != nil {
 		return c.Error(err)
 	}
+	unlock := lockUploadSession(sessionID)
+	defer unlock()
+
+	session, err = uploadrepo.FindUploadSession(c.Context(), sessionID)
+	if err != nil {
+		return c.Error(err)
+	}
+	if err := ensureUploadSessionToken(session, c.Input("token")); err != nil {
+		return c.Error(err)
+	}
 	if err := ensureUploadSessionActive(session); err != nil {
 		return c.Error(err)
 	}
@@ -206,7 +226,7 @@ func UploadPart(c *server.Context) error {
 		return c.Error(err)
 	}
 
-	if err := recordUploadPart(c.Context(), sessionID, partNumber); err != nil {
+	if err := recordUploadPartLocked(c.Context(), sessionID, partNumber); err != nil {
 		return c.Error(err)
 	}
 
@@ -229,29 +249,29 @@ func CompleteUpload(c *server.Context) error {
 	if err := ensureUploadSessionToken(session, input.Token); err != nil {
 		return c.Error(err)
 	}
+	unlock := lockUploadSession(input.SessionID)
+	defer unlock()
+
+	session, err = uploadrepo.FindUploadSession(c.Context(), input.SessionID)
+	if err != nil {
+		return c.Error(err)
+	}
+	if err := ensureUploadSessionToken(session, input.Token); err != nil {
+		return c.Error(err)
+	}
+	if strings.EqualFold(session.Status, uploadSessionComplete) {
+		if existing := uploadrepo.FindUploadFileByPath(c.Context(), session.ObjectKey); existing != nil {
+			_ = cleanupUploadSession(input.SessionID)
+			return c.JSON(uploadrepo.BuildUploadFilePayload(*existing))
+		}
+		return c.Error("上传会话已完成")
+	}
 	if err := ensureUploadSessionActive(session); err != nil {
 		return c.Error(err)
 	}
 	rule, err := uploadrepo.FindUploadRule(c.Context(), session.RuleID)
 	if err != nil {
 		return c.Error(err)
-	}
-	if strings.EqualFold(rule.Transport, "direct") {
-		if err := validateUploadStoredFile(rule, session.Name, session.Mime); err != nil {
-			return c.Error(err)
-		}
-	}
-
-	if existing := uploadrepo.FindUploadFileByPath(c.Context(), session.ObjectKey); existing != nil && strings.EqualFold(rule.Transport, "direct") {
-		_ = updateUploadFileRelationMetaIfNeeded(c.Context(), *existing, session.BizID, session.CategoryID)
-		_ = cleanupUploadSession(input.SessionID)
-		refreshed, err := uploadrepo.FindUploadFile(c.Context(), existing.ID)
-		if err == nil {
-			logUploadFile(c, refreshed.ID, input)
-			return c.JSON(uploadrepo.BuildUploadFilePayload(refreshed))
-		}
-		logUploadFile(c, existing.ID, input)
-		return c.JSON(uploadrepo.BuildUploadFilePayload(*existing))
 	}
 
 	fileRecord, err := completeUploadSession(c.Context(), rule, session)
@@ -332,11 +352,7 @@ func ensureUploadSessionActive(session resolvedUploadSession) error {
 	return nil
 }
 
-func recordUploadPart(ctx context.Context, sessionID uint64, partNumber int) error {
-	lock := uploadSessionPartLock(sessionID)
-	lock.Lock()
-	defer lock.Unlock()
-
+func recordUploadPartLocked(ctx context.Context, sessionID uint64, partNumber int) error {
 	session, err := uploadrepo.FindUploadSession(ctx, sessionID)
 	if err != nil {
 		return err
@@ -351,9 +367,26 @@ func recordUploadPart(ctx context.Context, sessionID uint64, partNumber int) err
 	})
 }
 
-func uploadSessionPartLock(sessionID uint64) *sync.Mutex {
-	index := int(sessionID % uint64(len(uploadSessionPartLocks)))
-	return &uploadSessionPartLocks[index]
+func lockUploadSession(sessionID uint64) func() {
+	uploadSessionMutexes.Lock()
+	entry := uploadSessionMutexes.items[sessionID]
+	if entry == nil {
+		entry = &uploadSessionMutex{}
+		uploadSessionMutexes.items[sessionID] = entry
+	}
+	entry.refs++
+	uploadSessionMutexes.Unlock()
+
+	entry.mutex.Lock()
+	return func() {
+		entry.mutex.Unlock()
+		uploadSessionMutexes.Lock()
+		entry.refs--
+		if entry.refs == 0 {
+			delete(uploadSessionMutexes.items, sessionID)
+		}
+		uploadSessionMutexes.Unlock()
+	}
 }
 
 func OpenUpload(c *server.Context) error {
@@ -365,23 +398,33 @@ func OpenUpload(c *server.Context) error {
 	if err := ensureUploadOpenAccess(c, fileRecord); err != nil {
 		return c.Error(err, uploadaccess.Status(err))
 	}
+	raw, ok := c.Raw.(*fiber.Ctx)
+	if !ok {
+		return c.Error("当前上传环境不支持文件输出")
+	}
 
 	provider, err := uploadprovider.Resolve(resolveUploadStorageProvider(fileRecord.Storage))
 	if err != nil {
 		return c.Error(err)
 	}
-	target, err := provider.ResolveOpen(c.Context(), uploadprovider.File{
-		Path:    fileRecord.Path,
-		Storage: fileRecord.Storage,
+	target, err := uploadprovider.Open(c.Context(), provider, uploadprovider.OpenInput{
+		File: uploadprovider.File{
+			Path:    fileRecord.Path,
+			Storage: fileRecord.Storage,
+		},
+		ProviderKey: fileRecord.ProviderKey,
+		Name:        fileRecord.Name,
+		Mime:        fileRecord.Mime,
+		Range:       strings.TrimSpace(raw.Get("Range")),
 	})
 	if err != nil {
+		if statusCode, header, ok := uploadprovider.ResolveOpenError(err); ok {
+			setUploadOpenErrorHeaders(raw, header)
+			return c.Error(err, statusCode)
+		}
 		return c.Error(err)
 	}
 
-	raw, ok := c.Raw.(*fiber.Ctx)
-	if !ok {
-		return c.Error("当前上传环境不支持文件输出")
-	}
 	if target == nil {
 		return c.Error("文件不存在")
 	}
@@ -390,9 +433,46 @@ func OpenUpload(c *server.Context) error {
 		return raw.Redirect(strings.TrimSpace(target.Redirect), http.StatusFound)
 	}
 	if strings.TrimSpace(target.LocalPath) == "" {
+		if target.Stream != nil {
+			return sendUploadStream(raw, target)
+		}
 		return c.Error("文件不存在")
 	}
 	return raw.SendFile(strings.TrimSpace(target.LocalPath))
+}
+
+func setUploadOpenErrorHeaders(raw *fiber.Ctx, header http.Header) {
+	for _, name := range []string{"Content-Range", "Retry-After"} {
+		if value := strings.TrimSpace(header.Get(name)); value != "" {
+			raw.Set(name, value)
+		}
+	}
+}
+
+func sendUploadStream(raw *fiber.Ctx, target *uploadprovider.OpenResult) error {
+	for _, header := range []string{
+		"Content-Type",
+		"Content-Disposition",
+		"Content-Range",
+		"Accept-Ranges",
+		"ETag",
+		"Last-Modified",
+		"Cache-Control",
+	} {
+		if value := strings.TrimSpace(target.Header.Get(header)); value != "" {
+			raw.Set(header, value)
+		}
+	}
+	statusCode := target.StatusCode
+	if statusCode <= 0 {
+		statusCode = http.StatusOK
+	}
+	raw.Status(statusCode)
+	maxInt := int64(^uint(0) >> 1)
+	if target.ContentLength >= 0 && target.ContentLength <= maxInt {
+		return raw.SendStream(target.Stream, int(target.ContentLength))
+	}
+	return raw.SendStream(target.Stream)
 }
 
 func setUploadResponseHeaders(raw *fiber.Ctx) {

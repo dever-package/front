@@ -58,7 +58,15 @@
         "placeholder": "请选择存储方式",
         "value": "form.storage_id",
         "mode": "form",
-        "option": "option.storage",
+        "option": {
+          "model": "front.NewUploadStorageModel",
+          "labelField": "name",
+          "extraFields": [
+            "type"
+          ],
+          "order": "id asc",
+          "pageSize": 200
+        },
         "validate": [
           {
             "type": "required",
@@ -82,7 +90,7 @@
             "message": "上传方式不能为空。"
           }
         ],
-        "info": "本地存储仅支持后端中转；七牛云可选择后端中转或前端直传。",
+        "info": "本地和飞书云盘仅支持后端中转；七牛云可选择后端中转或前端直传。",
         "meta": {
           "formLayout": "horizontal",
           "controlClassName": "max-w-[240px]",
@@ -99,6 +107,9 @@
                 "qiniu": [
                   "relay",
                   "direct"
+                ],
+                "feishu": [
+                  "relay"
                 ]
               }
             }
@@ -190,6 +201,9 @@
     "submit": {
       "type": "save",
       "params": "form",
+      "before": {
+        "service": "front.upload.UploadRuleHook.BeforeSaveUploadRule"
+      },
       "data": {
         "id": "$form.id",
         "name": "$form.name",

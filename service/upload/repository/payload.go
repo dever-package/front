@@ -6,15 +6,19 @@ import (
 	"strings"
 
 	"github.com/dever-package/front/service/siteconfig"
+	"github.com/dever-package/front/service/upload/openurl"
 	uploadprovider "github.com/dever-package/front/service/upload/provider"
 )
 
 func BuildUploadFilePayload(file UploadFile) map[string]any {
 	openURL := buildUploadOpenURL(file.ID)
-	publicURL := resolveUploadFilePublicURL(file)
-	if strings.TrimSpace(publicURL) == "" {
-		publicURL = openURL
-	}
+	providerURL, useSignedPublicOpen := resolveUploadFilePublicURL(file)
+	publicURL, openTargetURL := openurl.ResolveAssetURLs(
+		file.ID,
+		providerURL,
+		openURL,
+		useSignedPublicOpen,
+	)
 
 	return map[string]any{
 		"id":          file.ID,
@@ -34,7 +38,7 @@ func BuildUploadFilePayload(file UploadFile) map[string]any {
 		"url":         publicURL,
 		"download":    openURL,
 		"thumbnail":   publicURL,
-		"open_url":    openURL,
+		"open_url":    openTargetURL,
 	}
 }
 
@@ -44,13 +48,14 @@ func buildUploadOpenURL(fileID uint64) string {
 	return siteconfig.FrontRuntimeAPIURL("upload/open", query)
 }
 
-func resolveUploadFilePublicURL(file UploadFile) string {
+func resolveUploadFilePublicURL(file UploadFile) (string, bool) {
 	driver, err := uploadprovider.Resolve(strings.TrimSpace(file.Storage.Type))
 	if err != nil {
-		return ""
+		return "", false
 	}
-	return strings.TrimSpace(driver.ResolvePublicURL(uploadprovider.File{
+	publicURL := strings.TrimSpace(driver.ResolvePublicURL(uploadprovider.File{
 		Path:    file.Path,
 		Storage: file.Storage,
 	}))
+	return publicURL, uploadprovider.UsesSignedPublicOpen(driver)
 }

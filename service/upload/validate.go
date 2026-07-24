@@ -33,13 +33,23 @@ func validateUploadInit(rule resolvedUploadRule, input uploadInitInput) error {
 	if err := validateUploadActiveContent(rule.Accept, input.Name, input.Mime); err != nil {
 		return err
 	}
-	if strings.EqualFold(rule.Transport, "direct") && strings.EqualFold(resolveUploadStorageProvider(rule.Storage), "local") {
-		return fmt.Errorf("本地上传不支持前端直传")
+	if err := validateUploadTransport(resolveUploadStorageProvider(rule.Storage), rule.Transport); err != nil {
+		return err
 	}
 	if strings.EqualFold(rule.Transport, "direct") && normalizeUploadHash(input.Hash) == "" {
 		return fmt.Errorf("当前上传规则要求提供文件标识")
 	}
 	return nil
+}
+
+func validateUploadTransport(storageType, transport string) error {
+	if !strings.EqualFold(strings.TrimSpace(transport), "direct") {
+		return nil
+	}
+	if strings.EqualFold(strings.TrimSpace(storageType), "qiniu") {
+		return nil
+	}
+	return fmt.Errorf("当前存储方式不支持前端直传")
 }
 
 func validateUploadStoredFile(rule resolvedUploadRule, fileName, mimeType string) error {

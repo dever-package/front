@@ -20,10 +20,11 @@ import (
 )
 
 const (
-	SignatureParam = "sign"
-	ExpiresParam   = "expires"
-	DefaultTTL     = 5 * time.Minute
-	MaxTTL         = 24 * time.Hour
+	SignatureParam       = "sign"
+	PublicSignatureParam = "public_sign"
+	ExpiresParam         = "expires"
+	DefaultTTL           = 5 * time.Minute
+	MaxTTL               = 24 * time.Hour
 )
 
 var (
@@ -40,9 +41,20 @@ func IsSignedRequest(c *server.Context) bool {
 }
 
 func ValidateRequest(c *server.Context) error {
+	if c == nil {
+		return fmt.Errorf("文件签名参数无效")
+	}
 	fileID := util.ToUint64(c.Query("id"))
+	if fileID == 0 {
+		return fmt.Errorf("文件签名参数无效")
+	}
+
+	if actual := strings.TrimSpace(c.Query(PublicSignatureParam)); actual != "" {
+		return validatePublicSignature(fileID, actual)
+	}
+
 	expires, err := strconv.ParseInt(strings.TrimSpace(c.Query(ExpiresParam)), 10, 64)
-	if fileID == 0 || err != nil || expires <= 0 {
+	if err != nil || expires <= 0 {
 		return fmt.Errorf("文件签名参数无效")
 	}
 	if time.Now().Unix() > expires {
@@ -65,6 +77,24 @@ func ValidateRequest(c *server.Context) error {
 		return fmt.Errorf("文件签名无效")
 	}
 	return nil
+}
+
+// ResolveAssetURLs keeps providers with public URLs unchanged. Providers without
+// a public URL receive a stable signed display URL for native media elements.
+func ResolveAssetURLs(fileID uint64, providerURL, protectedURL string, useSignedPublicOpen bool) (string, string) {
+	providerURL = strings.TrimSpace(providerURL)
+	protectedURL = strings.TrimSpace(protectedURL)
+	if providerURL != "" {
+		return providerURL, protectedURL
+	}
+	if !useSignedPublicOpen {
+		return protectedURL, protectedURL
+	}
+	publicURL, err := BuildPublic(fileID)
+	if err != nil {
+		return protectedURL, protectedURL
+	}
+	return publicURL, publicURL
 }
 
 func BuildSigned(fileID uint64, ttl time.Duration) (string, time.Time, error) {
@@ -92,12 +122,49 @@ func BuildSigned(fileID uint64, ttl time.Duration) (string, time.Time, error) {
 	return siteconfig.FrontRuntimeAPIURL("upload/open", query), expiresAt, nil
 }
 
+func BuildPublic(fileID uint64) (string, error) {
+	if fileID == 0 {
+		return "", fmt.Errorf("文件ID不能为空")
+	}
+	signature, err := signPublic(fileID)
+	if err != nil {
+		return "", err
+	}
+
+	query := url.Values{}
+	query.Set("id", strconv.FormatUint(fileID, 10))
+	query.Set(PublicSignatureParam, signature)
+	return siteconfig.FrontRuntimeAPIURL("upload/open", query), nil
+}
+
 func sign(fileID uint64, expires int64) (string, error) {
 	secret, err := signSecret()
 	if err != nil {
 		return "", err
 	}
 	message := fmt.Sprintf("front-upload-open:v1:%d:%d", fileID, expires)
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte(message))
+	return hex.EncodeToString(mac.Sum(nil)), nil
+}
+
+func validatePublicSignature(fileID uint64, actual string) error {
+	expected, err := signPublic(fileID)
+	if err != nil {
+		return err
+	}
+	if !hmac.Equal([]byte(strings.ToLower(actual)), []byte(expected)) {
+		return fmt.Errorf("文件签名无效")
+	}
+	return nil
+}
+
+func signPublic(fileID uint64) (string, error) {
+	secret, err := signSecret()
+	if err != nil {
+		return "", err
+	}
+	message := fmt.Sprintf("front-upload-open:public:v1:%d", fileID)
 	mac := hmac.New(sha256.New, secret)
 	_, _ = mac.Write([]byte(message))
 	return hex.EncodeToString(mac.Sum(nil)), nil

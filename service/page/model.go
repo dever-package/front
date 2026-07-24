@@ -124,14 +124,14 @@ func resolveModelListContainer(
 	if modelValue == nil {
 		return nil, nil, true, missingDataModelError(pathValue, key, modelName)
 	}
-	options := resolveModelFrontOption(c.Context(), modelName, modelValue)
+	options := resolveListModelFrontOption(c.Context(), modelName, modelValue, current)
 	queryConfig := util.CloneMap(current)
 	queryConfig["modelName"] = modelName
 	rows, total, page, pageSize, err := queryModelList(c, modelValue, queryConfig)
 	if err != nil {
 		return nil, options, true, err
 	}
-	rows = frontmeta.AttachRelations(c.Context(), modelName, rows)
+	rows = attachListModelRelations(c.Context(), modelName, rows, current)
 	rows = frontmeta.HideFields(modelName, rows)
 	rows, err = applyListRowService(c, current, pathValue, rows)
 	if err != nil {
@@ -143,7 +143,7 @@ func resolveModelListContainer(
 		switch key {
 		case "list":
 			result[key] = rows
-		case "model", "service", "searchFields", "filterFields", "order", "modelName":
+		case "model", "service", "searchFields", "filterFields", "order", "modelName", "relationOptions", "relationFields":
 			continue
 		default:
 			result[key] = value
@@ -154,6 +154,39 @@ func resolveModelListContainer(
 	result["page"] = page
 	result["pageSize"] = pageSize
 	return result, options, true, nil
+}
+
+func resolveListModelFrontOption(
+	ctx context.Context,
+	modelName string,
+	modelValue any,
+	config map[string]any,
+) map[string]any {
+	if value, exists := config["relationOptions"]; exists && !util.ToBool(value) {
+		return frontmeta.ResolveModelDirectOptions(modelName)
+	}
+	return resolveModelFrontOption(ctx, modelName, modelValue)
+}
+
+func attachListModelRelations(
+	ctx context.Context,
+	modelName string,
+	rows []map[string]any,
+	config map[string]any,
+) []map[string]any {
+	fields, limited := configuredModelFields(config, "relationFields")
+	if !limited {
+		return frontmeta.AttachRelations(ctx, modelName, rows)
+	}
+	return frontmeta.AttachRelationsByFields(ctx, modelName, rows, fields)
+}
+
+func configuredModelFields(config map[string]any, key string) ([]string, bool) {
+	value, exists := config[key]
+	if !exists {
+		return nil, false
+	}
+	return mapStringSlice(value), true
 }
 
 func applyListRowService(

@@ -2,6 +2,7 @@ package site
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"hash/crc32"
 	"strconv"
@@ -66,7 +67,7 @@ func writeRuntime(c *server.Context, site siteconfig.Site, pluginDev bool) error
 		return c.Error("当前环境不支持 runtime 输出")
 	}
 
-	content, err := runtimeContent(site, pluginDev)
+	content, err := runtimeContent(c.Context(), site, pluginDev)
 	if err != nil {
 		return c.Error(err)
 	}
@@ -76,9 +77,10 @@ func writeRuntime(c *server.Context, site siteconfig.Site, pluginDev bool) error
 	return raw.Send(content)
 }
 
-func runtimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
-	if pluginDev {
-		return buildRuntimeContent(site, pluginDev)
+func runtimeContent(ctx context.Context, site siteconfig.Site, pluginDev bool) ([]byte, error) {
+	sitePayload, dynamic := resolveRuntimeSitePayload(ctx, site)
+	if pluginDev || dynamic {
+		return buildRuntimeContent(site, pluginDev, sitePayload)
 	}
 
 	cacheKey := runtimeContentCacheKey(site, pluginDev)
@@ -86,7 +88,7 @@ func runtimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 		return cloneBytes(cached), nil
 	}
 
-	content, err := buildRuntimeContent(site, pluginDev)
+	content, err := buildRuntimeContent(site, pluginDev, sitePayload)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +96,7 @@ func runtimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 	return content, nil
 }
 
-func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
+func buildRuntimeContent(site siteconfig.Site, pluginDev bool, sitePayload runtimeSitePayload) ([]byte, error) {
 	runtimeSetting := runtimeSettingPayload{
 		Skin:       site.Setting.Runtime.Skin,
 		RouterMode: site.Setting.Runtime.RouterMode,
@@ -109,17 +111,10 @@ func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 		APIPrefix:   strings.Trim(site.APIPrefix(), "/"),
 		APIHost:     runtimeAPIHost(siteconfig.DefaultAPI),
 		SiteAPIHost: runtimeAPIHost(strings.Trim(site.APIPrefix(), "/")),
-		Site: runtimeSitePayload{
-			Name:        site.Config.Name,
-			Subtitle:    site.Config.Subtitle,
-			Description: site.Config.Description,
-			URL:         site.Config.PrimaryURL(),
-			Logo:        site.LogoURL(),
-			Favicon:     site.FaviconURL(),
-		},
-		Appearance: site.Setting.Appearance,
-		Runtime:    runtimeSetting,
-		Access:     site.Access,
+		Site:        sitePayload,
+		Appearance:  site.Setting.Appearance,
+		Runtime:     runtimeSetting,
+		Access:      site.Access,
 	}
 	content, err := json.Marshal(payload)
 	if err != nil {
@@ -129,9 +124,9 @@ func buildRuntimeContent(site siteconfig.Site, pluginDev bool) ([]byte, error) {
 	return []byte("window.appRuntime = " + string(content) + ";\n"), nil
 }
 
-func injectRuntime(content []byte, site siteconfig.Site, pluginDev bool) ([]byte, error) {
-	if pluginDev {
-		return injectRuntimeUncached(content, site, pluginDev)
+func injectRuntime(ctx context.Context, content []byte, site siteconfig.Site, pluginDev bool) ([]byte, error) {
+	if pluginDev || hasRuntimeSiteConfigProvider(site.Key) {
+		return injectRuntimeUncached(ctx, content, site, pluginDev)
 	}
 
 	cacheKey := runtimeHTMLCacheKey(content, site, pluginDev)
@@ -139,7 +134,7 @@ func injectRuntime(content []byte, site siteconfig.Site, pluginDev bool) ([]byte
 		return cloneBytes(cached), nil
 	}
 
-	result, err := injectRuntimeUncached(content, site, pluginDev)
+	result, err := injectRuntimeUncached(ctx, content, site, pluginDev)
 	if err != nil {
 		return nil, err
 	}
@@ -147,8 +142,8 @@ func injectRuntime(content []byte, site siteconfig.Site, pluginDev bool) ([]byte
 	return result, nil
 }
 
-func injectRuntimeUncached(content []byte, site siteconfig.Site, pluginDev bool) ([]byte, error) {
-	runtime, err := runtimeContent(site, pluginDev)
+func injectRuntimeUncached(ctx context.Context, content []byte, site siteconfig.Site, pluginDev bool) ([]byte, error) {
+	runtime, err := runtimeContent(ctx, site, pluginDev)
 	if err != nil {
 		return nil, err
 	}

@@ -60,8 +60,8 @@ func applyNodeLabelMap(nodes map[string][]map[string]any, modelName, pathValue s
 
 func nodeLabelModelName(content []byte, pathValue string) string {
 	for _, candidate := range []string{
-		SubmitModelName(content, pathValue),
 		explicitDataModelName(content),
+		SubmitModelName(content, pathValue),
 		DefaultModelName(pathValue),
 	} {
 		candidate = strings.TrimSpace(candidate)

@@ -94,6 +94,24 @@ export function useSearch(...args: any[]) {
 export const Button = getCompatModule("@/components/ui/button").Button;
 export const Card = getCompatModule("@/components/ui/card").Card;
 export const Input = getCompatModule("@/components/ui/input").Input;
+export const Switch = getCompatModule("@/components/ui/switch").Switch;
+const tableModule = getCompatModule("@/components/ui/table");
+export const Table = tableModule.Table;
+export const TableBody = tableModule.TableBody;
+export const TableCell = tableModule.TableCell;
+export const TableFooter = tableModule.TableFooter;
+export const TableHead = tableModule.TableHead;
+export const TableHeader = tableModule.TableHeader;
+export const TableRow = tableModule.TableRow;
+export const TableCaption = tableModule.TableCaption;
+export const FormDate = getCompatModule("@/page/nodes/form/date").FormDate;
+const dialogModule = getCompatModule("@/components/ui/dialog");
+export const Dialog = dialogModule.Dialog;
+export const DialogContent = dialogModule.DialogContent;
+export const DialogDescription = dialogModule.DialogDescription;
+export const DialogFooter = dialogModule.DialogFooter;
+export const DialogHeader = dialogModule.DialogHeader;
+export const DialogTitle = dialogModule.DialogTitle;
 export const SiteLogo = getCompatModule(
   "@/components/layout/site-logo",
 ).SiteLogo;
@@ -114,6 +132,9 @@ export const requestRaw = getCompatModule("@/lib/request").requestRaw;
 export const resetFrontRuntimeCache =
   getCompatModule("@/lib/request").resetFrontRuntimeCache;
 export const useAuthStore = getCompatModule("@/stores/auth-store").useAuthStore;
+export const useTheme = getCompatModule(
+  "@/context/theme-provider",
+).useTheme;
 
 function frontSDK(): DeverFrontSDK {
   const sdk = window.DeverFront?.sdk;
