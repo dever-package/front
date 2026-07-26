@@ -2,10 +2,7 @@ package provider
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"unicode"
 
@@ -46,41 +43,60 @@ func (feishuDriver) SaveWithResult(ctx context.Context, input SaveInput) (SaveRe
 	if err != nil {
 		return SaveResult{}, err
 	}
-	remoteName, shard := feishuRemoteObject(input.ObjectKey, input.Ext)
-	folderToken, err := client.ensureShardFolder(ctx, accessToken, shard)
-	if err != nil {
-		return SaveResult{}, err
-	}
-	fileToken, err := client.findFileToken(ctx, accessToken, folderToken, remoteName)
-	if err != nil {
-		return SaveResult{}, err
-	}
-	if fileToken != "" {
-		if input.Progress != nil {
-			input.Progress(input.Size, input.Size)
+	folderToken := ""
+	candidates := make([]string, 0, len(input.NameCandidates))
+	reportStoredName := true
+	if input.PathMode == frontmodel.UploadStoragePathModeHash {
+		var hashFileName string
+		folderToken, hashFileName, err = client.ensureHashFolder(ctx, accessToken, input.ObjectKey)
+		if err != nil {
+			return SaveResult{}, err
 		}
-		return SaveResult{ProviderKey: fileToken}, nil
+		if existingToken, findErr := client.findFileToken(ctx, accessToken, folderToken, hashFileName); findErr != nil {
+			return SaveResult{}, findErr
+		} else if existingToken != "" {
+			if input.Progress != nil {
+				input.Progress(input.Size, input.Size)
+			}
+			return SaveResult{ProviderKey: existingToken}, nil
+		}
+		candidates = append(candidates, hashFileName)
+		reportStoredName = false
+	} else {
+		folderToken, err = client.ensureSourceFolder(ctx, accessToken, input.SourceKey, input.SourceName)
+		if err != nil {
+			return SaveResult{}, err
+		}
+		candidates, err = resolveFeishuNameCandidates(input)
+		if err != nil {
+			return SaveResult{}, err
+		}
+	}
+	remoteName, err := client.findAvailableFileName(ctx, accessToken, folderToken, candidates)
+	if err != nil {
+		return SaveResult{}, err
 	}
 
 	if input.Progress != nil {
 		input.Progress(0, input.Size)
 	}
+	fileToken := ""
 	if input.Size <= feishuUploadAllMaxBytes {
 		fileToken, err = client.uploadAll(ctx, accessToken, folderToken, remoteName, input.LocalPath, input.Size)
 	} else {
 		fileToken, err = client.uploadMultipart(ctx, accessToken, folderToken, remoteName, input.LocalPath, input.Size, input.Progress)
 	}
 	if err != nil {
-		recoveredToken, recoveryErr := client.findFileToken(ctx, accessToken, folderToken, remoteName)
-		if recoveryErr != nil || recoveredToken == "" {
-			return SaveResult{}, err
-		}
-		fileToken = recoveredToken
+		return SaveResult{}, err
 	}
 	if input.Progress != nil {
 		input.Progress(input.Size, input.Size)
 	}
-	return SaveResult{ProviderKey: fileToken}, nil
+	result := SaveResult{ProviderKey: fileToken}
+	if reportStoredName {
+		result.StoredName = remoteName
+	}
+	return result, nil
 }
 
 func (feishuDriver) InitDirect(_ context.Context, _ Rule, _ Session) (*DirectInitResult, error) {
@@ -99,7 +115,7 @@ func (feishuDriver) ResolveOpenWithResult(ctx context.Context, input OpenInput) 
 	}
 	fileToken := strings.TrimSpace(input.ProviderKey)
 	if fileToken == "" {
-		fileToken = strings.TrimSpace(file.Path)
+		fileToken = ResolveFileProviderKey(file)
 	}
 	if fileToken == "" {
 		return nil, &OpenError{Err: fmt.Errorf("飞书云盘文件标识不存在"), StatusCode: 404}
@@ -154,21 +170,39 @@ func resolveFeishuConfig(storage frontmodel.UploadStorage) (feishuConfig, error)
 	return config, nil
 }
 
-func feishuRemoteObject(objectKey, ext string) (string, string) {
-	sum := sha256.Sum256([]byte(strings.TrimSpace(objectKey)))
-	digest := hex.EncodeToString(sum[:])
-	return digest + normalizeFeishuExtension(ext), digest[:2]
+func resolveFeishuNameCandidates(input SaveInput) ([]string, error) {
+	raw := input.NameCandidates
+	if len(raw) == 0 {
+		raw = []string{input.Name}
+	}
+
+	result := make([]string, 0, len(raw))
+	seen := make(map[string]struct{}, len(raw))
+	for _, candidate := range raw {
+		candidate = strings.TrimSpace(candidate)
+		if !isValidFeishuEntryName(candidate) {
+			return nil, fmt.Errorf("飞书云盘文件名称无效")
+		}
+		if _, exists := seen[candidate]; exists {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		result = append(result, candidate)
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("飞书云盘文件名称不能为空")
+	}
+	return result, nil
 }
 
-func normalizeFeishuExtension(value string) string {
-	ext := strings.ToLower(strings.TrimSpace(filepath.Ext("file" + strings.TrimSpace(value))))
-	if ext == "" || len(ext) > 24 {
-		return ""
+func isValidFeishuEntryName(value string) bool {
+	if value == "" || value == "." || value == ".." || len([]rune(value)) > 240 {
+		return false
 	}
-	for _, char := range strings.TrimPrefix(ext, ".") {
-		if !unicode.IsLetter(char) && !unicode.IsDigit(char) {
-			return ""
+	for _, char := range value {
+		if unicode.IsControl(char) || strings.ContainsRune(`\\/:*?"<>|`, char) {
+			return false
 		}
 	}
-	return ext
+	return true
 }

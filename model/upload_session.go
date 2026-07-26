@@ -20,6 +20,7 @@ type UploadSession struct {
 	Hash             string    `dorm:"type:varchar(64);comment:文件哈希"`
 	Token            string    `dorm:"type:varchar(64);comment:会话令牌"`
 	ObjectKey        string    `dorm:"type:varchar(255);comment:对象键"`
+	ProviderKey      string    `dorm:"type:varchar(255);not null;default:'';comment:存储侧文件标识"`
 	ChunkSize        int64     `dorm:"type:bigint;not null;default:0;comment:分片大小"`
 	ChunkTotal       int       `dorm:"type:int;not null;default:1;comment:分片总数"`
 	UploadedParts    string    `dorm:"type:text;comment:已上传分片"`
@@ -31,6 +32,8 @@ type UploadSession struct {
 
 type UploadSessionIndex struct {
 	RuleStatus struct{} `index:"rule_id,status"`
+	RuleName   struct{} `index:"rule_id,biz_id,name,status"`
+	BizName    struct{} `index:"biz_id,name,status"`
 	Token      struct{} `index:"token"`
 }
 

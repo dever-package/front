@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -20,35 +21,52 @@ type Rule struct {
 }
 
 type Session struct {
-	ObjectKey string
+	ObjectKey           string
+	ObjectKeyCandidates []string
+	NameCandidates      []string
+	PathMode            string
 }
 
 type File struct {
-	Path    string
-	Storage frontmodel.UploadStorage
+	Path        string
+	ProviderKey string
+	Storage     frontmodel.UploadStorage
 }
 
 type SaveInput struct {
-	Rule      Rule
-	Session   Session
-	LocalPath string
-	ObjectKey string
-	Name      string
-	Mime      string
-	Size      int64
-	Hash      string
-	Ext       string
-	Progress  func(loaded int64, total int64)
+	Rule                Rule
+	Session             Session
+	LocalPath           string
+	ObjectKey           string
+	ObjectKeyCandidates []string
+	Name                string
+	NameCandidates      []string
+	SourceKey           string
+	SourceName          string
+	Mime                string
+	Size                int64
+	Hash                string
+	Ext                 string
+	PathMode            string
+	Progress            func(loaded int64, total int64)
 }
 
 type SaveResult struct {
 	ProviderKey string
+	StoredName  string
 }
 
 type DirectInitResult struct {
-	UploadURL string            `json:"uploadURL"`
-	Fields    map[string]string `json:"fields"`
-	Method    string            `json:"method"`
+	UploadURL   string            `json:"uploadURL"`
+	Fields      map[string]string `json:"fields"`
+	Method      string            `json:"method"`
+	ProviderKey string            `json:"-"`
+	StoredName  string            `json:"-"`
+}
+
+type saveCandidate struct {
+	ObjectKey string
+	Name      string
 }
 
 type OpenTarget struct {
@@ -138,6 +156,40 @@ func Save(ctx context.Context, driver Driver, input SaveInput) (SaveResult, erro
 		return SaveResult{}, err
 	}
 	return SaveResult{ProviderKey: input.ObjectKey}, nil
+}
+
+func resolveSaveCandidates(input SaveInput) []saveCandidate {
+	objectKeys := input.ObjectKeyCandidates
+	if len(objectKeys) == 0 {
+		objectKeys = []string{input.ObjectKey}
+	}
+
+	result := make([]saveCandidate, 0, len(objectKeys))
+	seen := make(map[string]struct{}, len(objectKeys))
+	for index, objectKey := range objectKeys {
+		objectKey = strings.TrimSpace(objectKey)
+		if objectKey == "" {
+			continue
+		}
+		if _, exists := seen[objectKey]; exists {
+			continue
+		}
+		seen[objectKey] = struct{}{}
+
+		name := strings.TrimSpace(input.Name)
+		if index < len(input.NameCandidates) {
+			name = strings.TrimSpace(input.NameCandidates[index])
+		}
+		result = append(result, saveCandidate{ObjectKey: objectKey, Name: name})
+	}
+	return result
+}
+
+func ResolveFileProviderKey(file File) string {
+	if providerKey := strings.TrimSpace(file.ProviderKey); providerKey != "" {
+		return providerKey
+	}
+	return strings.TrimSpace(file.Path)
 }
 
 func Open(ctx context.Context, driver Driver, input OpenInput) (*OpenResult, error) {
@@ -231,14 +283,23 @@ func ResolveOpenError(err error) (int, http.Header, bool) {
 	return statusCode, openErr.Header.Clone(), true
 }
 
-func JoinPublicURL(domain, path string) string {
+func JoinPublicURL(domain, objectKey string) string {
 	domain = strings.TrimRight(strings.TrimSpace(domain), "/")
-	path = strings.TrimLeft(strings.TrimSpace(path), "/")
-	if domain == "" || path == "" {
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	if domain == "" || objectKey == "" {
 		return ""
 	}
 	if !strings.HasPrefix(domain, "http://") && !strings.HasPrefix(domain, "https://") {
 		domain = "https://" + domain
 	}
-	return domain + "/" + path
+	return domain + "/" + EscapeObjectKeyPath(objectKey)
+}
+
+func EscapeObjectKeyPath(objectKey string) string {
+	objectKey = strings.TrimLeft(strings.TrimSpace(objectKey), "/")
+	segments := strings.Split(objectKey, "/")
+	for index, segment := range segments {
+		segments[index] = url.PathEscape(segment)
+	}
+	return strings.Join(segments, "/")
 }

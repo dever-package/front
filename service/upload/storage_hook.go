@@ -7,6 +7,7 @@ import (
 	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 
+	frontmodel "github.com/dever-package/front/model"
 	frontaction "github.com/dever-package/front/service/action"
 	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
@@ -17,6 +18,7 @@ func (UploadStorageHook) ProviderAttachUploadStorageList(_ *server.Context, para
 	payload := cloneUploadHookRecord(params)
 	rows := cloneUploadStorageRows(payload["rows"])
 	for _, row := range rows {
+		normalizeUploadStoragePathModeField(row)
 		if strings.EqualFold(util.ToStringTrimmed(row["type"]), "feishu") {
 			delete(row, "secret_key")
 		}
@@ -33,6 +35,7 @@ func (UploadStorageHook) ProviderAttachUploadStorageForm(_ *server.Context, para
 	if strings.EqualFold(util.ToStringTrimmed(record["type"]), "feishu") {
 		record["secret_key"] = ""
 	}
+	normalizeUploadStoragePathModeField(record)
 	return record
 }
 
@@ -43,6 +46,7 @@ func (UploadStorageHook) ProviderBeforeSaveUploadStorage(c *server.Context, para
 	}
 	storageType := strings.ToLower(util.ToStringTrimmed(record["type"]))
 	existing := ensureUploadStorageTypeUnchanged(c, record, storageType)
+	normalizeUploadStoragePathModeField(record)
 	if storageType != "feishu" {
 		return record
 	}
@@ -115,6 +119,10 @@ func trimUploadStorageField(record map[string]any, field string) {
 	if _, exists := record[field]; exists {
 		record[field] = util.ToStringTrimmed(record[field])
 	}
+}
+
+func normalizeUploadStoragePathModeField(record map[string]any) {
+	record["path_mode"] = frontmodel.NormalizeUploadStoragePathMode(util.ToStringTrimmed(record["path_mode"]))
 }
 
 func cloneUploadHookRecord(params []any) map[string]any {

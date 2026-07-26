@@ -782,21 +782,8 @@ func viteFSURL(file string) string {
 	return "/@fs/" + filepath.ToSlash(absolute)
 }
 
-func viteSourceURL(file string) string {
-	file = strings.TrimSpace(file)
-	if file == "" || filepath.IsAbs(file) {
-		return viteFSURL(file)
-	}
-
-	cleaned := filepath.ToSlash(filepath.Clean(file))
-	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
-		return viteFSURL(file)
-	}
-	return "/" + cleaned
-}
-
 func versionedViteSourceURL(file string) string {
-	url := viteSourceURL(file)
+	url := viteFSURL(file)
 	info, err := os.Stat(file)
 	if err != nil || info.IsDir() {
 		return url

@@ -183,31 +183,35 @@ func (Route) PostBatchInfo(c *server.Context) error {
 	return c.JSON(results)
 }
 
-func isSystemPageInfoPath(ctx context.Context, pathValue string) bool {
+func isPageInfoAccessibleWithoutPermission(ctx context.Context, pathValue string) bool {
 	pathValue = frontpagepath.NormalizePath(pathValue)
 	if pathValue == "" {
 		return false
 	}
 	if site, ok := siteconfig.FromContext(ctx); ok {
-		return isSiteSystemPagePath(site, pathValue)
+		return isSitePageInfoAccessibleWithoutPermission(site, pathValue)
 	}
 
 	cfg, err := siteconfig.Load(ctx)
 	if err == nil {
 		for _, site := range cfg.Sites {
-			if isSiteSystemPagePath(site, pathValue) {
+			if isSitePageInfoAccessibleWithoutPermission(site, pathValue) {
 				return true
 			}
 		}
 	}
-	return isSiteSystemPagePath(siteconfig.Site{API: siteconfig.DefaultAPI}, pathValue)
+	return isSitePageInfoAccessibleWithoutPermission(
+		siteconfig.Site{API: siteconfig.DefaultAPI},
+		pathValue,
+	)
 }
 
-func isSiteSystemPagePath(site siteconfig.Site, pathValue string) bool {
+func isSitePageInfoAccessibleWithoutPermission(site siteconfig.Site, pathValue string) bool {
 	return pathValue == site.SystemPagePath("login") ||
 		pathValue == site.SystemPagePath("main") ||
 		pathValue == site.InternalPagePath(site.SystemPagePath("login")) ||
-		pathValue == site.InternalPagePath(site.SystemPagePath("main"))
+		pathValue == site.InternalPagePath(site.SystemPagePath("main")) ||
+		site.IsPublicPagePath(pathValue)
 }
 
 func (Route) GetOption(c *server.Context) error {
@@ -311,7 +315,7 @@ func buildRouteInfo(
 	lookup permissionservice.InputLookup,
 	query map[string]string,
 ) (pageservice.Schema, error) {
-	if isSystemPageInfoPath(c.Context(), pathValue) {
+	if isPageInfoAccessibleWithoutPermission(c.Context(), pathValue) {
 		currentSchema, err := pageservice.BuildInfo(c, pathValue)
 		if err != nil {
 			return pageservice.Schema{}, err

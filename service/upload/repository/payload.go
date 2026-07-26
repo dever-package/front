@@ -54,8 +54,9 @@ func resolveUploadFilePublicURL(file UploadFile) (string, bool) {
 		return "", false
 	}
 	publicURL := strings.TrimSpace(driver.ResolvePublicURL(uploadprovider.File{
-		Path:    file.Path,
-		Storage: file.Storage,
+		Path:        file.Path,
+		ProviderKey: file.ProviderKey,
+		Storage:     file.Storage,
 	}))
 	return publicURL, uploadprovider.UsesSignedPublicOpen(driver)
 }

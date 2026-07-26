@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/dever-package/front/service/upload/internal/transfer"
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
 	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
@@ -79,39 +78,27 @@ func importFileWithRule(ctx context.Context, input ImportFileInput, rule resolve
 
 	ext := resolveUploadExt(name, detectedMime)
 	objectKey := buildUploadObjectKey(rule.ID, hash, ext, bizRecord.Key)
-	if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
-		notifyImportProgress(input.Progress, "资源已存在，正在复用记录", 95)
-		if err := updateUploadFileRelationMetaIfNeeded(ctx, *existing, bizRecord.ID, categoryID); err == nil {
-			if refreshed, refreshErr := uploadrepo.FindUploadFile(ctx, existing.ID); refreshErr == nil {
-				notifyImportProgress(input.Progress, "资源保存完成", 100)
-				return refreshed, nil
-			}
-		}
-		notifyImportProgress(input.Progress, "资源保存完成", 100)
-		return *existing, nil
-	}
-
-	provider, err := uploadprovider.Resolve(resolveUploadStorageProvider(rule.Storage))
-	if err != nil {
-		return resolvedUploadFile{}, err
-	}
 	notifyImportProgress(input.Progress, "正在保存到存储", 50)
-	saveResult, err := uploadprovider.Save(ctx, provider, uploadprovider.SaveInput{
-		Rule: uploadprovider.Rule{
-			Storage:      rule.Storage,
-			Accept:       rule.Accept,
-			MaxSizeBytes: uploadRuleMaxSizeBytes(rule),
-		},
-		Session: uploadprovider.Session{
-			ObjectKey: objectKey,
+	fileRecord, err := storeNewUpload(ctx, storeUploadInput{
+		Rule: rule,
+		Session: resolvedUploadSession{
+			RuleID:     rule.ID,
+			StorageID:  rule.StorageID,
+			Kind:       kind,
+			BizID:      bizRecord.ID,
+			BizKey:     bizRecord.Key,
+			BizName:    bizRecord.Name,
+			CategoryID: categoryID,
+			Name:       name,
+			Ext:        ext,
+			Mime:       detectedMime,
+			Size:       size,
+			Hash:       hash,
+			ObjectKey:  objectKey,
+			Status:     uploadSessionComplete,
 		},
 		LocalPath: localPath,
-		ObjectKey: objectKey,
-		Name:      name,
-		Mime:      detectedMime,
-		Size:      size,
 		Hash:      hash,
-		Ext:       ext,
 		Progress: func(loaded int64, total int64) {
 			if progress := transfer.Percent(loaded, total, 50, 95); progress >= 0 {
 				notifyImportProgress(input.Progress, "正在保存到存储", progress)
@@ -121,24 +108,8 @@ func importFileWithRule(ctx context.Context, input ImportFileInput, rule resolve
 	if err != nil {
 		return resolvedUploadFile{}, err
 	}
-	notifyImportProgress(input.Progress, "正在写入资源记录", 98)
-
-	return persistUploadFile(ctx, rule, resolvedUploadSession{
-		RuleID:     rule.ID,
-		StorageID:  rule.StorageID,
-		Kind:       kind,
-		BizID:      bizRecord.ID,
-		BizKey:     bizRecord.Key,
-		BizName:    bizRecord.Name,
-		CategoryID: categoryID,
-		Name:       name,
-		Ext:        ext,
-		Mime:       detectedMime,
-		Size:       size,
-		Hash:       hash,
-		ObjectKey:  objectKey,
-		Status:     uploadSessionComplete,
-	}, hash, objectKey, resolveSavedProviderKey(saveResult, objectKey))
+	notifyImportProgress(input.Progress, "资源保存完成", 100)
+	return fileRecord, nil
 }
 
 func notifyImportProgress(progress func(text string, progress int), text string, percent int) {

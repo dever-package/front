@@ -42,6 +42,7 @@ type UploadSession struct {
 	Hash             string
 	Token            string
 	ObjectKey        string
+	ProviderKey      string
 	ChunkSize        int64
 	ChunkTotal       int
 	UploadedParts    string

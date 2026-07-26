@@ -112,6 +112,10 @@
               }
             },
             {
+              "value": "path_mode",
+              "type": "show-tag"
+            },
+            {
               "name": "存储容器",
               "value": "bucket",
               "type": "show-base"

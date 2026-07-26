@@ -814,19 +814,24 @@ func resolveUploadRelationPublicURL(ctx context.Context, row map[string]any) (st
 	if pathValue == "" {
 		return "", false
 	}
+	file := uploadprovider.File{
+		Path:        pathValue,
+		ProviderKey: strings.TrimSpace(util.ToString(row["provider_key"])),
+	}
+	providerKey := uploadprovider.ResolveFileProviderKey(file)
 
 	storageID := util.ToUint64(row["storage_id"])
 	if storageID == 0 {
-		return uploadprovider.ResolveLocalPublicURL("", pathValue), false
+		return uploadprovider.ResolveLocalPublicURL("", providerKey), false
 	}
 
 	storageModel := frontrecord.Resolve("front.NewUploadStorageModel")
 	if storageModel == nil {
-		return uploadprovider.ResolveLocalPublicURL("", pathValue), false
+		return uploadprovider.ResolveLocalPublicURL("", providerKey), false
 	}
 	storageRow := storageModel.FindMap(ctx, map[string]any{"id": storageID})
 	if len(storageRow) == 0 {
-		return uploadprovider.ResolveLocalPublicURL("", pathValue), false
+		return uploadprovider.ResolveLocalPublicURL("", providerKey), false
 	}
 
 	storage := frontmodel.UploadStorage{
@@ -841,10 +846,8 @@ func resolveUploadRelationPublicURL(ctx context.Context, row map[string]any) (st
 	if err != nil {
 		return "", false
 	}
-	publicURL := strings.TrimSpace(driver.ResolvePublicURL(uploadprovider.File{
-		Path:    pathValue,
-		Storage: storage,
-	}))
+	file.Storage = storage
+	publicURL := strings.TrimSpace(driver.ResolvePublicURL(file))
 	return publicURL, uploadprovider.UsesSignedPublicOpen(driver)
 }
 

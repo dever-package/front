@@ -35,7 +35,7 @@ func LocalPublicPath(objectKey string) string {
 	if normalizedKey == "" {
 		return ""
 	}
-	return path.Join(localUploadPublicPrefix, normalizedKey)
+	return strings.TrimRight(localUploadPublicPrefix, "/") + "/" + EscapeObjectKeyPath(normalizedKey)
 }
 
 func ResolveLocalPublicFilePath(publicPath string) (string, error) {

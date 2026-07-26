@@ -1,6 +1,10 @@
 package repository
 
-import "github.com/shemic/dever/util"
+import (
+	"github.com/shemic/dever/util"
+
+	frontmodel "github.com/dever-package/front/model"
+)
 
 func mapUploadBiz(row map[string]any) UploadBiz {
 	return UploadBiz{
@@ -15,6 +19,7 @@ func mapUploadStorage(row map[string]any) UploadStorage {
 		ID:         util.ToUint64(row["id"]),
 		Name:       util.ToStringTrimmed(row["name"]),
 		Type:       util.ToStringTrimmed(row["type"]),
+		PathMode:   frontmodel.NormalizeUploadStoragePathMode(util.ToStringTrimmed(row["path_mode"])),
 		AccessKey:  util.ToStringTrimmed(row["access_key"]),
 		SecretKey:  util.ToStringTrimmed(row["secret_key"]),
 		Bucket:     util.ToStringTrimmed(row["bucket"]),

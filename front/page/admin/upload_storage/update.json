@@ -73,6 +73,26 @@
         }
       },
       {
+        "id": "upload-storage-path-mode",
+        "type": "form-radio",
+        "name": "文件组织方式",
+        "placeholder": "请选择文件组织方式",
+        "value": "form.path_mode",
+        "mode": "form",
+        "option": "option.path_mode",
+        "info": "自动适配：本地和七牛使用内容哈希，飞书使用来源目录；来源目录会按资源来源和最终文件名保存，重名时追加内容摘要。修改后只影响新上传文件，不会移动或重命名历史文件。",
+        "validate": [
+          {
+            "type": "required",
+            "message": "文件组织方式不能为空。"
+          }
+        ],
+        "meta": {
+          "formLayout": "horizontal",
+          "orientation": "horizontal"
+        }
+      },
+      {
         "id": "upload-storage-qiniu-access-key",
         "type": "form-input",
         "name": "AccessKey",
@@ -253,7 +273,7 @@
             ]
           }
         ],
-        "info": "请使用专用共享文件夹，并确保应用拥有读取、上传、创建子文件夹权限。",
+        "info": "配置流程：为自建应用添加机器人能力、开通 drive:drive 权限并发布；创建仅自己的授权群并添加应用机器人；在云盘新建专用文件夹，以可编辑权限共享给该群；浏览器打开文件夹后，仅复制地址中 /drive/folder/ 后的 Token（不要填写完整链接）。",
         "meta": {
           "formLayout": "horizontal",
           "showWhen": [
@@ -350,6 +370,7 @@
       "id": "",
       "name": "",
       "type": "local",
+      "path_mode": "auto",
       "access_key": "",
       "secret_key": "",
       "bucket": "",

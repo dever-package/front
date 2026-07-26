@@ -67,9 +67,8 @@ type feishuAppState struct {
 }
 
 type feishuFolderState struct {
-	folderMu      sync.Mutex
-	foldersLoaded bool
-	folderTokens  map[string]string
+	folderMu     sync.Mutex
+	folderTokens map[string]string
 }
 
 type feishuBaseResponse struct {

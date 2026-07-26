@@ -25,20 +25,41 @@ func completeDirectUploadSession(ctx context.Context, rule resolvedUploadRule, s
 	if err := validateUploadStoredFile(rule, session.Name, session.Mime); err != nil {
 		return resolvedUploadFile{}, err
 	}
+
+	unlockObject := lockUploadStoreKey("object:" + session.ObjectKey)
+	defer unlockObject()
+
 	var fileRecord resolvedUploadFile
 	if existing := uploadrepo.FindUploadFileByPath(ctx, session.ObjectKey); existing != nil {
-		_ = updateUploadFileRelationMetaIfNeeded(ctx, *existing, session.BizID, session.CategoryID)
-		fileRecord = *existing
-		if refreshed, err := uploadrepo.FindUploadFile(ctx, existing.ID); err == nil {
-			fileRecord = refreshed
-		}
+		fileRecord = reuseExistingUploadFile(ctx, *existing, session.BizID, session.CategoryID)
 	} else {
-		persisted, err := persistUploadFile(ctx, rule, session, session.Hash, session.ObjectKey, session.ObjectKey)
+		providerKey := strings.TrimSpace(session.ProviderKey)
+		if providerKey == "" {
+			resolvedName, unlockName, err := lockAvailableUploadName(
+				ctx,
+				rule.ID,
+				session.BizID,
+				session.ID,
+				session.Name,
+				session.Ext,
+				session.Hash,
+			)
+			if err != nil {
+				return resolvedUploadFile{}, err
+			}
+			defer unlockName()
+			session.Name = resolvedName.Name
+			providerKey = session.ObjectKey
+		}
+
+		persisted, err := persistUploadFile(ctx, rule, session, session.Hash, session.ObjectKey, providerKey)
 		if err != nil {
 			return resolvedUploadFile{}, err
 		}
 		fileRecord = persisted
 	}
+	session.Name = fileRecord.Name
+	session.ProviderKey = fileRecord.ProviderKey
 	return finalizeUploadResult(ctx, session, fileRecord)
 }
 
@@ -72,44 +93,17 @@ func completeRelayUploadSession(ctx context.Context, rule resolvedUploadRule, se
 	objectKey := buildUploadObjectKey(rule.ID, hash, session.Ext, session.BizKey)
 	session.Hash = hash
 	session.ObjectKey = objectKey
-	if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
-		_ = updateUploadFileRelationMetaIfNeeded(ctx, *existing, session.BizID, session.CategoryID)
-		if refreshed, err := uploadrepo.FindUploadFile(ctx, existing.ID); err == nil {
-			return finalizeUploadResult(ctx, session, refreshed)
-		}
-		return finalizeUploadResult(ctx, session, *existing)
-	}
-
-	provider, err := uploadprovider.Resolve(resolveUploadStorageProvider(rule.Storage))
-	if err != nil {
-		return resolvedUploadFile{}, err
-	}
-	saveResult, err := uploadprovider.Save(ctx, provider, uploadprovider.SaveInput{
-		Rule: uploadprovider.Rule{
-			Storage:      rule.Storage,
-			Accept:       rule.Accept,
-			MaxSizeBytes: uploadRuleMaxSizeBytes(rule),
-		},
-		Session: uploadprovider.Session{
-			ObjectKey: session.ObjectKey,
-		},
+	fileRecord, err := storeNewUpload(ctx, storeUploadInput{
+		Rule:      rule,
+		Session:   session,
 		LocalPath: mergedPath,
-		ObjectKey: objectKey,
-		Name:      session.Name,
-		Mime:      session.Mime,
-		Size:      size,
 		Hash:      hash,
-		Ext:       session.Ext,
 	})
 	if err != nil {
 		return resolvedUploadFile{}, err
 	}
-	providerKey := resolveSavedProviderKey(saveResult, objectKey)
-
-	fileRecord, err := persistUploadFile(ctx, rule, session, hash, objectKey, providerKey)
-	if err != nil {
-		return resolvedUploadFile{}, err
-	}
+	session.Name = fileRecord.Name
+	session.ProviderKey = fileRecord.ProviderKey
 	return finalizeUploadResult(ctx, session, fileRecord)
 }
 
@@ -119,13 +113,15 @@ func finalizeUploadResult(
 	fileRecord resolvedUploadFile,
 ) (resolvedUploadFile, error) {
 	if err := uploadrepo.UpdateUploadSession(ctx, session.ID, map[string]any{
-		"hash":       session.Hash,
-		"kind":       session.Kind,
-		"ext":        session.Ext,
-		"mime":       session.Mime,
-		"size":       session.Size,
-		"object_key": session.ObjectKey,
-		"status":     uploadSessionComplete,
+		"hash":         session.Hash,
+		"kind":         session.Kind,
+		"name":         session.Name,
+		"ext":          session.Ext,
+		"mime":         session.Mime,
+		"size":         session.Size,
+		"object_key":   session.ObjectKey,
+		"provider_key": session.ProviderKey,
+		"status":       uploadSessionComplete,
 	}); err != nil {
 		return resolvedUploadFile{}, err
 	}
@@ -167,6 +163,9 @@ func persistUploadFile(ctx context.Context, rule resolvedUploadRule, session res
 		"created_at":   time.Now(),
 	}))
 	if fileID == 0 {
+		if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
+			return reuseExistingUploadFile(ctx, *existing, session.BizID, session.CategoryID), nil
+		}
 		return resolvedUploadFile{}, fmt.Errorf("保存上传文件失败")
 	}
 	return uploadrepo.FindUploadFile(ctx, fileID)

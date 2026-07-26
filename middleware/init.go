@@ -361,7 +361,7 @@ func isPublicRouteSchemaRequest(frontConfig siteconfig.Config, c *server.Context
 		return false
 	}
 	if isFrontRouteEndpoint(requestPath, site, "route/info") {
-		return normalizePublicPagePath(c.Query("path")) == site.SystemPagePath("login")
+		return site.IsPublicPagePath(normalizePublicPagePath(c.Query("path")))
 	}
 	if isFrontRouteEndpoint(requestPath, site, "route/batch_info") {
 		return isPublicBatchInfoRequest(c, site)
@@ -383,9 +383,8 @@ func isPublicBatchInfoRequest(c *server.Context, site siteconfig.Site) bool {
 		return false
 	}
 
-	loginPath := site.SystemPagePath("login")
 	for _, pathValue := range paths {
-		if normalizePublicPagePath(pathValue) != loginPath {
+		if !site.IsPublicPagePath(normalizePublicPagePath(pathValue)) {
 			return false
 		}
 	}

@@ -72,6 +72,18 @@ func InitUpload(c *server.Context) error {
 	if hash != "" {
 		objectKey = buildUploadObjectKey(rule.ID, hash, ext, bizRecord.Key)
 	}
+	if objectKey != "" {
+		if existing := uploadrepo.FindUploadFileByPath(c.Context(), objectKey); existing != nil {
+			if err := uploadaccess.EnsureFile(c, uploadaccess.OperationRead, *existing); err != nil {
+				return c.Error(err, uploadaccess.Status(err))
+			}
+			reused := reuseExistingUploadFile(c.Context(), *existing, bizRecord.ID, categoryID)
+			return c.JSON(map[string]any{
+				"transport": rule.Transport,
+				"reused":    uploadrepo.BuildUploadFilePayload(reused),
+			})
+		}
+	}
 
 	chunkSize := uploadRuleChunkSizeBytes(rule)
 	chunkTotal := int((input.Size + chunkSize - 1) / chunkSize)
@@ -89,38 +101,7 @@ func InitUpload(c *server.Context) error {
 	}
 	now := time.Now()
 	expiredAt := now.Add(6 * time.Hour)
-
-	sessionID := util.ToUint64(sessionModel.Insert(c.Context(), map[string]any{
-		"rule_id":            rule.ID,
-		"storage_id":         rule.StorageID,
-		"kind":               kind,
-		"biz_id":             bizRecord.ID,
-		"category_id":        categoryID,
-		"name":               strings.TrimSpace(input.Name),
-		"ext":                ext,
-		"mime":               strings.TrimSpace(input.Mime),
-		"size":               input.Size,
-		"hash":               hash,
-		"token":              sessionToken,
-		"object_key":         objectKey,
-		"chunk_size":         chunkSize,
-		"chunk_total":        chunkTotal,
-		"uploaded_parts":     "[]",
-		"provider_upload_id": "",
-		"status":             uploadSessionPending,
-		"created_at":         now,
-		"expired_at":         expiredAt,
-	}))
-	if sessionID == 0 {
-		return c.Error("创建上传会话失败")
-	}
-
-	if err := ensureUploadSessionDir(sessionID); err != nil {
-		return c.Error(err)
-	}
-
 	session := resolvedUploadSession{
-		ID:         sessionID,
 		RuleID:     rule.ID,
 		StorageID:  rule.StorageID,
 		Kind:       kind,
@@ -141,6 +122,47 @@ func InitUpload(c *server.Context) error {
 		ExpiredAt:  expiredAt,
 	}
 
+	var direct *uploadprovider.DirectInitResult
+	if strings.EqualFold(rule.Transport, "direct") {
+		var unlockName func()
+		session, direct, unlockName, err = prepareDirectUpload(c.Context(), rule, session)
+		if err != nil {
+			return c.Error(err)
+		}
+		defer unlockName()
+	}
+
+	sessionID := util.ToUint64(sessionModel.Insert(c.Context(), map[string]any{
+		"rule_id":            rule.ID,
+		"storage_id":         rule.StorageID,
+		"kind":               kind,
+		"biz_id":             bizRecord.ID,
+		"category_id":        categoryID,
+		"name":               session.Name,
+		"ext":                ext,
+		"mime":               strings.TrimSpace(input.Mime),
+		"size":               input.Size,
+		"hash":               hash,
+		"token":              sessionToken,
+		"object_key":         objectKey,
+		"provider_key":       session.ProviderKey,
+		"chunk_size":         chunkSize,
+		"chunk_total":        chunkTotal,
+		"uploaded_parts":     "[]",
+		"provider_upload_id": "",
+		"status":             uploadSessionPending,
+		"created_at":         now,
+		"expired_at":         expiredAt,
+	}))
+	if sessionID == 0 {
+		return c.Error("创建上传会话失败")
+	}
+
+	if err := ensureUploadSessionDir(sessionID); err != nil {
+		return c.Error(err)
+	}
+	session.ID = sessionID
+
 	result := map[string]any{
 		"session_id":  sessionID,
 		"token":       sessionToken,
@@ -149,21 +171,7 @@ func InitUpload(c *server.Context) error {
 		"chunk_total": chunkTotal,
 	}
 
-	if strings.EqualFold(rule.Transport, "direct") {
-		provider, err := uploadprovider.Resolve(resolveUploadStorageProvider(rule.Storage))
-		if err != nil {
-			return c.Error(err)
-		}
-		direct, err := provider.InitDirect(c.Context(), uploadprovider.Rule{
-			Storage:      rule.Storage,
-			Accept:       rule.Accept,
-			MaxSizeBytes: uploadRuleMaxSizeBytes(rule),
-		}, uploadprovider.Session{
-			ObjectKey: session.ObjectKey,
-		})
-		if err != nil {
-			return c.Error(err)
-		}
+	if direct != nil {
 		result["direct"] = direct
 	}
 
@@ -409,8 +417,9 @@ func OpenUpload(c *server.Context) error {
 	}
 	target, err := uploadprovider.Open(c.Context(), provider, uploadprovider.OpenInput{
 		File: uploadprovider.File{
-			Path:    fileRecord.Path,
-			Storage: fileRecord.Storage,
+			Path:        fileRecord.Path,
+			ProviderKey: fileRecord.ProviderKey,
+			Storage:     fileRecord.Storage,
 		},
 		ProviderKey: fileRecord.ProviderKey,
 		Name:        fileRecord.Name,

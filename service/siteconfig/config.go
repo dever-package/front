@@ -467,6 +467,19 @@ func (site Site) SystemPagePath(pageName string) string {
 	return path.Join(pagePrefix, pageName)
 }
 
+func (site Site) IsPublicPagePath(pagePath string) bool {
+	pagePath = cleanRelativePath(site.ExternalPagePath(pagePath))
+	if pagePath == "" {
+		return false
+	}
+	for _, item := range site.Public {
+		if pagePath == site.SystemPagePath(item) {
+			return true
+		}
+	}
+	return false
+}
+
 func (site Site) PageRoutePrefix() string {
 	route := cleanRelativePath(site.Route)
 	if route != "" {

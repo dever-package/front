@@ -15,6 +15,7 @@ var pluginDevProxyRoutes = []string{
 	"/@react-refresh",
 	"/.vite/*",
 	"/vite/*",
+	"/node_modules/.pnpm/*",
 	"/node_modules/.vite/*",
 	"/tmp/dever/compiler/front/*",
 	"/package/*",

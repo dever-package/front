@@ -34,6 +34,7 @@ func FindUploadSession(ctx context.Context, sessionID uint64) (UploadSession, er
 		Hash:             NormalizeHash(row["hash"]),
 		Token:            util.ToStringTrimmed(row["token"]),
 		ObjectKey:        util.ToStringTrimmed(row["object_key"]),
+		ProviderKey:      util.ToStringTrimmed(row["provider_key"]),
 		ChunkSize:        util.ToInt64(row["chunk_size"]),
 		ChunkTotal:       int(util.ToInt64(row["chunk_total"])),
 		UploadedParts:    util.ToStringTrimmed(row["uploaded_parts"]),
@@ -61,6 +62,32 @@ func UpdateUploadSession(ctx context.Context, sessionID uint64, updates map[stri
 	}
 	sessionModel.Update(ctx, map[string]any{"id": sessionID}, updates)
 	return nil
+}
+
+func HasActiveUploadSessionByScopedName(ctx context.Context, ruleID, bizID, excludeSessionID uint64, name string) (bool, error) {
+	sessionModel, err := ResolveSessionModel()
+	if err != nil {
+		return false, err
+	}
+	filters := map[string]any{
+		"biz_id":     bizID,
+		"name":       strings.TrimSpace(name),
+		"status":     []string{"pending", "uploading"},
+		"expired_at": map[string]any{"gt": time.Now()},
+	}
+	if bizID == 0 {
+		filters["rule_id"] = ruleID
+	}
+	if excludeSessionID != 0 {
+		filters["id"] = map[string]any{"ne": excludeSessionID}
+	}
+	rows := sessionModel.SelectMap(ctx, filters, map[string]any{
+		"field":    "main.id",
+		"order":    "main.id desc",
+		"page":     1,
+		"pageSize": 1,
+	})
+	return len(rows) > 0, nil
 }
 
 func parseUploadSessionTime(value any) time.Time {
