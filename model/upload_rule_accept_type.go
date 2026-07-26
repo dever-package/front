@@ -26,6 +26,16 @@ var uploadRuleAcceptTypeSeed = []map[string]any{
 	{"id": 6, "upload_rule_id": 6, "accept_type_id": 4},
 	{"id": 7, "upload_rule_id": 6, "accept_type_id": 5},
 	{"id": 8, "upload_rule_id": 6, "accept_type_id": 1},
+	{"id": 9, "upload_rule_id": 7, "accept_type_id": 1},
+	{"id": 10, "upload_rule_id": 7, "accept_type_id": 2},
+	{"id": 11, "upload_rule_id": 7, "accept_type_id": 3},
+	{"id": 12, "upload_rule_id": 7, "accept_type_id": 4},
+	{"id": 13, "upload_rule_id": 7, "accept_type_id": 5},
+	{"id": 14, "upload_rule_id": 8, "accept_type_id": 1},
+	{"id": 15, "upload_rule_id": 8, "accept_type_id": 2},
+	{"id": 16, "upload_rule_id": 8, "accept_type_id": 3},
+	{"id": 17, "upload_rule_id": 8, "accept_type_id": 4},
+	{"id": 18, "upload_rule_id": 8, "accept_type_id": 5},
 }
 
 func NewUploadRuleAcceptTypeModel() *orm.Model[UploadRuleAcceptType] {

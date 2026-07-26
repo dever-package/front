@@ -80,6 +80,26 @@ var (
 			"max_size":       200,
 			"status":         1,
 		},
+		{
+			"id":             7,
+			"name":           "用户文件",
+			"storage_id":     1,
+			"accept_type_id": 1,
+			"transport":      "relay",
+			"chunk_size":     4,
+			"max_size":       200,
+			"status":         1,
+		},
+		{
+			"id":             8,
+			"name":           "CRM文件",
+			"storage_id":     1,
+			"accept_type_id": 1,
+			"transport":      "relay",
+			"chunk_size":     4,
+			"max_size":       200,
+			"status":         1,
+		},
 	}
 
 	uploadRuleTransportOptions = []map[string]any{
