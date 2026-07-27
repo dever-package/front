@@ -1,6 +1,7 @@
 package site
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -298,30 +299,31 @@ func sourceRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runt
 }
 
 func distRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtimePluginDescriptor {
-	metadata := readPluginDistMetadata(pluginName)
+	manifest := readPluginDistManifest(pluginName)
+	metadata := decodePluginDistMetadata(pluginName, manifest)
 	if metadata.Name == "" {
 		metadata.Name = pluginName
 	}
 
 	return runtimePluginDescriptor{
 		Name:     metadata.Name,
-		Manifest: pluginManifestURL(site, pluginName),
+		Manifest: versionedPluginManifestURL(site, pluginName, manifest),
 		Nodes:    metadata.Nodes,
 		Depends:  metadata.Depends,
 	}
 }
 
-func readPluginDistMetadata(pluginName string) pluginSourceMetadata {
+func readPluginDistManifest(pluginName string) []byte {
 	if content, ok, err := readEmbeddedPluginAsset(pluginName, pluginManifest); err == nil && ok {
-		return decodePluginDistMetadata(pluginName, content)
+		return content
 	}
 	for _, root := range pluginDiskRoots(pluginName) {
 		content, err := os.ReadFile(filepath.Join(root, pluginManifest))
 		if err == nil {
-			return decodePluginDistMetadata(pluginName, content)
+			return content
 		}
 	}
-	return pluginSourceMetadata{}
+	return nil
 }
 
 func decodePluginDistMetadata(defaultName string, content []byte) pluginSourceMetadata {
@@ -614,6 +616,16 @@ func pluginSourceMountPath(site siteconfig.Site) string {
 
 func pluginManifestURL(site siteconfig.Site, pluginName string) string {
 	return cleanRequestPath(path.Join(site.Path, pluginMountDir, pluginName, pluginManifest))
+}
+
+func versionedPluginManifestURL(site siteconfig.Site, pluginName string, manifest []byte) string {
+	manifestURL := pluginManifestURL(site, pluginName)
+	if len(manifest) == 0 {
+		return manifestURL
+	}
+
+	version := sha256.Sum256(manifest)
+	return manifestURL + "?v=" + fmt.Sprintf("%x", version[:8])
 }
 
 func pluginSourceManifestURL(site siteconfig.Site, pluginName string) string {
