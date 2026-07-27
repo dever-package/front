@@ -251,15 +251,15 @@ func discoverRuntimePluginDescriptors(site siteconfig.Site, pluginDev bool) []ru
 
 	descriptors := make([]runtimePluginDescriptor, 0, len(sourceNames)+len(distNames))
 	seen := map[string]struct{}{}
-	for _, name := range distNames {
-		seen[name] = struct{}{}
-		descriptors = append(descriptors, distRuntimePluginDescriptor(site, name))
-	}
 	for _, name := range sourceNames {
+		seen[name] = struct{}{}
+		descriptors = append(descriptors, sourceRuntimePluginDescriptor(site, name))
+	}
+	for _, name := range distNames {
 		if _, ok := seen[name]; ok {
 			continue
 		}
-		descriptors = append(descriptors, sourceRuntimePluginDescriptor(site, name))
+		descriptors = append(descriptors, distRuntimePluginDescriptor(site, name))
 	}
 	return descriptors
 }
