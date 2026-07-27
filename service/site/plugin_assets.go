@@ -147,6 +147,16 @@ func openPluginAssetPath(c *server.Context, value string) error {
 		return c.Error("前端插件路径不合法", 404)
 	}
 
+	// 发布产物以内嵌资源为准，避免部署目录中的旧 dist 覆盖新二进制。
+	// 开发模式通过 plugins-src 加载源码，不依赖这里的 dist 优先级。
+	if content, ok, err := readEmbeddedPluginAsset(pluginName, rel); err != nil {
+		return c.Error(err, 404)
+	} else if ok {
+		setPluginAssetCacheControl(raw, rel)
+		setContentType(raw, rel)
+		return raw.Send(content)
+	}
+
 	for _, root := range pluginDiskRoots(pluginName) {
 		file, err := resolvePluginDiskFile(root, rel)
 		if err == nil {
@@ -157,13 +167,6 @@ func openPluginAssetPath(c *server.Context, value string) error {
 		if !errors.Is(err, os.ErrNotExist) {
 			return c.Error(err, 404)
 		}
-	}
-	if content, ok, err := readEmbeddedPluginAsset(pluginName, rel); err != nil {
-		return c.Error(err, 404)
-	} else if ok {
-		setPluginAssetCacheControl(raw, rel)
-		setContentType(raw, rel)
-		return raw.Send(content)
 	}
 
 	return c.Error("前端插件不存在", 404)
@@ -309,14 +312,14 @@ func distRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runtim
 }
 
 func readPluginDistMetadata(pluginName string) pluginSourceMetadata {
+	if content, ok, err := readEmbeddedPluginAsset(pluginName, pluginManifest); err == nil && ok {
+		return decodePluginDistMetadata(pluginName, content)
+	}
 	for _, root := range pluginDiskRoots(pluginName) {
 		content, err := os.ReadFile(filepath.Join(root, pluginManifest))
 		if err == nil {
 			return decodePluginDistMetadata(pluginName, content)
 		}
-	}
-	if content, ok, err := readEmbeddedPluginAsset(pluginName, pluginManifest); err == nil && ok {
-		return decodePluginDistMetadata(pluginName, content)
 	}
 	return pluginSourceMetadata{}
 }
