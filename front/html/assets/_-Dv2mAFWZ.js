@@ -1,1 +1,0 @@
-import{W as t,X as a,D as n,j as u}from"./index-CCDSzg4T.js";import{L as c}from"./lazy-json-page-route-CJnb8wjC.js";import"./initial-boot-lKRg3WqZ.js";import"./front-boot-screen-CLEAR9CH.js";function f(){const{_splat:e}=t.useParams(),o=t.useSearch(),s=a(o),r=n(`/${e??""}`).replace(/^\/+/,"");return u.jsx(c,{route:`/${r}${s}`})}export{f as component};

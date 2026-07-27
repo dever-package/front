@@ -1,1 +1,0 @@
-import{j as n,w as e}from"./index-CCDSzg4T.js";const t=e.createContext({menu:[],navGroups:[]});function p({value:r,children:o}){return n.jsx(t.Provider,{value:r,children:o})}function u(){return e.useContext(t)}export{p as A,u};
