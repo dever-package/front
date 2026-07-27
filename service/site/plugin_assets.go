@@ -150,7 +150,7 @@ func openPluginAssetPath(c *server.Context, value string) error {
 	for _, root := range pluginDiskRoots(pluginName) {
 		file, err := resolvePluginDiskFile(root, rel)
 		if err == nil {
-			raw.Set("Cache-Control", "no-cache")
+			setPluginAssetCacheControl(raw, rel)
 			setContentType(raw, rel)
 			return raw.SendFile(file)
 		}
@@ -161,12 +161,20 @@ func openPluginAssetPath(c *server.Context, value string) error {
 	if content, ok, err := readEmbeddedPluginAsset(pluginName, rel); err != nil {
 		return c.Error(err, 404)
 	} else if ok {
-		raw.Set("Cache-Control", "public, max-age=31536000, immutable")
+		setPluginAssetCacheControl(raw, rel)
 		setContentType(raw, rel)
 		return raw.Send(content)
 	}
 
 	return c.Error("前端插件不存在", 404)
+}
+
+func setPluginAssetCacheControl(raw *fiber.Ctx, rel string) {
+	if rel == pluginManifest || strings.TrimSpace(raw.Query("v")) == "" {
+		raw.Set("Cache-Control", "no-cache")
+		return
+	}
+	raw.Set("Cache-Control", "public, max-age=31536000, immutable")
 }
 
 func openSourcePluginAsset(c *server.Context) error {
