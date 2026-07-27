@@ -1,1 +1,0 @@
-import{j as n,d as e}from"./index-BHEp83YP.js";const t=e.createContext({menu:[],navGroups:[]});function p({value:r,children:o}){return n.jsx(t.Provider,{value:r,children:o})}function u(){return e.useContext(t)}export{p as A,u};
