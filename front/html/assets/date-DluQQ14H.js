@@ -1,0 +1,1 @@
+import{ab as n,j as o}from"./index-CCDSzg4T.js";function i({item:a,value:e}){const r=String(a.meta?.format||"datetime-minute"),t=n(e,r);return t?o.jsx("span",{className:"whitespace-nowrap",children:t}):null}export{i as ShowDate};

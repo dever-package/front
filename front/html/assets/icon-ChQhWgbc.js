@@ -1,0 +1,1 @@
+import{j as t}from"./index-CCDSzg4T.js";import{r as i}from"./icon-Dg5GesUG.js";import"./x-BHLVMSIe.js";import"./wrench-DGiALVUe.js";function u({item:o,value:s}){const n=s||o.meta?.icon||"",r=i(n);if(!r)return t.jsx("span",{children:n});const e=o.meta?.size||16;return t.jsx(r,{size:e})}export{u as ShowIcon};

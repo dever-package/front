@@ -1,0 +1,1 @@
+import{j as n,h as r}from"./index-CCDSzg4T.js";function o({item:t,value:e}){return n.jsx("p",{className:r("text-sm text-muted-foreground",t.className),children:e!=null?String(e):t.name||""})}export{o as ShowText};

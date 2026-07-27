@@ -1,0 +1,1 @@
+import{j as o}from"./index-CCDSzg4T.js";import{L as t}from"./lazy-json-page-route-CJnb8wjC.js";import"./initial-boot-lKRg3WqZ.js";import"./front-boot-screen-CLEAR9CH.js";const r=()=>o.jsx(t,{route:"/settings-account"});export{r as component};

@@ -174,11 +174,44 @@ func openPluginAssetPath(c *server.Context, value string) error {
 }
 
 func setPluginAssetCacheControl(raw *fiber.Ctx, rel string) {
-	if rel == pluginManifest || strings.TrimSpace(raw.Query("v")) == "" {
+	if rel == pluginManifest {
 		raw.Set("Cache-Control", "no-cache")
 		return
 	}
-	raw.Set("Cache-Control", "public, max-age=31536000, immutable")
+	if strings.TrimSpace(raw.Query("v")) != "" || isContentHashedPluginAsset(rel) {
+		raw.Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+	raw.Set("Cache-Control", "no-cache")
+}
+
+func isContentHashedPluginAsset(rel string) bool {
+	rel = filepath.ToSlash(strings.TrimSpace(rel))
+	if !strings.HasPrefix(rel, "assets/") {
+		return false
+	}
+
+	name := path.Base(rel)
+	ext := path.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	separator := strings.LastIndex(stem, "-")
+	if separator < 0 {
+		return false
+	}
+	hash := stem[separator+1:]
+	if len(hash) < 8 {
+		return false
+	}
+
+	for _, char := range hash {
+		if (char < 'a' || char > 'z') &&
+			(char < 'A' || char > 'Z') &&
+			(char < '0' || char > '9') &&
+			char != '_' && char != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func openSourcePluginAsset(c *server.Context) error {

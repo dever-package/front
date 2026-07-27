@@ -1,0 +1,1 @@
+function n(){return typeof document<"u"&&!!document.getElementById("front-initial-boot")}function t(){if(typeof window>"u")return;const e=window;if(typeof e.__deverHideInitialBoot=="function"){e.__deverHideInitialBoot();return}document.getElementById("front-initial-boot")?.remove()}export{n as a,t as h};

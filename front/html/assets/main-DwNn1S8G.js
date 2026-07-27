@@ -1,0 +1,1 @@
+import{j as t,h as e}from"./index-CCDSzg4T.js";function s({fixed:a,className:o,fluid:n,...l}){return t.jsx("main",{"data-layout":a?"fixed":"auto",className:e("w-full px-4 py-6",a&&"flex grow flex-col overflow-hidden",o),...l})}export{s as M};
