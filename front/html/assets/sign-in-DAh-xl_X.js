@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./index-CaoaR_AG.js","./index-Dzysa5wb.js","./index-DBnL7pjc.css","./checkbox-CgOjux1n.js","./sidebar-C6bcTS4m.js","./text-CasA7j9y.js","./icon-CnsppRg6.js","./alert-Bf1De8zL.js"])))=>i.map(i=>d[i]);
+import{l as o,j as n,F as e,_ as a}from"./index-Dzysa5wb.js";const i=o(()=>a(()=>import("./index-CaoaR_AG.js").then(t=>t.i),__vite__mapDeps([0,1,2,3,4,5,6,7]),import.meta.url).then(t=>({default:t.SignIn})),n.jsx(e,{}));export{i as component};
