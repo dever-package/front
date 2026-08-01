@@ -42,7 +42,7 @@ func NormalizeRelationID(value any) uint64 {
 
 func ResolveKind(kind, fileName, mimeType string) string {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case "image", "video", "audio", "file", "other":
+	case "image", "video", "audio", "text", "file", "other":
 		return strings.ToLower(strings.TrimSpace(kind))
 	}
 
@@ -54,6 +54,8 @@ func ResolveKind(kind, fileName, mimeType string) string {
 		return "video"
 	case strings.HasPrefix(mimeType, "audio/"):
 		return "audio"
+	case isTextUploadMime(mimeType):
+		return "text"
 	}
 
 	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(fileName)))
@@ -64,10 +66,21 @@ func ResolveKind(kind, fileName, mimeType string) string {
 		return "video"
 	case ".mp3", ".wav", ".m4a", ".aac", ".ogg":
 		return "audio"
-	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".zip", ".rar":
+	case ".txt", ".md", ".markdown", ".mdown", ".mkd":
+		return "text"
+	case ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".zip", ".rar":
 		return "file"
 	default:
 		return "file"
+	}
+}
+
+func isTextUploadMime(mimeType string) bool {
+	switch mimeType {
+	case "text/plain", "text/markdown", "text/x-markdown":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -37,6 +37,9 @@ type middlewareSettings struct {
 func Register() {
 	registerOnce.Do(func() {
 		settings := loadMiddlewareSettings()
+		if err := uploadservice.EnsureBuiltinTextUploadType(context.Background()); err != nil {
+			panic(fmt.Errorf("初始化文本上传类型失败: %w", err))
+		}
 		if err := permissionservice.WarmupSites(context.Background(), settings.frontConfig.Sites); err != nil {
 			panic(err)
 		}

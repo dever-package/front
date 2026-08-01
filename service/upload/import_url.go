@@ -32,7 +32,7 @@ func ImportURLUpload(c *server.Context) error {
 	}); err != nil {
 		return err
 	}
-	release, err := acquireImportURLSlot()
+	release, err := acquireImportURLSlot(c.Context())
 	if err != nil {
 		return c.Error(err)
 	}

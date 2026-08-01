@@ -44,7 +44,7 @@ func ImportURLUploadStream(c *server.Context) error {
 	if requestID == "" {
 		requestID = uuid.NewString()
 	}
-	release, err := acquireImportURLSlot()
+	release, err := acquireImportURLSlot(c.Context())
 	if err != nil {
 		return c.Error(err)
 	}

@@ -50,7 +50,7 @@ func ImportURLResource(ctx context.Context, input ImportURLResourceInput) (map[s
 	if input.RuleID == 0 {
 		return nil, fmt.Errorf("上传规则不能为空")
 	}
-	release, err := acquireImportURLSlot()
+	release, err := acquireImportURLSlot(ctx)
 	if err != nil {
 		return nil, err
 	}

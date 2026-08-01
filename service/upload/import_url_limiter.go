@@ -1,24 +1,31 @@
 package upload
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 )
 
-const defaultImportURLConcurrency = 4
+const (
+	defaultImportURLConcurrency = 64
+	maxImportURLConcurrency     = 64
+)
 
 var importURLSlots = make(chan struct{}, importURLConcurrency())
 
-func acquireImportURLSlot() (func(), error) {
+func acquireImportURLSlot(ctx context.Context) (func(), error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	select {
 	case importURLSlots <- struct{}{}:
 		return func() {
 			<-importURLSlots
 		}, nil
-	default:
-		return nil, fmt.Errorf("远程资源导入任务繁忙，请稍后再试")
+	case <-ctx.Done():
+		return nil, fmt.Errorf("等待远程资源导入任务失败: %w", ctx.Err())
 	}
 }
 
@@ -34,8 +41,8 @@ func importURLConcurrency() int {
 	if err != nil || n <= 0 {
 		return defaultImportURLConcurrency
 	}
-	if n > 64 {
-		return 64
+	if n > maxImportURLConcurrency {
+		return maxImportURLConcurrency
 	}
 	return n
 }

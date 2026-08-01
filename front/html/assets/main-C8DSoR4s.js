@@ -1,0 +1,1 @@
+import{c as n}from"./index-Cz_UH-Rm.js";import{j as t,c}from"./index-Bo7IJJk4.js";const r=[["path",{d:"m18 15-6-6-6 6",key:"153udz"}]],l=n("chevron-up",r);function p({fixed:o,className:a,fluid:s,...e}){return t.jsx("main",{"data-layout":o?"fixed":"auto",className:c("w-full px-4 py-6",o&&"flex grow flex-col overflow-hidden",a),...e})}export{l as C,p as M};

@@ -19,6 +19,7 @@ var uploadAcceptTypeSeed = []map[string]any{
 	{"id": 3, "name": "音频", "accept": "audio/*"},
 	{"id": 4, "name": "Office 文件", "accept": ".doc,.docx,.xls,.xlsx,.ppt,.pptx"},
 	{"id": 5, "name": "PDF 文件", "accept": ".pdf"},
+	{"id": 6, "name": "文本文件", "accept": ".txt,.md,.markdown,.mdown,.mkd,text/plain,text/markdown"},
 }
 
 func NewUploadAcceptTypeModel() *orm.Model[UploadAcceptType] {
