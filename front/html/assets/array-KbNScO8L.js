@@ -1,1 +1,0 @@
-import{c as o}from"./index-Cz_UH-Rm.js";const s=[["path",{d:"m15 18-6-6 6-6",key:"1wnfg3"}]],f=o("chevron-left",s);function i(e,t,c){if(t<0||t>=e.length||c<0||c>=e.length||t===c)return[...e];const n=[...e],[r]=n.splice(t,1);return typeof r>"u"||n.splice(c,0,r),n}export{f as C,i as m};
