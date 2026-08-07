@@ -1,11 +1,27 @@
 package repository
 
 import (
+	"mime"
 	"path/filepath"
 	"strings"
 
 	"github.com/shemic/dever/util"
 )
+
+var uploadMimeTypesByExtension = map[string]string{
+	".doc":      "application/msword",
+	".docx":     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".md":       "text/markdown",
+	".markdown": "text/markdown",
+	".mdown":    "text/markdown",
+	".mkd":      "text/markdown",
+	".pdf":      "application/pdf",
+	".ppt":      "application/vnd.ms-powerpoint",
+	".pptx":     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".txt":      "text/plain",
+	".xls":      "application/vnd.ms-excel",
+	".xlsx":     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
 
 func NormalizeHash(value any) string {
 	hash := strings.ToLower(util.ToStringTrimmed(value))
@@ -34,6 +50,33 @@ func NormalizeBizKey(value any) string {
 
 func NormalizeBizName(value any) string {
 	return strings.TrimSpace(util.ToStringTrimmed(value))
+}
+
+func NormalizeMimeType(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if mediaType, _, err := mime.ParseMediaType(value); err == nil {
+		value = mediaType
+	}
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func ResolveMimeType(fileName, mimeType string) string {
+	mimeType = NormalizeMimeType(mimeType)
+	if mimeType != "" && mimeType != "application/octet-stream" && mimeType != "binary/octet-stream" {
+		return mimeType
+	}
+
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(fileName)))
+	if resolved := uploadMimeTypesByExtension[ext]; resolved != "" {
+		return resolved
+	}
+	if resolved := NormalizeMimeType(mime.TypeByExtension(ext)); resolved != "" {
+		return resolved
+	}
+	return mimeType
 }
 
 func NormalizeRelationID(value any) uint64 {

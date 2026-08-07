@@ -64,6 +64,37 @@ func resolveUploadKind(kind, fileName, mimeType string) string {
 	return uploadrepo.ResolveKind(kind, fileName, mimeType)
 }
 
+func resolveUploadMimeType(fileName, mimeType string) string {
+	return uploadrepo.ResolveMimeType(fileName, mimeType)
+}
+
+func resolveUploadProviderMimeLimit(accept string) string {
+	mimeTypes := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, token := range splitUploadAccept(accept) {
+		if token == "*" || token == "*/*" {
+			return ""
+		}
+		// Qiniu's mimeLimit re-detects file content and cannot faithfully
+		// represent extension rules such as .md. Keep those rules in the
+		// upload service validator instead of letting the provider reject them.
+		if strings.HasPrefix(token, ".") || !strings.Contains(token, "/") {
+			return ""
+		}
+
+		mimeType := normalizeUploadMimeType(token)
+		if mimeType == "" {
+			return ""
+		}
+		if _, exists := seen[mimeType]; exists {
+			continue
+		}
+		seen[mimeType] = struct{}{}
+		mimeTypes = append(mimeTypes, mimeType)
+	}
+	return strings.Join(mimeTypes, ";")
+}
+
 func normalizeUploadChunkSize(size int64) int64 {
 	if size <= 0 {
 		return 2 * 1024 * 1024

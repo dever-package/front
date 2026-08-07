@@ -54,7 +54,7 @@ func saveQiniuCandidate(ctx context.Context, input SaveInput, objectKey string) 
 		Scope:        fmt.Sprintf("%s:%s", strings.TrimSpace(storageConfig.Bucket), objectKey),
 		InsertOnly:   1,
 		FsizeLimit:   input.Size,
-		MimeLimit:    strings.TrimSpace(input.Rule.Accept),
+		MimeLimit:    strings.TrimSpace(input.Rule.MimeLimit),
 		ForceSaveKey: false,
 	}
 	upToken := policy.UploadToken(mac)
@@ -104,7 +104,7 @@ func (qiniuDriver) InitDirect(ctx context.Context, rule Rule, session Session) (
 		Scope:      fmt.Sprintf("%s:%s", strings.TrimSpace(storageConfig.Bucket), candidate.ObjectKey),
 		InsertOnly: 1,
 		FsizeLimit: rule.MaxSizeBytes,
-		MimeLimit:  strings.TrimSpace(rule.Accept),
+		MimeLimit:  strings.TrimSpace(rule.MimeLimit),
 	}
 	if storageConfig.TokenTTL > 0 {
 		policy.Expires = uint64(storageConfig.TokenTTL)

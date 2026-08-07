@@ -2,7 +2,6 @@ package upload
 
 import (
 	"fmt"
-	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -135,21 +134,11 @@ func detectUploadMimeFromHeader(header []byte, fileName, fallback string) string
 	if detected != "" && detected != "application/octet-stream" {
 		return detected
 	}
-	if fallback = normalizeUploadMimeType(fallback); fallback != "" {
-		return fallback
-	}
-	return normalizeUploadMimeType(mime.TypeByExtension(filepath.Ext(fileName)))
+	return resolveUploadMimeType(fileName, fallback)
 }
 
 func normalizeUploadMimeType(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if mediaType, _, err := mime.ParseMediaType(value); err == nil {
-		value = mediaType
-	}
-	return strings.ToLower(strings.TrimSpace(value))
+	return uploadrepo.NormalizeMimeType(value)
 }
 
 func splitUploadAccept(accept string) []string {

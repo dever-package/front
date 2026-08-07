@@ -45,7 +45,7 @@ func prepareDirectUpload(
 	}
 	direct, err := driver.InitDirect(ctx, uploadprovider.Rule{
 		Storage:      rule.Storage,
-		Accept:       rule.Accept,
+		MimeLimit:    resolveUploadProviderMimeLimit(rule.Accept),
 		MaxSizeBytes: uploadRuleMaxSizeBytes(rule),
 	}, uploadprovider.Session{
 		ObjectKey:           providerTarget.PrimaryObjectKey(),

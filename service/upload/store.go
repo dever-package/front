@@ -76,7 +76,7 @@ func storeNewUpload(ctx context.Context, input storeUploadInput) (resolvedUpload
 	saveResult, err := uploadprovider.Save(ctx, driver, uploadprovider.SaveInput{
 		Rule: uploadprovider.Rule{
 			Storage:      input.Rule.Storage,
-			Accept:       input.Rule.Accept,
+			MimeLimit:    resolveUploadProviderMimeLimit(input.Rule.Accept),
 			MaxSizeBytes: uploadRuleMaxSizeBytes(input.Rule),
 		},
 		Session: uploadprovider.Session{

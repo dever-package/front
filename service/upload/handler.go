@@ -39,6 +39,7 @@ func InitUpload(c *server.Context) error {
 	if err := c.BindJSON(&input); err != nil {
 		return c.Error("请求体格式错误")
 	}
+	input.Mime = resolveUploadMimeType(input.Name, input.Mime)
 
 	kind := resolveUploadKind(input.Kind, input.Name, input.Mime)
 	if err := requireUploadCreateAccess(c, uploadCreateAccessInput{
@@ -169,6 +170,7 @@ func InitUpload(c *server.Context) error {
 		"transport":   rule.Transport,
 		"chunk_size":  chunkSize,
 		"chunk_total": chunkTotal,
+		"mime":        session.Mime,
 	}
 
 	if direct != nil {

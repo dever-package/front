@@ -16,7 +16,7 @@ import (
 
 type Rule struct {
 	Storage      frontmodel.UploadStorage
-	Accept       string
+	MimeLimit    string
 	MaxSizeBytes int64
 }
 
