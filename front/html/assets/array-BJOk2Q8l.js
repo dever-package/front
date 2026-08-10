@@ -1,1 +1,0 @@
-import{c as r}from"./site-brand-B4NDYds4.js";const a=[["path",{d:"M5 12h14",key:"1ays0h"}],["path",{d:"M12 5v14",key:"s699le"}]],p=r("plus",a);function u(e,t,c){if(t<0||t>=e.length||c<0||c>=e.length||t===c)return[...e];const s=[...e],[n]=s.splice(t,1);return typeof n>"u"||s.splice(c,0,n),s}export{p as P,u as m};

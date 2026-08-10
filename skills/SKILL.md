@@ -58,6 +58,14 @@ version: 0.1.0
 - 推导失败、权限不足应显式失败，不要静默 fallback 到另一 model 或旧协议字段。
 - 业务私有逻辑发现误放进本包时，迁回业务组件并删掉本包中的特殊分支。
 
+## 生产资产协议
+
+- `dever run` 使用现有 Vite source server，不读取宿主生产目录模拟开发环境，也不适用生产 bundle 预算。
+- `dever front build` / `dever build` 只负责可编辑 front plugin；不得在每个应用构建时重复编译宿主源码。
+- 宿主 `front/src` 由维护者执行 `pnpm --dir front build:backend` 独立发布，构建先写 staging，bundle audit 成功后再替换 `front/html`。
+- 插件和宿主复用同一 bundle 审计器，但预算按各自入口配置；不得用减少目录总文件数为理由把富文本、代码编辑器等重功能并入首屏。
+- 不手改 `front/html`、插件 `front/dist` 或 manifest；生产缓存继续由站点静态资源服务统一处理。
+
 ## 常见检查
 
 - 权限异常：先查 `service/permission`、page parent/auth、站点 access mode 和 action key 推导，不要放开通配权限。

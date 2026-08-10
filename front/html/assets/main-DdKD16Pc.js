@@ -1,1 +1,0 @@
-import{c as e}from"./site-brand-B4NDYds4.js";import{j as r,d as t}from"./index-DQELzwwP.js";const s=[["path",{d:"m6 9 6 6 6-6",key:"qrunsl"}]],d=e("chevron-down",s);function u({fixed:o,className:n,fluid:c,...a}){return r.jsx("main",{"data-layout":o?"fixed":"auto",className:t("w-full px-4 py-6",o&&"flex grow flex-col overflow-hidden",n),...a})}export{d as C,u as M};

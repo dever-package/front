@@ -15,6 +15,8 @@ import (
 
 type qiniuDriver struct{}
 
+const qiniuVideoThumbnailOperation = "vframe/jpg/offset/0/w/640"
+
 func (driver qiniuDriver) Save(ctx context.Context, input SaveInput) error {
 	_, err := driver.SaveWithResult(ctx, input)
 	return err
@@ -175,4 +177,30 @@ func (qiniuDriver) ResolveOpen(_ context.Context, file File) (*OpenTarget, error
 
 func (qiniuDriver) ResolvePublicURL(file File) string {
 	return JoinPublicURL(file.Storage.Domain, ResolveFileProviderKey(file))
+}
+
+func (driver qiniuDriver) ResolveThumbnailURL(file File) string {
+	return appendQiniuURLImageOperation(
+		driver.ResolvePublicURL(file),
+		qiniuVideoThumbnailOperation,
+	)
+}
+
+func appendQiniuURLImageOperation(rawURL, operation string) string {
+	value := strings.TrimSpace(rawURL)
+	operation = strings.TrimSpace(operation)
+	if value == "" || operation == "" || strings.Contains(value, "vframe/") {
+		return value
+	}
+
+	fragment := ""
+	if index := strings.Index(value, "#"); index >= 0 {
+		fragment = value[index:]
+		value = value[:index]
+	}
+	separator := "?"
+	if strings.Contains(value, "?") {
+		separator = "&"
+	}
+	return value + separator + operation + fragment
 }

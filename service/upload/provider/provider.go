@@ -134,6 +134,10 @@ type SignedPublicOpenDriver interface {
 	UsesSignedPublicOpen() bool
 }
 
+type ThumbnailURLDriver interface {
+	ResolveThumbnailURL(File) string
+}
+
 var drivers = map[string]Driver{
 	"local":  localDriver{},
 	"qiniu":  qiniuDriver{},
@@ -269,6 +273,30 @@ func CheckStorage(ctx context.Context, storage frontmodel.UploadStorage) error {
 func UsesSignedPublicOpen(driver Driver) bool {
 	capability, ok := driver.(SignedPublicOpenDriver)
 	return ok && capability.UsesSignedPublicOpen()
+}
+
+func ResolveThumbnailURL(driver Driver, file File) string {
+	capability, ok := driver.(ThumbnailURLDriver)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(capability.ResolveThumbnailURL(file))
+}
+
+func IsVideoFile(kind, mimeType, extension string) bool {
+	if strings.EqualFold(strings.TrimSpace(kind), "video") {
+		return true
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(mimeType)), "video/") {
+		return true
+	}
+	extension = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(extension)), ".")
+	switch extension {
+	case "mp4", "mov", "webm", "avi", "mkv", "m4v", "ogv":
+		return true
+	default:
+		return false
+	}
 }
 
 func ResolveOpenError(err error) (int, http.Header, bool) {

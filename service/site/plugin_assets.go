@@ -26,13 +26,14 @@ import (
 )
 
 const (
-	pluginMountDir       = "plugins"
-	pluginSourceMountDir = "plugins-src"
-	pluginDistDir        = "front/dist"
-	pluginSourceDir      = "front/src"
-	pluginManifest       = "manifest.json"
-	pluginSourceEntry    = "plugin.ts"
-	pluginDevRuntime     = "runtime.js"
+	pluginMountDir         = "plugins"
+	pluginSourceMountDir   = "plugins-src"
+	pluginDistDir          = "front/dist"
+	pluginSourceDir        = "front/src"
+	pluginManifest         = "manifest.json"
+	pluginSourceEntry      = "plugin.ts"
+	pluginDevRuntime       = "runtime.js"
+	pluginCompatModeModule = "module"
 )
 
 type pluginManifestEntry struct {
@@ -43,19 +44,21 @@ type pluginManifestEntry struct {
 }
 
 type runtimePluginDescriptor struct {
-	Name     string   `json:"name"`
-	Manifest string   `json:"manifest,omitempty"`
-	Entry    string   `json:"entry,omitempty"`
-	CSS      []string `json:"css,omitempty"`
-	Nodes    []string `json:"nodes,omitempty"`
-	Depends  []string `json:"depends,omitempty"`
-	Module   bool     `json:"module,omitempty"`
+	Name       string   `json:"name"`
+	Manifest   string   `json:"manifest,omitempty"`
+	Entry      string   `json:"entry,omitempty"`
+	CSS        []string `json:"css,omitempty"`
+	CompatMode string   `json:"compatMode,omitempty"`
+	Nodes      []string `json:"nodes,omitempty"`
+	Depends    []string `json:"depends,omitempty"`
+	Module     bool     `json:"module,omitempty"`
 }
 
 type pluginSourceMetadata struct {
-	Name    string   `json:"name"`
-	Nodes   []string `json:"nodes,omitempty"`
-	Depends []string `json:"depends,omitempty"`
+	Name       string   `json:"name"`
+	CompatMode string   `json:"compatMode,omitempty"`
+	Nodes      []string `json:"nodes,omitempty"`
+	Depends    []string `json:"depends,omitempty"`
 }
 
 type pluginSourceMetadataCacheEntry struct {
@@ -253,6 +256,7 @@ func openSourcePluginAssetPath(c *server.Context, value string) error {
 
 func sendSourcePluginManifest(raw *fiber.Ctx, pluginName string, sourceRoot string) error {
 	metadata := readPluginSourceMetadata(pluginName, filepath.Join(sourceRoot, pluginSourceEntry))
+	metadata.CompatMode = pluginCompatModeModule
 	content, err := json.Marshal(map[string]interface{}{
 		"__plugin": metadata,
 		pluginDevRuntime: pluginManifestEntry{
@@ -322,12 +326,13 @@ func sourceRuntimePluginDescriptor(site siteconfig.Site, pluginName string) runt
 	}
 
 	return runtimePluginDescriptor{
-		Name:     metadata.Name,
-		Manifest: pluginSourceManifestURL(site, pluginName),
-		Entry:    pluginSourceRuntimeURL(site, pluginName),
-		Nodes:    metadata.Nodes,
-		Depends:  metadata.Depends,
-		Module:   true,
+		Name:       metadata.Name,
+		Manifest:   pluginSourceManifestURL(site, pluginName),
+		Entry:      pluginSourceRuntimeURL(site, pluginName),
+		CompatMode: pluginCompatModeModule,
+		Nodes:      metadata.Nodes,
+		Depends:    metadata.Depends,
+		Module:     true,
 	}
 }
 

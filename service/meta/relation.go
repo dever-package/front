@@ -3,9 +3,7 @@ package meta
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,12 +11,9 @@ import (
 	"github.com/shemic/dever/orm"
 	"github.com/shemic/dever/util"
 
-	frontmodel "github.com/dever-package/front/model"
 	optionseed "github.com/dever-package/front/service/internal/optionseed"
 	frontrecord "github.com/dever-package/front/service/record"
-	"github.com/dever-package/front/service/siteconfig"
-	"github.com/dever-package/front/service/upload/openurl"
-	uploadprovider "github.com/dever-package/front/service/upload/provider"
+	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
 type OptionModel interface {
@@ -784,71 +779,51 @@ func hideUploadStorageRelationSecret(_ context.Context, row map[string]any) map[
 }
 
 func buildUploadRelationPayload(ctx context.Context, row map[string]any) map[string]any {
-	fileID := util.ToUint64(row["id"])
-	openURL := ""
-	if fileID != 0 {
-		query := url.Values{}
-		query.Set("id", strconv.FormatUint(fileID, 10))
-		openURL = siteconfig.FrontRuntimeAPIURL("upload/open", query)
-	}
-
-	providerURL, useSignedPublicOpen := resolveUploadRelationPublicURL(ctx, row)
-	publicURL, openTargetURL := openurl.ResolveAssetURLs(
-		fileID,
-		providerURL,
-		openURL,
-		useSignedPublicOpen,
-	)
+	urls := uploadrepo.ResolveUploadFileURLs(uploadRelationFile(ctx, row))
 
 	result := util.CloneMap(row)
 	delete(result, "provider_key")
-	result["url"] = publicURL
-	result["thumbnail"] = publicURL
-	result["open_url"] = openTargetURL
-	result["download"] = openURL
+	result["url"] = urls.URL
+	result["thumbnail"] = urls.Thumbnail
+	result["open_url"] = urls.OpenURL
+	result["download"] = urls.Download
 	return result
 }
 
-func resolveUploadRelationPublicURL(ctx context.Context, row map[string]any) (string, bool) {
-	pathValue := strings.TrimSpace(util.ToString(row["path"]))
-	if pathValue == "" {
-		return "", false
-	}
-	file := uploadprovider.File{
-		Path:        pathValue,
-		ProviderKey: strings.TrimSpace(util.ToString(row["provider_key"])),
-	}
-	providerKey := uploadprovider.ResolveFileProviderKey(file)
-
+func uploadRelationFile(ctx context.Context, row map[string]any) uploadrepo.UploadFile {
 	storageID := util.ToUint64(row["storage_id"])
+	return uploadrepo.UploadFile{
+		ID:          util.ToUint64(row["id"]),
+		StorageID:   storageID,
+		Kind:        util.ToString(row["kind"]),
+		Ext:         util.ToString(row["ext"]),
+		Mime:        util.ToString(row["mime"]),
+		Path:        strings.TrimSpace(util.ToString(row["path"])),
+		ProviderKey: strings.TrimSpace(util.ToString(row["provider_key"])),
+		Storage:     uploadRelationStorage(ctx, storageID),
+	}
+}
+
+func uploadRelationStorage(ctx context.Context, storageID uint64) uploadrepo.UploadStorage {
+	storage := uploadrepo.UploadStorage{ID: storageID, Type: "local"}
 	if storageID == 0 {
-		return uploadprovider.ResolveLocalPublicURL("", providerKey), false
+		return storage
 	}
 
 	storageModel := frontrecord.Resolve("front.NewUploadStorageModel")
 	if storageModel == nil {
-		return uploadprovider.ResolveLocalPublicURL("", providerKey), false
+		return storage
 	}
 	storageRow := storageModel.FindMap(ctx, map[string]any{"id": storageID})
 	if len(storageRow) == 0 {
-		return uploadprovider.ResolveLocalPublicURL("", providerKey), false
+		return storage
 	}
 
-	storage := frontmodel.UploadStorage{
-		ID:     storageID,
-		Type:   strings.ToLower(strings.TrimSpace(util.ToString(storageRow["type"]))),
-		Domain: strings.TrimSpace(util.ToString(storageRow["domain"])),
+	if storageType := strings.ToLower(strings.TrimSpace(util.ToString(storageRow["type"]))); storageType != "" {
+		storage.Type = storageType
 	}
-	if storage.Type == "" {
-		storage.Type = "local"
-	}
-	driver, err := uploadprovider.Resolve(storage.Type)
-	if err != nil {
-		return "", false
-	}
-	file.Storage = storage
-	publicURL := strings.TrimSpace(driver.ResolvePublicURL(file))
-	return publicURL, uploadprovider.UsesSignedPublicOpen(driver)
+	storage.Domain = strings.TrimSpace(util.ToString(storageRow["domain"]))
+	return storage
 }
 
 func relationOptionBaseKey(config Relation) string {

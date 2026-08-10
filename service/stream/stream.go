@@ -36,6 +36,23 @@ type Entry struct {
 	Payload map[string]any `json:"payload"`
 }
 
+type ReadCursor struct {
+	RequestID string
+	LastID    string
+}
+
+type ReadEntry struct {
+	RequestID string
+	ID        string
+	Payload   map[string]any
+}
+
+type normalizedReadCursor struct {
+	requestID string
+	streamKey string
+	lastID    string
+}
+
 func New(namespace string) Service {
 	namespace = strings.TrimSpace(namespace)
 	if namespace == "" {
@@ -94,32 +111,52 @@ func (s Service) WritePayload(ctx context.Context, requestID string, payload map
 }
 
 func (s Service) Read(ctx context.Context, requestID string, lastID string, count int64, block time.Duration) ([]Entry, error) {
-	requestID = strings.TrimSpace(requestID)
-	if !validRequestID(requestID) {
-		return nil, fmt.Errorf("request_id 不能为空")
+	rows, err := s.ReadMany(ctx, []ReadCursor{{RequestID: requestID, LastID: lastID}}, count, block)
+	if err != nil {
+		return nil, err
 	}
-	lastID = strings.TrimSpace(lastID)
-	if lastID == "" {
-		lastID = "0-0"
+	entries := make([]Entry, 0, len(rows))
+	for _, row := range rows {
+		entries = append(entries, Entry{ID: row.ID, Payload: row.Payload})
+	}
+	return entries, nil
+}
+
+func (s Service) ReadMany(ctx context.Context, cursors []ReadCursor, count int64, block time.Duration) ([]ReadEntry, error) {
+	normalized, err := s.normalizeReadCursors(cursors)
+	if err != nil {
+		return nil, err
+	}
+	if len(normalized) == 0 {
+		return []ReadEntry{}, nil
 	}
 	if count <= 0 {
 		count = 100
 	}
-
 	if s.client == nil {
-		return s.memory.Read(ctx, s.Key(requestID), lastID, count, block)
+		return s.memory.ReadMany(ctx, normalized, count, block)
 	}
 	if !s.canUseRedis() {
 		return nil, redisCoolingDownError(s.namespace)
 	}
+
+	streamArgs := make([]string, 0, len(normalized)*2)
+	requestIDsByKey := make(map[string]string, len(normalized))
+	for _, cursor := range normalized {
+		streamArgs = append(streamArgs, cursor.streamKey)
+		requestIDsByKey[cursor.streamKey] = cursor.requestID
+	}
+	for _, cursor := range normalized {
+		streamArgs = append(streamArgs, cursor.lastID)
+	}
 	streams, err := s.client.XRead(ctx, &redis.XReadArgs{
-		Streams: []string{s.Key(requestID), lastID},
+		Streams: streamArgs,
 		Count:   count,
 		Block:   block,
 	}).Result()
 	if err == redis.Nil {
 		s.redisSuccess()
-		return []Entry{}, nil
+		return []ReadEntry{}, nil
 	}
 	if err != nil {
 		if contextOperationError(ctx, err) {
@@ -130,16 +167,45 @@ func (s Service) Read(ctx context.Context, requestID string, lastID string, coun
 		return nil, fmt.Errorf("读取 Redis stream 失败: %w", err)
 	}
 	s.redisSuccess()
-	entries := make([]Entry, 0)
+	entries := make([]ReadEntry, 0)
 	for _, currentStream := range streams {
+		requestID := requestIDsByKey[currentStream.Stream]
 		for _, message := range currentStream.Messages {
-			entries = append(entries, Entry{
-				ID:      message.ID,
-				Payload: DecodePayload(message.Values["payload"]),
+			entries = append(entries, ReadEntry{
+				RequestID: requestID,
+				ID:        message.ID,
+				Payload:   DecodePayload(message.Values["payload"]),
 			})
 		}
 	}
 	return entries, nil
+}
+
+func (s Service) normalizeReadCursors(cursors []ReadCursor) ([]normalizedReadCursor, error) {
+	result := make([]normalizedReadCursor, 0, len(cursors))
+	indexes := make(map[string]int, len(cursors))
+	for _, cursor := range cursors {
+		requestID := strings.TrimSpace(cursor.RequestID)
+		if !validRequestID(requestID) {
+			return nil, fmt.Errorf("request_id 不能为空")
+		}
+		lastID := strings.TrimSpace(cursor.LastID)
+		if lastID == "" {
+			lastID = "0-0"
+		}
+		current := normalizedReadCursor{
+			requestID: requestID,
+			streamKey: s.Key(requestID),
+			lastID:    lastID,
+		}
+		if index, exists := indexes[requestID]; exists {
+			result[index] = current
+			continue
+		}
+		indexes[requestID] = len(result)
+		result = append(result, current)
+	}
+	return result, nil
 }
 
 func (s Service) writeRedis(ctx context.Context, streamKey string, requestID string, payload map[string]any, rawPayload []byte) (string, error) {
@@ -424,7 +490,7 @@ func (s *memoryStreamStore) Write(ctx context.Context, key string, payload map[s
 	return id, nil
 }
 
-func (s *memoryStreamStore) Read(ctx context.Context, key string, lastID string, count int64, block time.Duration) ([]Entry, error) {
+func (s *memoryStreamStore) ReadMany(ctx context.Context, cursors []normalizedReadCursor, count int64, block time.Duration) ([]ReadEntry, error) {
 	if count <= 0 {
 		count = 100
 	}
@@ -436,7 +502,16 @@ func (s *memoryStreamStore) Read(ctx context.Context, key string, lastID string,
 	for {
 		s.mu.Lock()
 		s.cleanupLocked(time.Now())
-		entries := s.entriesAfterLocked(key, lastID, count)
+		entries := make([]ReadEntry, 0)
+		for _, cursor := range cursors {
+			for _, entry := range s.entriesAfterLocked(cursor.streamKey, cursor.lastID, count) {
+				entries = append(entries, ReadEntry{
+					RequestID: cursor.requestID,
+					ID:        entry.ID,
+					Payload:   entry.Payload,
+				})
+			}
+		}
 		notify := s.notify
 		s.mu.Unlock()
 
@@ -446,7 +521,7 @@ func (s *memoryStreamStore) Read(ctx context.Context, key string, lastID string,
 
 		wait := time.Until(deadline)
 		if wait <= 0 {
-			return []Entry{}, nil
+			return []ReadEntry{}, nil
 		}
 		timer := time.NewTimer(wait)
 		select {
@@ -456,7 +531,7 @@ func (s *memoryStreamStore) Read(ctx context.Context, key string, lastID string,
 		case <-notify:
 			timer.Stop()
 		case <-timer.C:
-			return []Entry{}, nil
+			return []ReadEntry{}, nil
 		}
 	}
 }
