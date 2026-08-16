@@ -2,9 +2,11 @@ package upload
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,7 +20,17 @@ import (
 	uploadrepo "github.com/dever-package/front/service/upload/repository"
 )
 
-const importURLTimeout = 10 * time.Minute
+const (
+	importURLTimeout          = 10 * time.Minute
+	importURLDownloadAttempts = 3
+)
+
+type importURLDownload struct {
+	localPath string
+	name      string
+	mimeType  string
+	cleanup   func()
+}
 
 func ImportURLUpload(c *server.Context) error {
 	var input uploadImportURLInput
@@ -66,20 +78,45 @@ func downloadImportURLFile(
 
 	reqCtx, cancel := context.WithTimeout(ctx, importURLTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, rawURL, nil)
+	var lastErr error
+	for attempt := 1; attempt <= importURLDownloadAttempts; attempt++ {
+		download, err := downloadImportURLFileAttempt(reqCtx, input, parsed, maxBytes, progress)
+		if err == nil {
+			return download.localPath, download.name, download.mimeType, download.cleanup, nil
+		}
+		lastErr = err
+		if attempt == importURLDownloadAttempts || !isRetryableImportURLDownloadError(err) {
+			break
+		}
+		notifyImportURLProgress(progress, "远程连接中断，正在重试", 5)
+		if err = waitImportURLDownloadRetry(reqCtx, attempt); err != nil {
+			return "", "", "", nil, err
+		}
+	}
+	return "", "", "", nil, lastErr
+}
+
+func downloadImportURLFileAttempt(
+	ctx context.Context,
+	input uploadImportURLInput,
+	parsed *url.URL,
+	maxBytes int64,
+	progress func(text string, progress int),
+) (importURLDownload, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(input.URL), nil)
 	if err != nil {
-		return "", "", "", nil, fmt.Errorf("创建资源下载请求失败: %w", err)
+		return importURLDownload{}, fmt.Errorf("创建资源下载请求失败: %w", err)
 	}
 	resp, err := importURLHTTPClient.Do(req)
 	if err != nil {
-		return "", "", "", nil, fmt.Errorf("下载资源失败: %w", err)
+		return importURLDownload{}, fmt.Errorf("下载资源失败: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= http.StatusBadRequest {
-		return "", "", "", nil, fmt.Errorf("下载资源失败: status=%d", resp.StatusCode)
+		return importURLDownload{}, fmt.Errorf("下载资源失败: status=%d", resp.StatusCode)
 	}
 	if maxBytes > 0 && resp.ContentLength > maxBytes {
-		return "", "", "", nil, fmt.Errorf("文件大小超出限制")
+		return importURLDownload{}, fmt.Errorf("文件大小超出限制")
 	}
 	notifyImportURLProgress(progress, "正在下载远程资源", 5)
 
@@ -87,7 +124,7 @@ func downloadImportURLFile(
 	name := resolveImportURLName(input.Name, parsed, resp.Header.Get("Content-Disposition"), mimeType)
 	file, err := os.CreateTemp("", "dever-import-url-*"+filepath.Ext(name))
 	if err != nil {
-		return "", "", "", nil, fmt.Errorf("创建导入临时文件失败: %w", err)
+		return importURLDownload{}, fmt.Errorf("创建导入临时文件失败: %w", err)
 	}
 	cleanup := func() {
 		_ = os.Remove(file.Name())
@@ -106,18 +143,49 @@ func downloadImportURLFile(
 	closeErr := file.Close()
 	if copyErr != nil {
 		cleanup()
-		return "", "", "", nil, fmt.Errorf("写入导入临时文件失败: %w", copyErr)
+		return importURLDownload{}, fmt.Errorf("写入导入临时文件失败: %w", copyErr)
 	}
 	if closeErr != nil {
 		cleanup()
-		return "", "", "", nil, fmt.Errorf("关闭导入临时文件失败: %w", closeErr)
+		return importURLDownload{}, fmt.Errorf("关闭导入临时文件失败: %w", closeErr)
 	}
 	if maxBytes > 0 && written > maxBytes {
 		cleanup()
-		return "", "", "", nil, fmt.Errorf("文件大小超出限制")
+		return importURLDownload{}, fmt.Errorf("文件大小超出限制")
 	}
 
-	return file.Name(), name, mimeType, cleanup, nil
+	return importURLDownload{
+		localPath: file.Name(),
+		name:      name,
+		mimeType:  mimeType,
+		cleanup:   cleanup,
+	}, nil
+}
+
+func isRetryableImportURLDownloadError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var networkErr net.Error
+	return errors.As(err, &networkErr)
+}
+
+func waitImportURLDownloadRetry(ctx context.Context, attempt int) error {
+	delay := 300 * time.Millisecond
+	if attempt > 1 {
+		delay = 900 * time.Millisecond
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func notifyImportURLProgress(progress func(text string, progress int), text string, percent int) {

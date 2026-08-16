@@ -27,7 +27,7 @@
           "appearance": {
             "theme": "light",
             "sidebar": "floating",
-            "layout": "compact",
+            "layout": "default",
             "direction": "ltr"
           },
           "runtime": {
