@@ -46,7 +46,7 @@ func parseWeChatArticle(page fetchedArticlePage, document *nethtml.Node, maxAsse
 	content := findElementByID(document, "js_content")
 	if content == nil {
 		if isWeChatVerifyPage(page.SourceHTML) {
-			return ImportedArticle{}, fmt.Errorf("微信返回环境验证页，服务端无法直接读取正文；可先在浏览器打开文章后复制粘贴正文")
+			return ImportedArticle{}, fmt.Errorf("微信返回环境验证页，服务端无法直接读取正文；请配置有效的平台 Cookie 后重试")
 		}
 		return parseGenericArticle(page, document, maxAssets)
 	}

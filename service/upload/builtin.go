@@ -19,6 +19,7 @@ type ImportURLResourceInput struct {
 	BizKey     string
 	BizName    string
 	CategoryID uint64
+	Progress   func(text string, progress int)
 }
 
 type UploadBuiltinService struct{}
@@ -65,7 +66,7 @@ func ImportURLResource(ctx context.Context, input ImportURLResourceInput) (map[s
 		BizKey:     input.BizKey,
 		BizName:    input.BizName,
 		CategoryID: input.CategoryID,
-	}, nil)
+	}, input.Progress)
 	if err != nil {
 		return nil, err
 	}

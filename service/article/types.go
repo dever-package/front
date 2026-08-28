@@ -3,6 +3,7 @@ package article
 type ImportURLInput struct {
 	URL       string `json:"url"`
 	MaxImages int    `json:"max_images"`
+	Cookie    string `json:"-"`
 }
 
 type ImportedArticle struct {

@@ -47,7 +47,7 @@ func ImportURL(c *server.Context) error {
 }
 
 func ImportURLContent(ctx context.Context, input ImportURLInput) (ImportedArticle, error) {
-	page, err := fetchArticlePage(ctx, input.URL)
+	page, err := fetchArticlePage(ctx, input.URL, input.Cookie)
 	if err != nil {
 		return ImportedArticle{}, err
 	}
@@ -61,7 +61,7 @@ func ImportURLContent(ctx context.Context, input ImportURLInput) (ImportedArticl
 	return article, nil
 }
 
-func fetchArticlePage(ctx context.Context, rawURL string) (fetchedArticlePage, error) {
+func fetchArticlePage(ctx context.Context, rawURL string, cookie string) (fetchedArticlePage, error) {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" {
 		return fetchedArticlePage{}, fmt.Errorf("文章链接不能为空")
@@ -82,6 +82,13 @@ func fetchArticlePage(ctx context.Context, rawURL string) (fetchedArticlePage, e
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 	req.Header.Set("Cache-Control", "no-cache")
+	cookie = strings.TrimSpace(cookie)
+	if strings.ContainsAny(cookie, "\r\n") {
+		return fetchedArticlePage{}, fmt.Errorf("文章登录态格式无效")
+	}
+	if cookie != "" {
+		req.Header.Set("Cookie", cookie)
+	}
 
 	resp, err := articleHTTPClient.Do(req)
 	if err != nil {
