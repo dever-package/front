@@ -13,9 +13,10 @@ import (
 )
 
 type ClientOptions struct {
-	Timeout      time.Duration
-	MaxRedirects int
-	ProxyEnvVars []string
+	Timeout             time.Duration
+	DisableTotalTimeout bool
+	MaxRedirects        int
+	ProxyEnvVars        []string
 }
 
 var safeURLDialer = &net.Dialer{
@@ -25,7 +26,9 @@ var safeURLDialer = &net.Dialer{
 
 func NewHTTPClient(options ClientOptions) *http.Client {
 	timeout := options.Timeout
-	if timeout <= 0 {
+	if options.DisableTotalTimeout {
+		timeout = 0
+	} else if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 	return &http.Client{

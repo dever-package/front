@@ -31,6 +31,7 @@ version: 0.1.0
 ## 硬规则
 
 - `package/front` 只承载通用 runtime 能力，不放业务组件私有逻辑。
+- 组件专用上传类型和规则不得写入 `front` Model seed，也不得约定全局数字 ID；`form-upload.meta.ruleId` 只用于 `front` 自有静态规则，组件规则由组件 Service 返回并通过通用 `meta.ruleIdPath` 绑定。
 - 不手改 `front/html` 及其 `assets`；主前端源码构建后才更新这里。
 - 不绕过 page/model/action registry 直连任意表、字段或 SQL。
 - 标准 action 必须经过站点、登录态、权限、字段白名单和 model 元数据校验。

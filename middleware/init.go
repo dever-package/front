@@ -17,6 +17,7 @@ import (
 	exportservice "github.com/dever-package/front/service/export"
 	importerservice "github.com/dever-package/front/service/importer"
 	permissionservice "github.com/dever-package/front/service/permission"
+	"github.com/dever-package/front/service/requestguard"
 	"github.com/dever-package/front/service/siteconfig"
 	uploadservice "github.com/dever-package/front/service/upload"
 	"github.com/dever-package/front/service/upload/openurl"
@@ -62,7 +63,23 @@ func Register() {
 		coremiddleware.UseGlobalFunc(auth(settings))
 		coremiddleware.UseGlobalFunc(apiScopeGuard(settings))
 		coremiddleware.UseGlobalFunc(frontBootstrap(settings))
+		coremiddleware.UseGlobalFunc(componentRequestGuards(settings))
 	})
+}
+
+func componentRequestGuards(settings middlewareSettings) coremiddleware.ContextFunc {
+	return func(ctx any) error {
+		c, ok := ctx.(*server.Context)
+		if !ok || c == nil {
+			return nil
+		}
+		path := strings.TrimSpace(c.Path())
+		if isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
+			isStaticSiteRequest(settings.frontConfig, c, path) {
+			return nil
+		}
+		return requestguard.Check(c)
+	}
 }
 
 func loadMiddlewareSettings() middlewareSettings {

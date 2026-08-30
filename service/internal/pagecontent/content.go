@@ -17,6 +17,7 @@ import (
 	"github.com/shemic/dever/util"
 
 	frontpagepath "github.com/dever-package/front/internal/pagepath"
+	"github.com/dever-package/front/service/pagefilter"
 	"github.com/dever-package/front/service/siteconfig"
 )
 
@@ -150,6 +151,9 @@ func loadComponentPages(pageName string) ([]ComponentPage, error) {
 			routePath := frontpagepath.TrimPageFileExt(filepath.ToSlash(filepath.Join(append([]string{current.Name}, relativeParts...)...)))
 			routePath = frontpagepath.NormalizePath(routePath)
 			if routePath == "" {
+				return nil
+			}
+			if !pagefilter.Enabled(current.Name, pageName, routePath) {
 				return nil
 			}
 
