@@ -231,6 +231,9 @@ func openSourcePluginAssetPath(c *server.Context, value string) error {
 	if !ok {
 		return c.Error("前端插件源码路径不合法", 404)
 	}
+	if !siteconfig.PluginDevSourceAllowed(pluginName) {
+		return c.Error("前端插件源码不存在", 404)
+	}
 
 	sourceRoot, err := resolvePluginSourceRoot(pluginName)
 	if err != nil {
@@ -287,7 +290,11 @@ func discoverRuntimePluginDescriptors(site siteconfig.Site, pluginDev bool) []ru
 	distNames := discoverDistPluginNames()
 	sourceNames := []string{}
 	if pluginDev {
-		sourceNames = discoverSourcePluginNames()
+		var explicit bool
+		sourceNames, explicit = siteconfig.PluginDevSourceNames()
+		if !explicit {
+			sourceNames = discoverSourcePluginNames()
+		}
 	}
 
 	descriptors := make([]runtimePluginDescriptor, 0, len(sourceNames)+len(distNames))
@@ -854,5 +861,6 @@ func versionedViteSourceURL(file string) string {
 	if strings.Contains(url, "?") {
 		separator = "&"
 	}
-	return url + separator + "v=" + strconv.FormatInt(info.ModTime().UnixNano(), 36)
+	version := strconv.FormatInt(info.ModTime().UnixNano(), 36) + "-" + siteconfig.PluginDevVersion()
+	return url + separator + "v=" + version
 }

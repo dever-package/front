@@ -2,10 +2,20 @@ package siteconfig
 
 import (
 	"os"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shemic/dever/config"
 )
+
+const (
+	pluginDevNamesEnv   = "DEVER_FRONT_PLUGIN_DEV_NAMES"
+	pluginDevVersionEnv = "DEVER_FRONT_PLUGIN_DEV_VERSION"
+)
+
+var pluginDevProcessVersion = strconv.FormatInt(time.Now().UnixNano(), 36)
 
 var pluginDevProxyRoutes = []string{
 	"/@fs/*",
@@ -43,6 +53,49 @@ func PluginDevEnabled(cfg config.FrontSite) bool {
 		return *cfg.PluginDev.Enabled
 	}
 	return false
+}
+
+func PluginDevSourceNames() ([]string, bool) {
+	value, explicit := os.LookupEnv(pluginDevNamesEnv)
+	if !explicit {
+		return nil, false
+	}
+
+	seen := make(map[string]struct{})
+	for _, name := range strings.Split(value, ",") {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			seen[name] = struct{}{}
+		}
+	}
+
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, true
+}
+
+func PluginDevSourceAllowed(name string) bool {
+	names, explicit := PluginDevSourceNames()
+	if !explicit {
+		return true
+	}
+	name = strings.TrimSpace(name)
+	for _, allowed := range names {
+		if name == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func PluginDevVersion() string {
+	if version := strings.TrimSpace(os.Getenv(pluginDevVersionEnv)); version != "" {
+		return version
+	}
+	return pluginDevProcessVersion
 }
 
 func IsPluginDevProxyPath(requestPath string) bool {
