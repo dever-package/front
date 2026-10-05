@@ -18,18 +18,19 @@ import (
 	importerservice "github.com/dever-package/front/service/importer"
 	permissionservice "github.com/dever-package/front/service/permission"
 	"github.com/dever-package/front/service/requestguard"
+	frontsite "github.com/dever-package/front/service/site"
 	"github.com/dever-package/front/service/siteconfig"
 	uploadservice "github.com/dever-package/front/service/upload"
 	"github.com/dever-package/front/service/upload/openurl"
 )
 
-const siteHeader = "X-Dever-Site"
 const apiKeyHeader = "X-API-Key"
 
 var registerOnce sync.Once
 
 type middlewareSettings struct {
 	authConfig           config.Auth
+	frontSite            config.FrontSite
 	frontConfig          siteconfig.Config
 	publicPaths          []string
 	allowPluginDevAssets bool
@@ -63,6 +64,7 @@ func Register() {
 		coremiddleware.UseGlobalFunc(auth(settings))
 		coremiddleware.UseGlobalFunc(apiScopeGuard(settings))
 		coremiddleware.UseGlobalFunc(frontBootstrap(settings))
+		coremiddleware.UseGlobal(hostPageNavigation(settings))
 		coremiddleware.UseGlobalFunc(componentRequestGuards(settings))
 	})
 }
@@ -75,7 +77,7 @@ func componentRequestGuards(settings middlewareSettings) coremiddleware.ContextF
 		}
 		path := strings.TrimSpace(c.Path())
 		if isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
-			isStaticSiteRequest(settings.frontConfig, c, path) {
+			isStaticSiteRequest(settings.frontConfig, settings.frontSite, c, path) {
 			return nil
 		}
 		return requestguard.Check(c)
@@ -94,6 +96,7 @@ func loadMiddlewareSettings() middlewareSettings {
 
 	return middlewareSettings{
 		authConfig:           cfg.Auth,
+		frontSite:            cfg.FrontSite,
 		frontConfig:          frontConfig,
 		publicPaths:          frontConfig.AllPublicPaths(),
 		allowPluginDevAssets: siteconfig.PluginDevEnabled(cfg.FrontSite),
@@ -112,7 +115,7 @@ func auth(settings middlewareSettings) coremiddleware.ContextFunc {
 				openurl.IsSignedRequest(c) ||
 				siteconfig.MatchPublicPath(settings.publicPaths, path) ||
 				isPublicSiteRequest(settings.frontConfig, c, path) ||
-				isStaticSiteRequest(settings.frontConfig, c, path) ||
+				isStaticSiteRequest(settings.frontConfig, settings.frontSite, c, path) ||
 				isPublicRouteSchemaRequest(settings.frontConfig, c, path) ||
 				allowAPIKeyRequest(settings.frontConfig, c, path)
 		},
@@ -150,6 +153,22 @@ func frontBootstrap(settings middlewareSettings) coremiddleware.ContextFunc {
 	}
 }
 
+func hostPageNavigation(settings middlewareSettings) coremiddleware.Middleware {
+	return func(ctx any, next coremiddleware.Next) error {
+		c, ok := ctx.(*server.Context)
+		if ok && c != nil {
+			served, err := frontsite.TryOpenHostPageNavigation(c, settings.frontConfig, settings.frontSite)
+			if err != nil || served {
+				return err
+			}
+		}
+		if next != nil {
+			return next(ctx)
+		}
+		return nil
+	}
+}
+
 func apiScopeGuard(settings middlewareSettings) coremiddleware.ContextFunc {
 	return func(ctx any) error {
 		c, ok := ctx.(*server.Context)
@@ -158,7 +177,7 @@ func apiScopeGuard(settings middlewareSettings) coremiddleware.ContextFunc {
 		}
 		path := strings.TrimSpace(c.Path())
 		if isPluginDevAssetPath(settings.allowPluginDevAssets, path) ||
-			isStaticSiteRequest(settings.frontConfig, c, path) {
+			isStaticSiteRequest(settings.frontConfig, settings.frontSite, c, path) {
 			return nil
 		}
 		if openurl.IsSignedRequest(c) {
@@ -292,11 +311,11 @@ func requestHostSite(frontConfig siteconfig.Config, c *server.Context) (siteconf
 	if c == nil {
 		return siteconfig.Site{}, false
 	}
-	return frontConfig.FindByHost(siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host")))
+	return frontConfig.FindByHost(siteconfig.RequestContextHost(c))
 }
 
 func requestSiteKey(c *server.Context) string {
-	siteKey := strings.TrimSpace(c.Header(siteHeader))
+	siteKey := strings.TrimSpace(c.Header(siteconfig.RequestSiteHeader))
 	if siteKey == "" {
 		siteKey = claimString(deverjwt.Claims(c.Context())["site"])
 	}
@@ -338,7 +357,7 @@ func isPluginDevAssetPath(enabled bool, path string) bool {
 	return enabled && siteconfig.IsPluginDevProxyPath(path)
 }
 
-func isStaticSiteRequest(frontConfig siteconfig.Config, c *server.Context, path string) bool {
+func isStaticSiteRequest(frontConfig siteconfig.Config, staticConfig config.FrontSite, c *server.Context, path string) bool {
 	if hasSiteContextHeader(c) {
 		return false
 	}
@@ -348,16 +367,19 @@ func isStaticSiteRequest(frontConfig siteconfig.Config, c *server.Context, path 
 	if c == nil || !isStaticSiteMethod(c.Method()) {
 		return false
 	}
+	if _, ok := frontsite.ResolveHostPageNavigation(c, frontConfig, staticConfig); ok {
+		return true
+	}
 	if _, ok := frontConfig.FindByAPIRequestPath(path); ok {
 		return false
 	}
-	host := siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host"))
+	host := siteconfig.RequestContextHost(c)
 	_, ok := frontConfig.FindByHost(host)
 	return ok
 }
 
 func hasSiteContextHeader(c *server.Context) bool {
-	return c != nil && strings.TrimSpace(c.Header(siteHeader)) != ""
+	return c != nil && strings.TrimSpace(c.Header(siteconfig.RequestSiteHeader)) != ""
 }
 
 func isStaticSiteMethod(method string) bool {

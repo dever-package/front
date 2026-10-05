@@ -42,7 +42,7 @@ func uploadOpenCookieToken(frontConfig siteconfig.Config, c *server.Context) str
 	if site, ok := requestSite(frontConfig, c, c.Path()); ok && strings.TrimSpace(site.Key) != "" {
 		siteKey = site.Key
 	}
-	host := siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host"))
+	host := siteconfig.RequestContextHost(c)
 	expectedName := uploadOpenCookiePrefix + normalizeAuthStorageKey(siteKey) + "_" + normalizeAuthStorageKey(host)
 	if token := normalizeUploadOpenCookieToken(cookies[expectedName]); token != "" {
 		return token

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -12,10 +13,12 @@ import (
 	"sync"
 
 	"github.com/shemic/dever/component"
+	"github.com/shemic/dever/server"
 	"github.com/shemic/dever/util"
 )
 
 const (
+	RequestSiteHeader      = "X-Dever-Site"
 	DefaultSiteKey         = "admin"
 	DefaultPage            = "admin"
 	DefaultAPI             = "front"
@@ -942,6 +945,26 @@ func RequestHost(forwardedHost string, host string) string {
 		return value
 	}
 	return NormalizeRequestHost(host)
+}
+
+// RequestContextHost returns the normalized request host for direct and proxied requests.
+func RequestContextHost(c *server.Context) string {
+	if c == nil {
+		return ""
+	}
+	forwardedHost := c.Header("X-Forwarded-Host")
+	host := c.Header("Host")
+	if host == "" {
+		switch raw := c.Raw.(type) {
+		case interface{ Hostname() string }:
+			host = raw.Hostname()
+		case interface{ Request() *http.Request }:
+			if request := raw.Request(); request != nil {
+				host = request.Host
+			}
+		}
+	}
+	return RequestHost(forwardedHost, host)
 }
 
 func NormalizeRequestHost(value string) string {

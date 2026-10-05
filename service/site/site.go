@@ -15,6 +15,7 @@ import (
 	"github.com/shemic/dever/server"
 
 	frontroot "github.com/dever-package/front"
+	frontpage "github.com/dever-package/front/service/page"
 	renderservice "github.com/dever-package/front/service/render"
 	"github.com/dever-package/front/service/siteconfig"
 )
@@ -89,15 +90,7 @@ func registerHostBoundSites(s server.Server, siteSettings settings, frontConfig 
 		if !ok {
 			return c.Error("资源不存在", http.StatusNotFound)
 		}
-		c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
-		rendered, err := renderservice.TryRenderRequest(c, currentSite)
-		if err != nil {
-			return c.Error(err, http.StatusInternalServerError)
-		}
-		if rendered {
-			return nil
-		}
-		return openFile(c, siteSettings, currentSite)
+		return openHostBoundSite(c, siteSettings, currentSite)
 	}
 	runtime := func(c *server.Context) error {
 		currentSite, ok := requestHostBoundSite(frontConfig, c)
@@ -117,7 +110,58 @@ func requestHostBoundSite(frontConfig siteconfig.Config, c *server.Context) (sit
 	if c == nil {
 		return siteconfig.Site{}, false
 	}
-	return frontConfig.FindByHost(siteconfig.RequestHost(c.Header("X-Forwarded-Host"), c.Header("Host")))
+	return frontConfig.FindByHost(siteconfig.RequestContextHost(c))
+}
+
+// ResolveHostPageNavigation identifies a browser page navigation that overlaps an API prefix.
+func ResolveHostPageNavigation(c *server.Context, frontConfig siteconfig.Config, staticConfig config.FrontSite) (siteconfig.Site, bool) {
+	if c == nil || !staticSiteEnabled(staticConfig) {
+		return siteconfig.Site{}, false
+	}
+	method := strings.ToUpper(strings.TrimSpace(c.Method()))
+	if method != http.MethodGet && method != http.MethodHead {
+		return siteconfig.Site{}, false
+	}
+	if strings.TrimSpace(c.Header(siteconfig.RequestSiteHeader)) != "" {
+		return siteconfig.Site{}, false
+	}
+	if !strings.Contains(strings.ToLower(c.Header("Accept")), "text/html") {
+		return siteconfig.Site{}, false
+	}
+	requestPath := cleanRequestPath(c.Path())
+	if _, ok := frontConfig.FindByAPIRequestPath(requestPath); !ok {
+		return siteconfig.Site{}, false
+	}
+	currentSite, ok := requestHostBoundSite(frontConfig, c)
+	if !ok {
+		return siteconfig.Site{}, false
+	}
+	pagePath := currentSite.InternalPagePath(requestPath)
+	if _, err := frontpage.ReadContentForPage(currentSite.Page, pagePath); err != nil {
+		return siteconfig.Site{}, false
+	}
+	return currentSite, true
+}
+
+// TryOpenHostPageNavigation serves the matching host-bound SPA before an overlapping API handler.
+func TryOpenHostPageNavigation(c *server.Context, frontConfig siteconfig.Config, staticConfig config.FrontSite) (bool, error) {
+	currentSite, ok := ResolveHostPageNavigation(c, frontConfig, staticConfig)
+	if !ok {
+		return false, nil
+	}
+	return true, openHostBoundSite(c, settingsFromConfig(staticConfig), currentSite)
+}
+
+func openHostBoundSite(c *server.Context, siteSettings settings, currentSite siteconfig.Site) error {
+	c.SetContext(siteconfig.WithSite(c.Context(), currentSite))
+	rendered, err := renderservice.TryRenderRequest(c, currentSite)
+	if err != nil {
+		return c.Error(err, http.StatusInternalServerError)
+	}
+	if rendered {
+		return nil
+	}
+	return openFile(c, siteSettings, currentSite)
 }
 
 func isHostBoundLegacySitePath(frontConfig siteconfig.Config, c *server.Context) bool {
@@ -132,16 +176,16 @@ func isHostBoundLegacySitePath(frontConfig siteconfig.Config, c *server.Context)
 }
 
 func settingsFromConfig(cfg config.FrontSite) settings {
-	enabled := true
-	if cfg.Enabled != nil {
-		enabled = *cfg.Enabled
-	}
 	return settings{
-		enabled:      enabled,
+		enabled:      staticSiteEnabled(cfg),
 		dir:          cleanDir(cfg.Dir),
 		pluginDev:    siteconfig.PluginDevEnabled(cfg),
 		pluginDevURL: frontPluginDevURL(cfg),
 	}
+}
+
+func staticSiteEnabled(cfg config.FrontSite) bool {
+	return cfg.Enabled == nil || *cfg.Enabled
 }
 
 func openFile(c *server.Context, site settings, currentSite siteconfig.Site) error {
