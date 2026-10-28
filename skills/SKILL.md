@@ -50,6 +50,7 @@ version: 0.1.0
 - 修复权限、站点配置、上传、导入导出、缓存、插件加载等 runtime 问题。
 - 扩展后台账号、角色、菜单、权限等 front 自有 model 的真实行为。
 - 维护插件 SDK 的公开 API，并保持组件插件不直接依赖主 front 源码。
+- 插件可声明 compat 依赖 `@/components/resource/resource-preview-dialog`，通过 `getCompatModule(path).ResourcePreviewDialog` 复用原生上传卡片的资源详情组件。
 
 普通业务页面、业务校验、业务状态流转和业务前台交互不要放到 `package/front`。
 
