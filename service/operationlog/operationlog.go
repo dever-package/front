@@ -1,6 +1,7 @@
 package operationlog
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -15,6 +16,7 @@ import (
 	frontauthctx "github.com/dever-package/front/service/internal/authctx"
 	frontmeta "github.com/dever-package/front/service/meta"
 	frontrecord "github.com/dever-package/front/service/record"
+	"github.com/dever-package/front/service/siteconfig"
 )
 
 const (
@@ -35,6 +37,19 @@ type Entry struct {
 	TargetID    string
 	Message     string
 	Payload     any
+}
+
+// Recorder writes operations for the authenticated identity domain. Errors from
+// persistence propagate through the normal Dever error path, as Model writes do.
+type Recorder func(context.Context, Entry)
+
+type recorderKey struct{}
+
+// WithRecorder binds an identity domain's recorder to the current request.
+// Standard actions and uploads use it before resolving any platform account.
+// Sites with a non-front auth provider must bind their own recorder.
+func WithRecorder(ctx context.Context, recorder Recorder) context.Context {
+	return context.WithValue(ctx, recorderKey{}, recorder)
 }
 
 func Record(c *server.Context, entry Entry) {
@@ -104,12 +119,18 @@ func ExtractID(value any, primaryKey string) string {
 }
 
 func record(c *server.Context, entry Entry, account map[string]any) {
-	defer func() {
-		_ = recover()
-	}()
-
 	if c == nil {
 		return
+	}
+	entry.Method = firstNonEmptyText(entry.Method, c.Method())
+	entry.Path = firstNonEmptyText(entry.Path, c.Path())
+	entry.PagePath = frontpagepath.NormalizePath(entry.PagePath)
+	if recorder, ok := c.Context().Value(recorderKey{}).(Recorder); ok {
+		recorder(c.Context(), entry)
+		return
+	}
+	if site, ok := siteconfig.FromContext(c.Context()); ok && site.Access.AuthProvider != siteconfig.DefaultAuthProvider {
+		panic(fmt.Errorf("operationlog: recorder required for auth provider %q", site.Access.AuthProvider))
 	}
 
 	entry = withAccount(c, entry, account)
