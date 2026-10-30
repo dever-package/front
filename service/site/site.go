@@ -172,7 +172,7 @@ func isHostBoundLegacySitePath(frontConfig siteconfig.Config, c *server.Context)
 		return false
 	}
 	site, ok := frontConfig.FindBySitePath(c.Path())
-	return ok && cleanRequestPath(site.Path) != "/"
+	return ok && len(site.Config.URLs) > 0 && cleanRequestPath(site.Path) != "/"
 }
 
 func settingsFromConfig(cfg config.FrontSite) settings {

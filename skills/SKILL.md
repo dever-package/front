@@ -43,6 +43,7 @@ version: 0.1.0
 - package/module front 插件加载走 `service/site` 和 Dever CLI 编译器，不在业务组件里复制插件静态服务。
 - 站点运行契约属于组件 `dever.json.front.sites`；项目 `config/front.json` 或 `config/front.jsonc` 只覆盖展示配置，二者同时存在时优先读取 `config/front.json`。
 - 站点展示配置里的 `url` 只接受字符串数组，用于 Host 根路径绑定；不要兼容字符串写法或带路径 URL。
+- 未绑定域名的站点保留自己的路径入口，可与绑定根路径的工作台共用域名；其 API 按声明的前缀和认证提供者解析，不被根路径站点覆盖。已绑定域名的站点仍禁用原路径别名。
 
 ## 允许改动的场景
 

@@ -291,6 +291,9 @@ func requestSite(frontConfig siteconfig.Config, c *server.Context, path string) 
 				return frontConfig.FindBySiteKey(siteKey)
 			}
 		}
+		if site, ok := frontConfig.FindByAPIRequestPath(path); ok && len(site.Config.URLs) == 0 {
+			return site, true
+		}
 		if site, ok := requestHostSite(frontConfig, c); ok {
 			return site, true
 		}
