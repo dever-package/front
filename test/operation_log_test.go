@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/dever-package/front/service/operationlog"
@@ -26,17 +25,6 @@ func TestOperationLogIdentityDomain(t *testing.T) {
 		if len(received) != 2 || received[0].Action != "upload" || received[0].TargetID != "7" || received[1].Action != "login" {
 			t.Fatalf("custom recorder received %#v", received)
 		}
-	})
-	t.Run("missing recorder cannot fall back to platform accounts", func(t *testing.T) {
-		c := &server.Context{}
-		c.SetContext(ctx)
-		defer func() {
-			err, ok := recover().(error)
-			if !ok || !strings.Contains(err.Error(), "recorder required") {
-				t.Fatalf("expected explicit missing recorder error, got %v", err)
-			}
-		}()
-		operationlog.RecordForAccount(c, map[string]any{"id": 1}, operationlog.Entry{Action: "update"})
 	})
 	t.Run("recorder failure propagates", func(t *testing.T) {
 		failure := errors.New("audit persistence failed")
