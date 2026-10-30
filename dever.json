@@ -1,6 +1,6 @@
 {
   "name": "front",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Dever front runtime, admin shell, RBAC, upload and system pages",
   "skills": [
     "skills/SKILL.md"
@@ -42,13 +42,6 @@
           "auth/login"
         ],
         "auth": [
-          {
-            "key": "tongyong",
-            "name": "通用",
-            "icon": "layout-dashboard",
-            "type": 1,
-            "sort": 1
-          },
           {
             "key": "config",
             "name": "平台配置",
