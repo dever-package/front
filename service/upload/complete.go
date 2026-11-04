@@ -133,18 +133,24 @@ func persistUploadFile(ctx context.Context, rule resolvedUploadRule, session res
 	if err != nil {
 		return resolvedUploadFile{}, err
 	}
-	if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
-		if err := updateUploadFileRelationMetaIfNeeded(ctx, *existing, session.BizID, session.CategoryID); err == nil {
-			if refreshed, refreshErr := uploadrepo.FindUploadFile(ctx, existing.ID); refreshErr == nil {
-				return refreshed, nil
-			}
-		}
-		return *existing, nil
-	}
-
 	storageID := session.StorageID
 	if storageID == 0 {
 		storageID = rule.StorageID
+	}
+	if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
+		// 只有目标存储已保存成功后才更新记录；同一路径的旧存储不能代替本次上传。
+		if existing.StorageID != storageID {
+			if fileModel.Update(ctx, map[string]any{"id": existing.ID}, map[string]any{
+				"storage_id":   storageID,
+				"provider_key": strings.TrimSpace(providerKey),
+			}) == 0 {
+				return resolvedUploadFile{}, fmt.Errorf("更新上传文件存储信息失败")
+			}
+		}
+		if err := updateUploadFileRelationMetaIfNeeded(ctx, *existing, session.BizID, session.CategoryID); err != nil {
+			return resolvedUploadFile{}, err
+		}
+		return uploadrepo.FindUploadFile(ctx, existing.ID)
 	}
 
 	fileID := uint64(fileModel.Insert(ctx, map[string]any{
@@ -163,7 +169,7 @@ func persistUploadFile(ctx context.Context, rule resolvedUploadRule, session res
 		"created_at":   time.Now(),
 	}))
 	if fileID == 0 {
-		if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil {
+		if existing := uploadrepo.FindUploadFileByPath(ctx, objectKey); existing != nil && existing.StorageID == storageID {
 			return reuseExistingUploadFile(ctx, *existing, session.BizID, session.CategoryID), nil
 		}
 		return resolvedUploadFile{}, fmt.Errorf("保存上传文件失败")

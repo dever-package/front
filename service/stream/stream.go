@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/shemic/dever/config"
 )
 
 const (
@@ -25,6 +27,8 @@ const (
 type Service struct {
 	namespace    string
 	client       *redis.Client
+	keyPrefix    string
+	configErr    error
 	maxLen       int64
 	ttl          time.Duration
 	memory       *memoryStreamStore
@@ -61,20 +65,26 @@ func New(namespace string) Service {
 	envPrefix := strings.ToUpper(strings.ReplaceAll(namespace, "-", "_"))
 	maxLen := envInt64(envPrefix+"_STREAM_MAXLEN", envInt64("STREAM_MAXLEN", defaultMaxLen))
 	ttl := envDuration(envPrefix+"_STREAM_TTL", envDuration("STREAM_TTL", defaultTTL))
+	client, keyPrefix, configErr := newRedisClient(envPrefix)
 	service := Service{
 		namespace:    namespace,
-		client:       newRedisClientFromEnv(envPrefix),
+		client:       client,
+		keyPrefix:    keyPrefix,
+		configErr:    configErr,
 		maxLen:       maxLen,
 		ttl:          ttl,
 		redisCircuit: newRedisCircuit(envDuration(envPrefix+"_STREAM_REDIS_RETRY", envDuration("STREAM_REDIS_RETRY", defaultRedisRetryDelay))),
 	}
-	if service.client == nil {
+	if service.client == nil && service.configErr == nil {
 		service.memory = newMemoryStreamStore(maxLen, ttl)
 	}
 	return service
 }
 
 func (s Service) WritePayload(ctx context.Context, requestID string, payload map[string]any) (string, error) {
+	if s.configErr != nil {
+		return "", s.configErr
+	}
 	requestID = strings.TrimSpace(requestID)
 	if !validRequestID(requestID) {
 		return "", fmt.Errorf("request_id 不能为空")
@@ -123,6 +133,9 @@ func (s Service) Read(ctx context.Context, requestID string, lastID string, coun
 }
 
 func (s Service) ReadMany(ctx context.Context, cursors []ReadCursor, count int64, block time.Duration) ([]ReadEntry, error) {
+	if s.configErr != nil {
+		return nil, s.configErr
+	}
 	normalized, err := s.normalizeReadCursors(cursors)
 	if err != nil {
 		return nil, err
@@ -236,7 +249,11 @@ func (s Service) writeRedis(ctx context.Context, streamKey string, requestID str
 }
 
 func (s Service) Key(requestID string) string {
-	return StreamKey(s.namespace, requestID)
+	key := StreamKey(s.namespace, requestID)
+	if s.keyPrefix != "" {
+		return s.keyPrefix + ":" + key
+	}
+	return key
 }
 
 func StreamKey(namespace string, requestID string) string {
@@ -646,6 +663,36 @@ func minInt64(left int64, right int64) int64 {
 		return left
 	}
 	return right
+}
+
+func newRedisClient(prefix string) (*redis.Client, string, error) {
+	// Explicit stream connections retain their existing environment contract.
+	if firstEnv("", prefix+"_REDIS_URL", "STREAM_REDIS_URL", "ENERGON_REDIS_URL", "REDIS_URL", prefix+"_REDIS_ADDR", "STREAM_REDIS_ADDR", "ENERGON_REDIS_ADDR", "REDIS_ADDR") != "" {
+		return newRedisClientFromEnv(prefix), "", nil
+	}
+	cfg, err := config.Load("")
+	if err != nil {
+		return nil, "", fmt.Errorf("读取 Stream Redis 配置失败: %w", err)
+	}
+	if !cfg.Redis.Enable {
+		return nil, "", fmt.Errorf("Stream Redis 未启用，请配置 redis.enable")
+	}
+	options := &redis.Options{
+		Addr:         cfg.Redis.Addr,
+		Username:     cfg.Redis.Username,
+		Password:     cfg.Redis.Password,
+		DB:           cfg.Redis.DB,
+		PoolSize:     cfg.Redis.PoolSize,
+		MinIdleConns: cfg.Redis.MinIdleConns,
+		MaxRetries:   cfg.Redis.MaxRetries,
+		DialTimeout:  cfg.Redis.DialTimeout.Duration(),
+		ReadTimeout:  cfg.Redis.ReadTimeout.Duration(),
+		WriteTimeout: cfg.Redis.WriteTimeout.Duration(),
+	}
+	if cfg.Redis.UseTLS {
+		options.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	return redis.NewClient(options), strings.Trim(strings.TrimSpace(cfg.Redis.Prefix), ":"), nil
 }
 
 func newRedisClientFromEnv(prefix string) *redis.Client {

@@ -1,0 +1,89 @@
+package provider
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	frontmodel "github.com/dever-package/front/model"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"sync/atomic"
+	"testing"
+)
+
+func TestQiniuUploadRecovery(t *testing.T) {
+	content := []byte("original generated file")
+	path := filepath.Join(t.TempDir(), "result.txt")
+	if err := os.WriteFile(path, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(content)
+	hash := hex.EncodeToString(digest[:])[:32]
+	var calls atomic.Int32
+	var mode atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Reqid", "fixture-request")
+ if r.Method == "GET" {
+			w.Write(content)
+			return
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
+		r.Body.Close()
+		attempt := calls.Add(1)
+		switch mode.Load() {
+		case 0:
+			if attempt == 1 {
+				connection, _, _ := w.(http.Hijacker).Hijack()
+				connection.Close()
+				return
+			}
+		case 1:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(614)
+			io.WriteString(w, `{"error":"file exists"}`)
+			return
+		case 2:
+			w.WriteHeader(http.StatusForbidden)
+			io.WriteString(w, `{"error":"permission denied"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"hash":"test-hash","key":"upload/result.txt"}`)
+	}))
+	defer server.Close()
+	previous := qiniuHTTPClient
+	qiniuHTTPClient = server.Client()
+	defer func() { qiniuHTTPClient = previous }()
+	input := SaveInput{Rule: Rule{Storage: frontmodel.UploadStorage{AccessKey: "test-access", SecretKey: "test-secret", Bucket: "fixture", UploadHost: server.URL, Domain: server.URL}}, LocalPath: path, ObjectKey: "upload/result.txt", Name: "result.txt", Mime: "text/plain", Size: int64(len(content)), Hash: hash, PathMode: frontmodel.UploadStoragePathModeHash}
+	t.Run("lost network response retries the same upload", func(t *testing.T) {
+		result, err := (qiniuDriver{}).SaveWithResult(context.Background(), input)
+		if err != nil || result.ProviderKey != "upload/result.txt" || calls.Load() < 2 || calls.Load() > 4 {
+			t.Fatal(result, calls.Load(), err)
+		}
+	})
+	t.Run("already committed file succeeds only after digest verification", func(t *testing.T) {
+		mode.Store(1)
+		if _, err := (qiniuDriver{}).SaveWithResult(context.Background(), input); err != nil {
+			t.Fatal(err)
+		}
+		wrong := input
+		wrong.Hash = fmt.Sprintf("%032d", 0)
+		if _, err := (qiniuDriver{}).SaveWithResult(context.Background(), wrong); err == nil {
+			t.Fatal("different existing content accepted")
+		}
+	})
+	t.Run("permission error is not retried", func(t *testing.T) {
+		mode.Store(2)
+		before := calls.Load()
+		if _, err := (qiniuDriver{}).SaveWithResult(context.Background(), input); err == nil {
+			t.Fatal("permission failure swallowed")
+		}
+		if calls.Load() != before+1 {
+			t.Fatalf("permanent failure retried: %d calls", calls.Load()-before)
+		}
+	})
+}

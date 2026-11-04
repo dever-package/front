@@ -78,11 +78,13 @@ func InitUpload(c *server.Context) error {
 			if err := uploadaccess.EnsureFile(c, uploadaccess.OperationRead, *existing); err != nil {
 				return c.Error(err, uploadaccess.Status(err))
 			}
-			reused := reuseExistingUploadFile(c.Context(), *existing, bizRecord.ID, categoryID)
-			return c.JSON(map[string]any{
-				"transport": rule.Transport,
-				"reused":    uploadrepo.BuildUploadFilePayload(reused),
-			})
+			if existing.StorageID == rule.StorageID {
+				reused := reuseExistingUploadFile(c.Context(), *existing, bizRecord.ID, categoryID)
+				return c.JSON(map[string]any{
+					"transport": rule.Transport,
+					"reused":    uploadrepo.BuildUploadFilePayload(reused),
+				})
+			}
 		}
 	}
 

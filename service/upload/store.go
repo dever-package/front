@@ -40,7 +40,7 @@ func storeNewUpload(ctx context.Context, input storeUploadInput) (resolvedUpload
 
 	unlockObject := lockUploadStoreKey("object:" + session.ObjectKey)
 	defer unlockObject()
-	if existing := uploadrepo.FindUploadFileByPath(ctx, session.ObjectKey); existing != nil {
+	if existing := uploadrepo.FindUploadFileByPath(ctx, session.ObjectKey); existing != nil && existing.StorageID == input.Rule.StorageID {
 		return reuseExistingUploadFile(ctx, *existing, session.BizID, session.CategoryID), nil
 	}
 

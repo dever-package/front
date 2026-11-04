@@ -22,6 +22,21 @@ type ImportURLResourceInput struct {
 	Progress   func(text string, progress int)
 }
 
+// DownloadURLResource 复用上传规则、地址校验和限额，将临时下载交给需要先持久化原始结果的调用方。
+// 调用方必须执行返回的 cleanup；本函数不会上传或创建文件记录。
+func DownloadURLResource(ctx context.Context, input ImportURLResourceInput) (localPath, name, mime string, cleanup func(), err error) {
+	rule, err := uploadrepo.FindUploadRule(ctx, input.RuleID)
+	if err != nil {
+		return "", "", "", nil, err
+	}
+	release, err := acquireImportURLSlot(ctx)
+	if err != nil {
+		return "", "", "", nil, err
+	}
+	defer release()
+	return downloadImportURLFile(ctx, uploadImportURLInput{RuleID: input.RuleID, URL: input.URL, Name: input.Name, Mime: input.Mime, Kind: input.Kind}, uploadRuleMaxSizeBytes(rule), input.Progress)
+}
+
 type UploadBuiltinService struct{}
 
 func (UploadBuiltinService) ProviderImportURLResource(c *server.Context, params []any) any {
